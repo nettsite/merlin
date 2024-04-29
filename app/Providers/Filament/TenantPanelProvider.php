@@ -18,6 +18,7 @@ use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\AuthenticateSession;
 use Illuminate\Session\Middleware\StartSession;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
+use Spatie\Multitenancy\Models\Tenant;
 
 class TenantPanelProvider extends PanelProvider
 {
@@ -31,6 +32,8 @@ class TenantPanelProvider extends PanelProvider
             ->colors([
                 'primary' => Color::Indigo,
             ])
+            // Todo: Customise tenant logo / brand name
+            ->brandName(Tenant::current()->name ?? 'Tenant')
             ->maxContentWidth(MaxWidth::Full)
             ->unsavedChangesAlerts()
             ->databaseTransactions()

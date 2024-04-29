@@ -9,6 +9,7 @@ use Filament\Pages;
 use Filament\Panel;
 use Filament\PanelProvider;
 use Filament\Support\Colors\Color;
+use Filament\Support\Enums\MaxWidth;
 use Filament\Widgets;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
@@ -24,11 +25,14 @@ class LandlordPanelProvider extends PanelProvider
     {
         return $panel
             ->id('landlord')
-            ->path('landlord')
-            // ->domain('landlord.' . config('app.url'))
+            ->path('admin')
+            ->login()
+            ->domain('landlord.' . config('app.url'))
             ->colors([
                 'primary' => Color::Amber,
             ])
+            ->brandName('Merlin Landlord')
+            ->maxContentWidth(MaxWidth::Full)
             ->discoverResources(in: app_path('Filament/Landlord/Resources'), for: 'App\\Filament\\Landlord\\Resources')
             ->discoverPages(in: app_path('Filament/Landlord/Pages'), for: 'App\\Filament\\Landlord\\Pages')
             ->pages([
