@@ -2,9 +2,13 @@
 
 namespace App\Providers\Filament;
 
+use App\Filament\Tenant\Pages\CompanyProfile;
+use App\Filament\Tenant\Pages\RegisterCompany;
+use App\Models\Company;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
+use Filament\Navigation\MenuItem;
 use Filament\Pages;
 use Filament\Panel;
 use Filament\PanelProvider;
@@ -29,12 +33,15 @@ class TenantPanelProvider extends PanelProvider
             ->id('tenant')
             ->path('')
             ->login()
+
             ->colors([
                 'primary' => Color::Indigo,
             ])
             // Todo: Customise tenant logo / brand name
             ->brandName(Tenant::current()->name ?? 'Tenant')
             ->maxContentWidth(MaxWidth::Full)
+            ->topNavigation()
+
             ->unsavedChangesAlerts()
             ->databaseTransactions()
             ->discoverResources(in: app_path('Filament/Tenant/Resources'), for: 'App\\Filament\\Tenant\\Resources')
@@ -47,7 +54,20 @@ class TenantPanelProvider extends PanelProvider
                 Widgets\AccountWidget::class,
                 Widgets\FilamentInfoWidget::class,
             ])
+
             ->discoverClusters(in: app_path('Filament/Tenant/Clusters'), for: 'App\\Filament\\Tenant\\Clusters')
+
+            // ->tenant(Company::class)
+            // ->tenantRegistration(RegisterCompany::class)
+            // ->tenantProfile(CompanyProfile::class)
+            // ->tenantMenuItems([
+            //     MenuItem::make()
+            //         ->label('Settings')
+            //         ->url(fn (): string => CompanyProfile::getUrl())
+            //         ->icon('heroicon-m-cog-8-tooth'),
+            //     // ...
+            // ])
+
             ->middleware([
                 EncryptCookies::class,
                 AddQueuedCookiesToResponse::class,
