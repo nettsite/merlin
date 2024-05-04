@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
@@ -20,6 +21,12 @@ class Document extends Model
      * @var string
      */
     protected $connection = 'tenant';
+    protected $table = 'documents';
+
+    public function party(): BelongsTo
+    {
+        return $this->belongsTo(Party::class);
+    }
 
     public function transactions(): HasMany
     {

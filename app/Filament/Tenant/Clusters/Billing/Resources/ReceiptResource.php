@@ -3,9 +3,9 @@
 namespace App\Filament\Tenant\Clusters\Billing\Resources;
 
 use App\Filament\Tenant\Clusters\Billing;
-use App\Filament\Tenant\Clusters\Billing\Resources\DocumentResource\Pages;
-use App\Filament\Tenant\Clusters\Billing\Resources\DocumentResource\RelationManagers;
-use App\Models\Document;
+use App\Filament\Tenant\Clusters\Billing\Resources\ReceiptResource\Pages;
+use App\Filament\Tenant\Clusters\Billing\Resources\ReceiptResource\RelationManagers;
+use App\Models\Receipt;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
@@ -14,11 +14,12 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 
-class DocumentResource extends Resource
+class ReceiptResource extends Resource
 {
-    protected static ?string $model = Document::class;
+    protected static ?string $model = Receipt::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
+    protected static ?int $navigationSort = 20;
 
     protected static ?string $cluster = Billing::class;
 
@@ -59,9 +60,9 @@ class DocumentResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index' => Pages\ListDocuments::route('/'),
-            'create' => Pages\CreateDocument::route('/create'),
-            'edit' => Pages\EditDocument::route('/{record}/edit'),
+            'index' => Pages\ListReceipts::route('/'),
+            'create' => Pages\CreateReceipt::route('/create'),
+            'edit' => Pages\EditReceipt::route('/{record}/edit'),
         ];
     }
 }

@@ -24,6 +24,7 @@ class PartyResource extends Resource
     protected static ?string $model = Party::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
+    protected static ?int $navigationSort = 30;
 
     protected static ?string $cluster = Billing::class;
 

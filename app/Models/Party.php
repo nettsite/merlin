@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use App\Support\Address;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Party extends Model
 {
@@ -28,16 +28,8 @@ class Party extends Model
         return $this->belongsToMany(Contact::class);
     }
 
-    protected function full_address(): Attribute
+    public function documents(): HasMany
     {
-        return Attribute::make(
-            get: fn (mixed $value, array $attributes) => new Address(
-                $attributes['address'],
-                $attributes['city'],
-                $attributes['province'],
-                $attributes['country_code'],
-                $attributes['postal_code'],
-            ),
-        );
+        return $this->hasMany(Document::class);
     }
 }
