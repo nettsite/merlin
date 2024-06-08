@@ -8,8 +8,10 @@
         "php": "^8.2",
         "filament/filament": "^3.2",
         "filament/spatie-laravel-settings-plugin": "^3.2",
+        "icetalker/filament-table-repeater": "^1.2",
         "laravel/framework": "^11.0",
         "laravel/tinker": "^2.9",
+        "spatie/browsershot": "^4.0",
         "spatie/laravel-data": "^4.5",
         "spatie/laravel-multitenancy": "^3.2",
         "spatie/laravel-settings": "^3.3"

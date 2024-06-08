@@ -1,10 +1,10 @@
 <?php
 
-namespace App\Filament\Tenant\Clusters\Billing\Resources;
+namespace App\Filament\Tenant\Resources;
 
-use App\Filament\Tenant\Clusters\Billing;
-use App\Filament\Tenant\Clusters\Billing\Resources\PartyResource\Pages;
-use App\Filament\Tenant\Clusters\Billing\Resources\PartyResource\RelationManagers;
+use App\Filament\Tenant;
+use App\Filament\Tenant\Resources\PartyResource\Pages;
+use App\Filament\Tenant\Resources\PartyResource\RelationManagers;
 use App\Models\Party;
 use App\Settings\PartySettings;
 use Filament\Forms;
@@ -25,8 +25,7 @@ class PartyResource extends Resource
 
     protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
     protected static ?int $navigationSort = 30;
-
-    protected static ?string $cluster = Billing::class;
+    protected static bool $shouldRegisterNavigation = false;
 
     public static function form(Form $form): Form
     {

@@ -1,5 +1,6 @@
 <?php
 
+use App\Support\SwitchTenantStorageTask;
 use Illuminate\Broadcasting\BroadcastEvent;
 use Illuminate\Events\CallQueuedListener;
 use Illuminate\Mail\SendQueuedMailable;
@@ -39,6 +40,7 @@ return [
         // \Spatie\Multitenancy\Tasks\SwitchTenantDatabaseTask::class,
         // \Spatie\Multitenancy\Tasks\SwitchRouteCacheTask::class,
         SwitchTenantDatabaseTask::class,
+        SwitchTenantStorageTask::class,
     ],
 
     /*

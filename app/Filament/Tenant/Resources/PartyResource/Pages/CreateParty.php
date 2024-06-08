@@ -1,8 +1,8 @@
 <?php
 
-namespace App\Filament\Tenant\Clusters\Billing\Resources\PartyResource\Pages;
+namespace App\Filament\Tenant\Resources\PartyResource\Pages;
 
-use App\Filament\Tenant\Clusters\Billing\Resources\PartyResource;
+use App\Filament\Tenant\Resources\PartyResource;
 use Filament\Actions;
 use Filament\Resources\Pages\CreateRecord;
 

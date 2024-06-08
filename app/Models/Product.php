@@ -2,18 +2,20 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 
-class Party extends Model
+class Product extends Model
 {
     use HasFactory, HasUuids, SoftDeletes;
 
+    /**
+     * The attributes which may not be bulk filled.
+     *
+     * @var array
+     */
     protected $guarded = [];
 
     /**
@@ -23,13 +25,4 @@ class Party extends Model
      */
     protected $connection = 'tenant';
 
-    public function contacts(): BelongsToMany
-    {
-        return $this->belongsToMany(Contact::class, 'contact_party', 'party_id');
-    }
-
-    public function documents(): HasMany
-    {
-        return $this->hasMany(Document::class);
-    }
 }
