@@ -37,7 +37,3 @@ Merlin is built on the backs of giants. These amazing packages make it possible.
         <p><a href="https://filamentphp.com/" target="_blank"><img src="https://private-user-images.githubusercontent.com/41773797/257018536-8d5a0b12-4643-4b5c-964a-56f0db91b90a.png" width="200" alt="Filament Logo"></a></p>
     </div>
 </div>
-
-<!-- <p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="200" alt="Laravel Logo"></a></p>
-
-<p align="center"><a href="https://filamentphp.com/" target="_blank"><img src="https://private-user-images.githubusercontent.com/41773797/257018536-8d5a0b12-4643-4b5c-964a-56f0db91b90a.png" width="200" alt="Filament Logo"></a></p> -->
