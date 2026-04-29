@@ -7,9 +7,9 @@
             :current="request()->is('suppliers*', 'purchase-invoices*', 'posting-rules*')"
         >Expenses</flux:navbar.item>
         <flux:navmenu>
-            <flux:navmenu.item href="/suppliers" wire:navigate>Suppliers</flux:navmenu.item>
-            <flux:navmenu.item href="/purchase-invoices" wire:navigate>Purchase Invoices</flux:navmenu.item>
-            <flux:navmenu.item href="/posting-rules" wire:navigate>Posting Rules</flux:navmenu.item>
+            <flux:navmenu.item href="{{ route('suppliers.index') }}" wire:navigate>Suppliers</flux:navmenu.item>
+            <flux:navmenu.item href="{{ route('purchase-invoices.index') }}" wire:navigate>Purchase Invoices</flux:navmenu.item>
+            <flux:navmenu.item href="{{ route('posting-rules.index') }}" wire:navigate>Posting Rules</flux:navmenu.item>
         </flux:navmenu>
     </flux:dropdown>
 
@@ -19,9 +19,9 @@
             :current="request()->is('accounts*', 'account-groups*', 'reports*')"
         >Accounting</flux:navbar.item>
         <flux:navmenu>
-            <flux:navmenu.item href="/accounts" wire:navigate>Accounts</flux:navmenu.item>
-            <flux:navmenu.item href="/account-groups" wire:navigate>Account Groups</flux:navmenu.item>
-            <flux:navmenu.item href="/reports" wire:navigate>Reports</flux:navmenu.item>
+            <flux:navmenu.item href="{{ route('accounts.index') }}" wire:navigate>Accounts</flux:navmenu.item>
+            <flux:navmenu.item href="{{ route('account-groups.index') }}" wire:navigate>Account Groups</flux:navmenu.item>
+            <flux:navmenu.item href="{{ route('reports.expenses-by-account') }}" wire:navigate>Reports</flux:navmenu.item>
         </flux:navmenu>
     </flux:dropdown>
 
@@ -31,11 +31,11 @@
             :current="request()->is('settings/*', 'roles*', 'users*', 'llm-logs*')"
         >Settings</flux:navbar.item>
         <flux:navmenu>
-            <flux:navmenu.item href="/settings/general" wire:navigate>General Settings</flux:navmenu.item>
-            <flux:navmenu.item href="/settings/purchasing" wire:navigate>Purchasing Settings</flux:navmenu.item>
-            <flux:navmenu.item href="/roles" wire:navigate>Roles</flux:navmenu.item>
-            <flux:navmenu.item href="/users" wire:navigate>Users</flux:navmenu.item>
-            <flux:navmenu.item href="/llm-logs" wire:navigate>LLM Logs</flux:navmenu.item>
+            <flux:navmenu.item href="{{ route('settings.general') }}" wire:navigate>General Settings</flux:navmenu.item>
+            <flux:navmenu.item href="{{ route('settings.purchasing') }}" wire:navigate>Purchasing Settings</flux:navmenu.item>
+            <flux:navmenu.item href="{{ route('roles.index') }}" wire:navigate>Roles</flux:navmenu.item>
+            <flux:navmenu.item href="{{ route('users.index') }}" wire:navigate>Users</flux:navmenu.item>
+            <flux:navmenu.item href="{{ route('llm-logs.index') }}" wire:navigate>LLM Logs</flux:navmenu.item>
         </flux:navmenu>
     </flux:dropdown>
 </flux:navbar>
