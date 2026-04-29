@@ -1,3 +1,59 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+    :root {
+        --bg:           #FFFFFF;
+        --bg-alt:       #FAF8F4;
+        --surface:      #FFFFFF;
+        --ink:          #1A1A1A;
+        --ink-soft:     #4D4D4D;
+        --muted:        #8A8580;
+        --border:       #EAE6DF;
+        --accent:       #C8772E;
+        --accent-on:    #FFFFFF;
+        --accent-ink:   #9A4F12;
+        --accent-soft:  #FCEFDF;
+        --accent-border:#F2D9B7;
+        --success:      #3B7A4E;
+        --warning:      #B45309;
+        --danger:       #B91C1C;
+        --info:         #1E40AF;
+        --radius-sm:    6px;
+        --radius-md:    8px;
+        --radius-lg:    12px;
+        --radius-xl:    14px;
+        --shadow-card:  0 1px 0 rgba(0,0,0,0.02), 0 18px 40px -16px rgba(26,26,26,0.14);
+        --shadow-modal: 0 20px 60px -10px rgba(0,0,0,0.25);
+    }
+}
+
+@layer components {
+    .confidence-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 11px;
+        font-weight: 600;
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+    }
+    .confidence-pill--high {
+        color: var(--accent-ink);
+        background: var(--accent-soft);
+        border: 1px solid var(--accent-border);
+    }
+    .confidence-pill--med {
+        color: var(--warning);
+        background: #FEF3C7;
+        border: 1px solid #FDE68A;
+    }
+    .confidence-pill--low {
+        color: var(--danger);
+        background: #FEE2E2;
+        border: 1px solid #FECACA;
+    }
+}

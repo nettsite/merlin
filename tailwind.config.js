@@ -12,7 +12,30 @@ export default {
     theme: {
         extend: {
             fontFamily: {
-                sans: ['Figtree', ...defaultTheme.fontFamily.sans],
+                sans: ['Inter', ...defaultTheme.fontFamily.sans],
+            },
+            colors: {
+                ink: {
+                    DEFAULT: '#1A1A1A',
+                    soft: '#4D4D4D',
+                    muted: '#8A8580',
+                },
+                accent: {
+                    DEFAULT: '#C8772E',
+                    on: '#FFFFFF',
+                    ink: '#9A4F12',
+                    soft: '#FCEFDF',
+                    border: '#F2D9B7',
+                },
+                surface: {
+                    DEFAULT: '#FFFFFF',
+                    alt: '#FAF8F4',
+                },
+                line: '#EAE6DF',
+                success: '#3B7A4E',
+                warning: '#B45309',
+                danger: '#B91C1C',
+                info: '#1E40AF',
             },
         },
     },
