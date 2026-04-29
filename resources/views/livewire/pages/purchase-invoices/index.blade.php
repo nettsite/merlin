@@ -80,7 +80,7 @@ new #[Layout('components.layout.app')] class extends Component
         $this->showUpload = true;
     }
 
-    public function upload(): void
+    public function processUpload(): void
     {
         $this->authorize('create', Document::class);
         $this->uploadError = '';
@@ -410,7 +410,7 @@ new #[Layout('components.layout.app')] class extends Component
 
 {{-- ===== Upload Modal ===== --}}
 <flux:modal name="upload-modal" wire:model.self="showUpload" class="w-[440px]">
-    <form wire:submit="upload" class="flex flex-col">
+    <form wire:submit="processUpload" class="flex flex-col">
         <div class="p-6 border-b border-line">
             <flux:heading size="lg" class="font-semibold">Upload Invoice PDF</flux:heading>
         </div>
