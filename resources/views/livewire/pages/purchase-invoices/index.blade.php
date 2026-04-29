@@ -697,7 +697,7 @@ new #[Layout('components.layout.app')] class extends Component
         </flux:field>
         <div class="flex justify-end gap-3">
             <flux:button type="button" variant="ghost" wire:click="$set('showDisputeReason', false)">Cancel</flux:button>
-            <flux:button type="submit" variant="warning">Dispute</flux:button>
+            <flux:button type="submit" variant="outline">Dispute</flux:button>
         </div>
     </form>
 </flux:modal>
