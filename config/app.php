@@ -65,7 +65,7 @@ return [
     |
     */
 
-    'timezone' => 'Afica/Johannesburg',
+    'timezone' => 'Africa/Johannesburg',
 
     /*
     |--------------------------------------------------------------------------
