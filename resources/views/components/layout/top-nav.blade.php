@@ -1,4 +1,6 @@
 <flux:navbar class="max-lg:hidden">
+    <flux:navbar.item href="{{ route('dashboard') }}" :current="request()->routeIs('dashboard')" wire:navigate>Dashboard</flux:navbar.item>
+
     <flux:dropdown>
         <flux:navbar.item
             icon:trailing="chevron-down"
