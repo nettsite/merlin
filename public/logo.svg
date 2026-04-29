@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 196 56" width="196" height="56" role="img" aria-label="Merlin">
+  <!-- Icon mark (32×32 source scaled to 48×48) -->
+  <g transform="scale(1.5)">
+    <rect x="2" y="2" width="28" height="28" rx="7" fill="#1A1A1A"/>
+    <path d="M16 7 L17.6 14.4 L25 16 L17.6 17.6 L16 25 L14.4 17.6 L7 16 L14.4 14.4 Z" fill="#C8772E"/>
+  </g>
+  <!-- Wordmark -->
+  <text
+    x="62"
+    y="38"
+    font-family="Inter, system-ui, -apple-system, sans-serif"
+    font-weight="700"
+    font-size="30"
+    letter-spacing="-0.03em"
+    fill="#1A1A1A"
+  >Merlin</text>
+</svg>
