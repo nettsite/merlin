@@ -7,6 +7,7 @@ use App\Modules\Core\Settings\CurrencySettings;
 use App\Modules\Purchasing\Models\Document;
 use App\Modules\Purchasing\Models\DocumentLine;
 use App\Modules\Purchasing\Services\DocumentService;
+use App\Modules\Purchasing\Services\ExchangeRateService;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\On;
@@ -272,6 +273,9 @@ new #[Layout('components.layout.app')] class extends Component
             'lines' => $lines,
             'activities' => $activities,
             'accounts' => $accounts,
+            'baseCurrency' => app(CurrencySettings::class)->base_currency,
+            'baseCurrencySymbol' => ExchangeRateService::currencySymbol(app(CurrencySettings::class)->base_currency),
+            'detailCurrencySymbol' => $detail ? ExchangeRateService::currencySymbol($detail->currency) : '',
         ];
     }
 }; ?>
@@ -375,7 +379,10 @@ new #[Layout('components.layout.app')] class extends Component
                         {{ $invoice->issue_date?->format('d M Y') ?? '—' }}
                     </td>
                     <td class="px-4 py-3 text-right font-medium text-ink tabular-nums">
-                        {{ $invoice->currency }} {{ number_format((float) $invoice->total, 2) }}
+                        {{ $baseCurrencySymbol }}{{ number_format((float) $invoice->total, 2) }}
+                        @if($invoice->is_foreign_currency && $invoice->foreign_total !== null)
+                            <span class="text-xs text-ink-muted block">{{ ExchangeRateService::currencySymbol($invoice->currency) }}{{ number_format((float) $invoice->foreign_total, 2) }}</span>
+                        @endif
                     </td>
                     <td class="px-4 py-3 text-right tabular-nums">
                         <span @class([
@@ -483,19 +490,44 @@ new #[Layout('components.layout.app')] class extends Component
             <div class="grid grid-cols-3 divide-x divide-line border-b border-line">
                 <div class="px-6 py-4">
                     <p class="text-xs text-ink-muted uppercase tracking-wide">Subtotal</p>
-                    <p class="text-lg font-semibold text-ink mt-1">{{ $detail->currency }} {{ number_format((float) $detail->subtotal, 2) }}</p>
+                    <p class="text-lg font-semibold text-ink mt-1">{{ $baseCurrencySymbol }}{{ number_format((float) $detail->subtotal, 2) }}</p>
+                    @if($detail->is_foreign_currency && $detail->foreign_subtotal !== null)
+                        <p class="text-xs text-ink-muted mt-0.5">{{ $detailCurrencySymbol }}{{ number_format((float) $detail->foreign_subtotal, 2) }}</p>
+                    @endif
                 </div>
                 <div class="px-6 py-4">
                     <p class="text-xs text-ink-muted uppercase tracking-wide">Total</p>
-                    <p class="text-lg font-semibold text-ink mt-1">{{ $detail->currency }} {{ number_format((float) $detail->total, 2) }}</p>
+                    <p class="text-lg font-semibold text-ink mt-1">{{ $baseCurrencySymbol }}{{ number_format((float) $detail->total, 2) }}</p>
+                    @if($detail->is_foreign_currency && $detail->foreign_total !== null)
+                        <p class="text-xs text-ink-muted mt-0.5">{{ $detailCurrencySymbol }}{{ number_format((float) $detail->foreign_total, 2) }}</p>
+                    @endif
                 </div>
                 <div class="px-6 py-4">
                     <p class="text-xs text-ink-muted uppercase tracking-wide">Balance Due</p>
                     <p class="text-lg font-semibold mt-1 {{ (float) $detail->balance_due > 0 ? 'text-danger' : 'text-success' }}">
-                        {{ $detail->currency }} {{ number_format((float) $detail->balance_due, 2) }}
+                        {{ $baseCurrencySymbol }}{{ number_format((float) $detail->balance_due, 2) }}
                     </p>
+                    @if($detail->is_foreign_currency && $detail->foreign_balance_due !== null)
+                        <p class="text-xs text-ink-muted mt-0.5">{{ $detailCurrencySymbol }}{{ number_format((float) $detail->foreign_balance_due, 2) }}</p>
+                    @endif
                 </div>
             </div>
+
+            {{-- Exchange rate (foreign currency only) --}}
+            @if($detail->is_foreign_currency)
+                <div class="px-6 py-3 border-b border-line bg-surface-alt flex items-center gap-2 text-xs text-ink-muted">
+                    <span>Exchange rate:</span>
+                    <span class="font-medium text-ink">
+                        {{ $detailCurrencySymbol }}1 = {{ $baseCurrencySymbol }}{{ number_format((float) $detail->exchange_rate, 4) }}
+                    </span>
+                    @if($detail->exchange_rate_date)
+                        <span>· {{ $detail->exchange_rate_date->format('d M Y') }}</span>
+                    @endif
+                    @if($detail->exchange_rate_provisional)
+                        <span class="px-1.5 py-0.5 rounded bg-yellow-100 text-yellow-700 font-medium">provisional</span>
+                    @endif
+                </div>
+            @endif
 
             {{-- LLM confidence --}}
             @if($detail->llm_confidence !== null)
@@ -580,7 +612,12 @@ new #[Layout('components.layout.app')] class extends Component
                                             {{ $line->account?->display_name ?? '—' }}
                                         </td>
                                         <td class="py-2 pr-4 text-right text-ink-soft tabular-nums">{{ $line->quantity }}</td>
-                                        <td class="py-2 pr-4 text-right text-ink-soft tabular-nums">{{ number_format((float) $line->unit_price, 4) }}</td>
+                                        <td class="py-2 pr-4 text-right text-ink-soft tabular-nums">
+                                            {{ $baseCurrencySymbol }}{{ number_format((float) $line->unit_price, 4) }}
+                                            @if($detail->is_foreign_currency && $line->foreign_unit_price !== null)
+                                                <span class="block text-ink-muted">{{ $detailCurrencySymbol }}{{ number_format((float) $line->foreign_unit_price, 4) }}</span>
+                                            @endif
+                                        </td>
                                         <td class="py-2 pr-4 text-right text-ink-soft tabular-nums">
                                             {{ $line->tax_rate !== null ? number_format((float) $line->tax_rate, 2).'%' : '—' }}
                                         </td>
