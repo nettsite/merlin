@@ -51,7 +51,17 @@ new #[Layout('components.layout.app')] class extends Component
 
     public bool $showDisputeReason = false;
 
+    public bool $showReprocessConfirm = false;
+
+    public bool $showDeleteConfirm = false;
+
     public string $actionReason = '';
+
+    // Header editing
+    public bool $editingHeader = false;
+
+    /** @var array<string, mixed> */
+    public array $headerForm = [];
 
     public function mount(): void
     {
@@ -129,6 +139,98 @@ new #[Layout('components.layout.app')] class extends Component
         $this->showDetail = false;
         $this->detailId = null;
         $this->editingLineId = null;
+        $this->editingHeader = false;
+        $this->headerForm = [];
+    }
+
+    // -------------------------------------------------------------------------
+    // Header editing
+    // -------------------------------------------------------------------------
+
+    public function openEditHeader(): void
+    {
+        $doc = Document::findOrFail($this->detailId);
+        $this->authorize('update', $doc);
+
+        $this->headerForm = [
+            'party_id' => $doc->party_id ?? '',
+            'reference' => $doc->reference ?? '',
+            'issue_date' => $doc->issue_date?->format('Y-m-d') ?? '',
+            'due_date' => $doc->due_date?->format('Y-m-d') ?? '',
+            'notes' => $doc->notes ?? '',
+        ];
+        $this->editingHeader = true;
+    }
+
+    public function saveHeader(): void
+    {
+        $doc = Document::findOrFail($this->detailId);
+        $this->authorize('update', $doc);
+
+        $this->validate([
+            'headerForm.party_id' => 'nullable|exists:parties,id',
+            'headerForm.reference' => 'nullable|string|max:255',
+            'headerForm.issue_date' => 'nullable|date',
+            'headerForm.due_date' => 'nullable|date',
+            'headerForm.notes' => 'nullable|string|max:2000',
+        ]);
+
+        $doc->update([
+            'party_id' => $this->headerForm['party_id'] ?: null,
+            'reference' => $this->headerForm['reference'] ?: null,
+            'issue_date' => $this->headerForm['issue_date'] ?: null,
+            'due_date' => $this->headerForm['due_date'] ?: null,
+            'notes' => $this->headerForm['notes'] ?: null,
+        ]);
+
+        $this->editingHeader = false;
+        $this->headerForm = [];
+    }
+
+    public function cancelEditHeader(): void
+    {
+        $this->editingHeader = false;
+        $this->headerForm = [];
+    }
+
+    // -------------------------------------------------------------------------
+    // Delete
+    // -------------------------------------------------------------------------
+
+    public function openDeleteConfirm(): void
+    {
+        $doc = Document::findOrFail($this->detailId);
+        $this->authorize('delete', $doc);
+        $this->showDeleteConfirm = true;
+    }
+
+    public function confirmDelete(): void
+    {
+        $doc = Document::findOrFail($this->detailId);
+        $this->authorize('delete', $doc);
+        app(DocumentService::class)->deleteDocument($doc, Auth::user());
+        $this->showDeleteConfirm = false;
+        $this->closeDetail();
+        session()->flash('success', 'Invoice deleted.');
+    }
+
+    // -------------------------------------------------------------------------
+    // Reprocess
+    // -------------------------------------------------------------------------
+
+    public function openReprocessConfirm(): void
+    {
+        $this->authorize('can-reprocess-invoices');
+        $this->showReprocessConfirm = true;
+    }
+
+    public function confirmReprocess(): void
+    {
+        $this->authorize('can-reprocess-invoices');
+        $doc = Document::findOrFail($this->detailId);
+        app(DocumentService::class)->reprocess($doc, Auth::user());
+        $this->showReprocessConfirm = false;
+        session()->flash('success', 'Invoice queued for reprocessing.');
     }
 
     // -------------------------------------------------------------------------
@@ -462,27 +564,86 @@ new #[Layout('components.layout.app')] class extends Component
     @if($detail)
     <div class="flex flex-col h-full">
         {{-- Header --}}
-        <div class="flex items-start justify-between p-6 border-b border-line">
-            <div>
-                <div class="flex items-center gap-3">
-                    <flux:heading size="lg" class="font-semibold">
-                        {{ $detail->document_number ?? 'Draft Invoice' }}
-                    </flux:heading>
-                    @include('livewire.pages.purchase-invoices._status-badge', ['status' => $detail->status])
+        <div class="p-6 border-b border-line">
+            <div class="flex items-start justify-between">
+                <div>
+                    <div class="flex items-center gap-3">
+                        <flux:heading size="lg" class="font-semibold">
+                            {{ $detail->document_number ?? 'Draft Invoice' }}
+                        </flux:heading>
+                        @include('livewire.pages.purchase-invoices._status-badge', ['status' => $detail->status])
+                    </div>
+                    <p class="text-sm text-ink-soft mt-1">
+                        {{ $detail->party?->business?->display_name ?? 'No supplier' }}
+                        @if($detail->issue_date)
+                            · {{ $detail->issue_date->format('d M Y') }}
+                        @endif
+                        @if($detail->reference)
+                            · Ref: {{ $detail->reference }}
+                        @endif
+                    </p>
                 </div>
-                <p class="text-sm text-ink-soft mt-1">
-                    {{ $detail->party?->business?->display_name ?? 'No supplier' }}
-                    @if($detail->issue_date)
-                        · {{ $detail->issue_date->format('d M Y') }}
+                <div class="flex items-center gap-2">
+                    {{-- Edit header (before approved) --}}
+                    @if(!$editingHeader && in_array($detail->status, ['received', 'reviewed']))
+                        @can('update', $detail)
+                            <flux:button wire:click="openEditHeader" size="xs" variant="ghost" icon="pencil">Edit</flux:button>
+                        @endcan
                     @endif
-                    @if($detail->reference)
-                        · Ref: {{ $detail->reference }}
+                    {{-- Reprocess --}}
+                    @if(in_array($detail->status, ['received', 'reviewed', 'rejected', 'disputed']))
+                        @can('can-reprocess-invoices')
+                            <flux:button wire:click="openReprocessConfirm" size="xs" variant="ghost" icon="arrow-path">Reprocess</flux:button>
+                        @endcan
                     @endif
-                </p>
+                    {{-- Delete --}}
+                    @if($detail->status !== 'posted')
+                        @can('delete', $detail)
+                            <flux:button wire:click="openDeleteConfirm" size="xs" variant="ghost" class="text-danger">Delete</flux:button>
+                        @endcan
+                    @endif
+                    <button wire:click="closeDetail" class="ml-2 text-ink-muted hover:text-ink">
+                        <svg class="w-5 h-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+                    </button>
+                </div>
             </div>
-            <button wire:click="closeDetail" class="text-ink-muted hover:text-ink">
-                <svg class="w-5 h-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
-            </button>
+
+            {{-- Inline header edit form --}}
+            @if($editingHeader)
+                <div class="mt-4 pt-4 border-t border-line space-y-3">
+                    <div class="grid grid-cols-2 gap-3">
+                        <flux:field>
+                            <flux:label>Supplier</flux:label>
+                            <flux:select wire:model="headerForm.party_id">
+                                <option value="">— None —</option>
+                                @foreach($suppliers as $supplier)
+                                    <option value="{{ $supplier->id }}">{{ $supplier->business?->display_name }}</option>
+                                @endforeach
+                            </flux:select>
+                        </flux:field>
+                        <flux:field>
+                            <flux:label>Reference</flux:label>
+                            <flux:input wire:model="headerForm.reference" placeholder="Supplier invoice number" />
+                        </flux:field>
+                        <flux:field>
+                            <flux:label>Issue Date</flux:label>
+                            <flux:input type="date" wire:model="headerForm.issue_date" />
+                        </flux:field>
+                        <flux:field>
+                            <flux:label>Due Date</flux:label>
+                            <flux:input type="date" wire:model="headerForm.due_date" />
+                        </flux:field>
+                    </div>
+                    <flux:field>
+                        <flux:label>Notes</flux:label>
+                        <flux:textarea wire:model="headerForm.notes" rows="2" />
+                    </flux:field>
+                    <div class="flex gap-2">
+                        <flux:button wire:click="saveHeader" size="sm" variant="primary">Save</flux:button>
+                        <flux:button wire:click="cancelEditHeader" size="sm" variant="ghost">Cancel</flux:button>
+                    </div>
+                </div>
+            @endif
         </div>
 
         <div class="flex-1 overflow-y-auto">
@@ -548,15 +709,15 @@ new #[Layout('components.layout.app')] class extends Component
             <div class="px-6 py-4 border-b border-line">
                 <h3 class="text-sm font-semibold text-ink mb-3">Lines</h3>
                 <div class="overflow-x-auto">
-                    <table class="w-full text-xs">
+                    <table class="w-full text-xs border-separate border-spacing-0">
                         <thead>
                             <tr class="text-ink-muted uppercase tracking-wide">
-                                <th class="text-left pb-2 pr-4">Description</th>
-                                <th class="text-left pb-2 pr-4">Account</th>
-                                <th class="text-right pb-2 pr-4">Qty</th>
-                                <th class="text-right pb-2 pr-4">Rate</th>
-                                <th class="text-right pb-2 pr-4">Tax%</th>
-                                <th class="text-right pb-2">Total</th>
+                                <th class="text-left py-2 pr-4 w-[38%]">Description</th>
+                                <th class="text-left py-2 px-4">Account</th>
+                                <th class="text-right py-2 px-4 whitespace-nowrap">Qty</th>
+                                <th class="text-right py-2 px-4 whitespace-nowrap">Rate</th>
+                                <th class="text-right py-2 px-4 whitespace-nowrap">Tax%</th>
+                                <th class="text-right py-2 pl-4 whitespace-nowrap">Total</th>
                                 @if(!in_array($detail->status, ['posted', 'rejected']))
                                     <th class="w-8"></th>
                                 @endif
@@ -569,7 +730,7 @@ new #[Layout('components.layout.app')] class extends Component
                                         <td class="py-2 pr-2">
                                             <input type="text" wire:model="editingLine.description" class="w-full border border-line rounded px-2 py-1 text-xs" />
                                         </td>
-                                        <td class="py-2 pr-2">
+                                        <td class="py-2 px-2">
                                             <select wire:model="editingLine.account_id" class="w-full border border-line rounded px-2 py-1 text-xs">
                                                 <option value="">—</option>
                                                 @foreach($accounts as $account)
@@ -577,16 +738,16 @@ new #[Layout('components.layout.app')] class extends Component
                                                 @endforeach
                                             </select>
                                         </td>
-                                        <td class="py-2 pr-2">
+                                        <td class="py-2 px-2">
                                             <input type="number" wire:model="editingLine.quantity" step="0.0001" class="w-20 border border-line rounded px-2 py-1 text-xs text-right" />
                                         </td>
-                                        <td class="py-2 pr-2">
+                                        <td class="py-2 px-2">
                                             <input type="number" wire:model="editingLine.unit_price" step="0.0001" class="w-24 border border-line rounded px-2 py-1 text-xs text-right" />
                                         </td>
-                                        <td class="py-2 pr-2">
+                                        <td class="py-2 px-2">
                                             <input type="number" wire:model="editingLine.tax_rate" step="0.01" min="0" max="100" class="w-16 border border-line rounded px-2 py-1 text-xs text-right" />
                                         </td>
-                                        <td class="py-2 pr-2 text-right font-medium text-ink tabular-nums">
+                                        <td class="py-2 pl-2 text-right font-medium text-ink tabular-nums whitespace-nowrap">
                                             {{ number_format((float) $line->line_total + (float) $line->tax_amount, 2) }}
                                         </td>
                                         <td class="py-2">
@@ -602,26 +763,26 @@ new #[Layout('components.layout.app')] class extends Component
                                     </tr>
                                 @else
                                     <tr class="border-t border-line group">
-                                        <td class="py-2 pr-4 text-ink">
+                                        <td class="py-2.5 pr-4 text-ink">
                                             {{ $line->description ?? '—' }}
                                             @if($line->llmSuggestedAccount && !$line->account_id)
                                                 <span class="text-ink-muted block text-xs">Suggested: {{ $line->llmSuggestedAccount->display_name }}</span>
                                             @endif
                                         </td>
-                                        <td class="py-2 pr-4 text-ink-soft">
+                                        <td class="py-2.5 px-4 text-ink-soft">
                                             {{ $line->account?->display_name ?? '—' }}
                                         </td>
-                                        <td class="py-2 pr-4 text-right text-ink-soft tabular-nums">{{ $line->quantity }}</td>
-                                        <td class="py-2 pr-4 text-right text-ink-soft tabular-nums">
+                                        <td class="py-2.5 px-4 text-right text-ink-soft tabular-nums whitespace-nowrap">{{ $line->quantity }}</td>
+                                        <td class="py-2.5 px-4 text-right text-ink-soft tabular-nums whitespace-nowrap">
                                             {{ $baseCurrencySymbol }}{{ number_format((float) $line->unit_price, 4) }}
                                             @if($detail->is_foreign_currency && $line->foreign_unit_price !== null)
                                                 <span class="block text-ink-muted">{{ $detailCurrencySymbol }}{{ number_format((float) $line->foreign_unit_price, 4) }}</span>
                                             @endif
                                         </td>
-                                        <td class="py-2 pr-4 text-right text-ink-soft tabular-nums">
+                                        <td class="py-2.5 px-4 text-right text-ink-soft tabular-nums whitespace-nowrap">
                                             {{ $line->tax_rate !== null ? number_format((float) $line->tax_rate, 2).'%' : '—' }}
                                         </td>
-                                        <td class="py-2 text-right font-medium text-ink tabular-nums">
+                                        <td class="py-2.5 pl-4 text-right font-medium text-ink tabular-nums whitespace-nowrap">
                                             {{ number_format((float) $line->line_total + (float) $line->tax_amount, 2) }}
                                         </td>
                                         @if(!in_array($detail->status, ['posted', 'rejected']))
@@ -737,5 +898,29 @@ new #[Layout('components.layout.app')] class extends Component
             <flux:button type="submit" variant="outline">Dispute</flux:button>
         </div>
     </form>
+</flux:modal>
+
+{{-- Reprocess confirm modal --}}
+<flux:modal name="reprocess-modal" wire:model.self="showReprocessConfirm" class="w-[400px]">
+    <div class="p-6 space-y-4">
+        <flux:heading>Reprocess Invoice</flux:heading>
+        <p class="text-sm text-ink-soft">This will delete all existing lines and re-run the LLM extraction. Any manual edits to lines will be lost. Continue?</p>
+        <div class="flex justify-end gap-3">
+            <flux:button variant="ghost" wire:click="$set('showReprocessConfirm', false)">Cancel</flux:button>
+            <flux:button variant="primary" wire:click="confirmReprocess">Reprocess</flux:button>
+        </div>
+    </div>
+</flux:modal>
+
+{{-- Delete confirm modal --}}
+<flux:modal name="delete-invoice-modal" wire:model.self="showDeleteConfirm" class="w-[400px]">
+    <div class="p-6 space-y-4">
+        <flux:heading>Delete Invoice</flux:heading>
+        <p class="text-sm text-ink-soft">This invoice will be permanently deleted. This action cannot be undone.</p>
+        <div class="flex justify-end gap-3">
+            <flux:button variant="ghost" wire:click="$set('showDeleteConfirm', false)">Cancel</flux:button>
+            <flux:button variant="danger" wire:click="confirmDelete">Delete</flux:button>
+        </div>
+    </div>
 </flux:modal>
 </div>

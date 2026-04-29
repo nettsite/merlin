@@ -174,6 +174,36 @@ class DocumentService
         });
     }
 
+    public function deleteDocument(Document $doc, User $by): void
+    {
+        if ($doc->status === 'posted') {
+            throw new \InvalidArgumentException('Cannot delete a posted invoice.');
+        }
+
+        DB::transaction(function () use ($doc, $by) {
+            $this->recordActivity($doc, $by, 'deleted', 'Invoice deleted.');
+            $doc->delete();
+        });
+    }
+
+    public function reprocess(Document $doc, User $by): void
+    {
+        if (! in_array($doc->status, ['received', 'reviewed', 'rejected', 'disputed'])) {
+            throw new \InvalidArgumentException("Cannot reprocess a {$doc->status} invoice.");
+        }
+
+        DB::transaction(function () use ($doc, $by) {
+            $doc->lines()->delete();
+
+            $doc->status = 'received';
+            $doc->saveQuietly();
+
+            $this->recordActivity($doc, $by, 'reprocess_queued', 'Invoice queued for reprocessing.');
+        });
+
+        ProcessInvoicePdf::dispatch($doc);
+    }
+
     public function duplicate(Document $doc): Document
     {
         return DB::transaction(function () use ($doc) {
