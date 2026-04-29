@@ -1,0 +1,24 @@
+{
+  "supplier_name": "Acme Hosting (Pty) Ltd",
+  "supplier_tax_number": "4123456789",
+  "invoice_number": "INV-2024-001234",
+  "issue_date": "2024-01-15",
+  "due_date": "2024-02-14",
+  "currency": "ZAR",
+  "subtotal": 1000.00,
+  "tax_total": 150.00,
+  "total": 1150.00,
+  "confidence": 0.95,
+  "warnings": [],
+  "lines": [
+    {
+      "description": "Monthly hosting fee - January 2024",
+      "quantity": 1,
+      "unit_price": 1000.00,
+      "line_total": 1000.00,
+      "suggested_account_code": "5210",
+      "account_confidence": 0.92,
+      "account_reason": "Recurring hosting fee maps to IT & Software expense account"
+    }
+  ]
+}
