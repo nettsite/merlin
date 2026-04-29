@@ -1,58 +1,101 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Merlin
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Merlin reads supplier invoices and posts them to your ledger — automatically. It uses an LLM pipeline to extract line items from PDFs, suggest GL account codes, and apply confidence-based auto-posting rules so that routine invoices never need human review.
 
-## About Laravel
+## Stack
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+| Layer | Package |
+|---|---|
+| Framework | Laravel 13, PHP 8.4 |
+| Frontend | Livewire 3, Volt, Flux UI, Alpine.js, Tailwind CSS 3 |
+| Auth | Laravel Breeze (Livewire stack) |
+| Roles & permissions | spatie/laravel-permission |
+| Audit log | spatie/laravel-activitylog |
+| File storage | spatie/laravel-medialibrary |
+| Settings | spatie/laravel-settings |
+| Testing | PHPUnit 12 |
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
-
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
-
-## Learning Laravel
-
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
-
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
-
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
-
-## Agentic Development
-
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+## Local setup
 
 ```bash
-composer require laravel/boost --dev
-
-php artisan boost:install
+git clone https://github.com/nettsite/merlin.git
+cd merlin
+composer run setup      # install, .env, key:generate, migrate, npm install + build
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+Copy `.env.example` to `.env` and fill in:
 
-## Contributing
+```env
+DB_CONNECTION=mysql     # MariaDB preferred
+DB_DATABASE=merlin
+DB_USERNAME=...
+DB_PASSWORD=...
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+OPENAI_API_KEY=...      # or whichever LLM provider the pipeline uses
+```
 
-## Code of Conduct
+## Development
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+```bash
+composer run dev        # starts server + queue + pail + vite concurrently
+composer run test       # clears config cache, then runs full PHPUnit suite
+vendor/bin/pint --dirty # format changed PHP files
+```
 
-## Security Vulnerabilities
+Run a single test:
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+```bash
+php artisan test --compact --filter=TestName
+```
 
-## License
+## Architecture
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+Business logic lives under `app/Modules/`, grouped by domain:
+
+```
+app/Modules/
+├── Core/          User, Party, Person, Business, Address
+├── Accounting/    Account, AccountGroup, AccountType, FinancialYearService
+├── Purchasing/    Document, DocumentLine, LlmLog, PostingRule + pipeline services
+└── Billing/       (stub)
+```
+
+All models use UUID primary keys via `App\Traits\HasUuid`. Polymorphic relationships are registered in `AppServiceProvider` via `Relation::enforceMorphMap()`.
+
+### Invoice pipeline
+
+1. Supplier drops a PDF into a watched folder (or uploads manually)
+2. The LLM extracts supplier, date, line items, and amounts
+3. Each line gets a suggested GL account code with a confidence score
+4. Lines above the auto-post threshold are posted immediately; lines below go into the review queue
+5. Every decision is logged — confidence score, matched supplier history, rule applied
+
+### Confidence thresholds
+
+| Score | Treatment |
+|---|---|
+| ≥ 85 % | Auto-posted, listed in "Posted today" |
+| 60 – 84 % | Queued for review |
+| < 60 % | Queued, flagged as low confidence |
+
+Thresholds are configurable per business via `PurchasingSettings`.
+
+## Navigation
+
+| Group | Pages |
+|---|---|
+| Expenses | Suppliers, Purchase Invoices, Posting Rules |
+| Accounting | Accounts, Account Groups, Reports |
+| Settings | General Settings, Purchasing Settings, Roles, Users, LLM Logs |
+
+## Design
+
+Visual decisions are documented in [`DESIGN.md`](DESIGN.md). The short version: warm amber accent (`#C8772E`), Inter font, flat surfaces, no gradients, confidence pills on every AI suggestion, tabular figures everywhere money appears.
+
+## Key conventions
+
+- **No `$user->hasRole()`** anywhere — always `$user->can('permission-name')`
+- **`QUEUE_CONNECTION=sync`** in local `.env` — no worker needed in dev
+- **Migrations have no `down()` methods**
+- Auth routes are owned by Breeze — do not register conflicting routes
+- `PurchaseInvoice` UI is always fully custom Livewire — never routed through shared CRUD helpers
