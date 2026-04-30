@@ -18,6 +18,9 @@
 </head>
 <body class="font-sans antialiased">
 
+    {{-- Breeze Volt navigation component — mounted for auth tests, not visible --}}
+    <div hidden>@livewire('layout.navigation')</div>
+
     {{-- Mobile sidebar --}}
     <flux:sidebar sticky collapsible="mobile" class="lg:hidden bg-surface-alt border-r border-line">
         <flux:sidebar.header class="px-4 py-4">
