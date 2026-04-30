@@ -19,6 +19,22 @@ class MagikaService
     ) {}
 
     /**
+     * Assert the file is a supported invoice format (PDF, DOCX, XLSX, CSV), throwing if not.
+     *
+     * @throws InvalidFileTypeException
+     */
+    public function assertIsSupportedFormat(string $absolutePath): MagikaResult
+    {
+        $result = $this->detect($absolutePath);
+
+        if (! $result->isSupportedFormat()) {
+            throw InvalidFileTypeException::unsupportedFormat($absolutePath, $result->mimeType);
+        }
+
+        return $result;
+    }
+
+    /**
      * Assert the file is a PDF, throwing if it is not.
      *
      * @throws InvalidFileTypeException
@@ -115,6 +131,47 @@ class MagikaService
             }
         }
 
+        // finfo reports DOCX/XLSX as application/zip on older libmagic versions.
+        // Inspect the ZIP entries to distinguish them.
+        if ($mimeType === 'application/zip') {
+            $mimeType = $this->resolveZipMimeType($absolutePath);
+        }
+
         return MagikaResult::fromFallback($mimeType);
+    }
+
+    private function resolveZipMimeType(string $absolutePath): string
+    {
+        $zip = new \ZipArchive;
+        if ($zip->open($absolutePath) !== true) {
+            return 'application/zip';
+        }
+
+        $hasWord = false;
+        $hasXl = false;
+
+        for ($i = 0; $i < min($zip->numFiles, 20); $i++) {
+            $name = $zip->getNameIndex($i);
+            if ($name === false) {
+                continue;
+            }
+            if (str_starts_with($name, 'word/')) {
+                $hasWord = true;
+            }
+            if (str_starts_with($name, 'xl/')) {
+                $hasXl = true;
+            }
+        }
+
+        $zip->close();
+
+        if ($hasWord) {
+            return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+        }
+        if ($hasXl) {
+            return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+        }
+
+        return 'application/zip';
     }
 }

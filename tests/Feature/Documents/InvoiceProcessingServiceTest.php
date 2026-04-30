@@ -2,21 +2,25 @@
 
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Core\Models\User;
+use App\Modules\Core\Settings\CurrencySettings;
 use App\Modules\Purchasing\DTO\ExtractedInvoice;
 use App\Modules\Purchasing\DTO\ExtractedInvoiceLine;
 use App\Modules\Purchasing\Models\Document;
 use App\Modules\Purchasing\Models\DocumentActivity;
 use App\Modules\Purchasing\Models\DocumentLine;
 use App\Modules\Purchasing\Services\AccountResolver;
+use App\Modules\Purchasing\Services\DocumentTextExtractor;
 use App\Modules\Purchasing\Services\ExchangeRateService;
 use App\Modules\Purchasing\Services\InvoiceProcessingService;
 use App\Modules\Purchasing\Services\LlmService;
-use App\Modules\Purchasing\Services\Pdf\PdfExtractor;
+use App\Modules\Purchasing\Services\PostingRuleService;
 use App\Modules\Purchasing\Services\SupplierResolver;
+use App\Modules\Purchasing\Settings\PurchasingSettings;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
 
 uses(RefreshDatabase::class);
@@ -33,8 +37,8 @@ beforeEach(function (): void {
         'allow_direct_posting' => true,
     ]);
 
-    // Mock PdfExtractor to avoid actual filesystem/pdftotext calls
-    $this->extractorMock = Mockery::mock(PdfExtractor::class);
+    // Mock DocumentTextExtractor to avoid actual filesystem/pdftotext calls
+    $this->extractorMock = Mockery::mock(DocumentTextExtractor::class);
     $this->extractorMock->allows('extract')->andReturn('fake extracted invoice text');
 
     // Mock LlmService to avoid live API calls
@@ -46,9 +50,9 @@ beforeEach(function (): void {
         supplierResolver: app(SupplierResolver::class),
         accountResolver: app(AccountResolver::class),
         exchangeRateService: app(ExchangeRateService::class),
-        postingRuleService: app(\App\Modules\Purchasing\Services\PostingRuleService::class),
-        currencySettings: app(\App\Modules\Core\Settings\CurrencySettings::class),
-        purchasingSettings: app(\App\Modules\Purchasing\Settings\PurchasingSettings::class),
+        postingRuleService: app(PostingRuleService::class),
+        currencySettings: app(CurrencySettings::class),
+        purchasingSettings: app(PurchasingSettings::class),
     );
 });
 
@@ -97,10 +101,10 @@ function fakeLine(string $description = 'Monthly hosting fee', ?string $accountC
 function attachFakeMedia(Document $document): void
 {
     Media::create([
-        'model_type' => Document::class,
+        'model_type' => (new Document)->getMorphClass(),
         'model_id' => $document->id,
-        'uuid' => \Illuminate\Support\Str::uuid(),
-        'collection_name' => 'source_pdf',
+        'uuid' => Str::uuid(),
+        'collection_name' => 'source_document',
         'name' => 'invoice',
         'file_name' => 'invoice.pdf',
         'mime_type' => 'application/pdf',
@@ -180,11 +184,11 @@ it('sets the llm account suggestion on lines', function (): void {
     expect($line->llm_account_suggestion)->toBe($this->account->id);
 });
 
-it('throws when no source pdf is attached', function (): void {
+it('throws when no source document is attached', function (): void {
     $document = Document::factory()->purchaseInvoice()->create();
 
     expect(fn () => $this->service->process($document))
-        ->toThrow(\RuntimeException::class, 'No source PDF');
+        ->toThrow(RuntimeException::class, 'No source document');
 });
 
 // --- Foreign currency ---

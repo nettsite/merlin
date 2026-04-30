@@ -191,9 +191,9 @@ it('recomputes line base amounts when rate is finalised', function (): void {
         ->and((float) $line->line_total)->toBe(round(100.0 * 18.5, 2));
 });
 
-it('rejects a non-PDF file in createFromPdf before touching the database', function (): void {
+it('rejects an unsupported file in createFromFile before touching the database', function (): void {
     $file = tempnam(sys_get_temp_dir(), 'merlin_test_');
-    file_put_contents($file, 'this is not a pdf');
+    file_put_contents($file, 'this is not a supported file');
 
     $service = new DocumentService(
         app(CurrencySettings::class),
@@ -201,7 +201,7 @@ it('rejects a non-PDF file in createFromPdf before touching the database', funct
         new MagikaService('__nonexistent__'),
     );
 
-    expect(fn () => $service->createFromPdf($file, []))
+    expect(fn () => $service->createFromFile($file, []))
         ->toThrow(InvalidFileTypeException::class);
 
     expect(Document::where('source', 'upload')->count())->toBe(0);

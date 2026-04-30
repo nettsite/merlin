@@ -6,7 +6,7 @@ use App\Exceptions\InvalidDocumentStateException;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Settings\CurrencySettings;
-use App\Modules\Purchasing\Jobs\ProcessInvoicePdf;
+use App\Modules\Purchasing\Jobs\ProcessInvoiceDocument;
 use App\Modules\Purchasing\Models\Document;
 use App\Modules\Purchasing\Models\DocumentActivity;
 use App\Modules\Purchasing\Models\DocumentRelationship;
@@ -58,7 +58,7 @@ class DocumentService
     // -------------------------------------------------------------------------
 
     /**
-     * Create a Document from an uploaded PDF file.
+     * Create a Document from an uploaded invoice file (PDF, DOCX, XLSX, or CSV).
      *
      * Returns the document and a flag indicating whether the file was a
      * duplicate of an already-uploaded invoice.
@@ -66,13 +66,13 @@ class DocumentService
      * @param  array<string, mixed>  $data  Accepted keys: party_id (nullable), currency
      * @return array{document: Document, duplicate: bool}
      */
-    public function createFromPdf(string $absolutePath, array $data): array
+    public function createFromFile(string $absolutePath, array $data): array
     {
-        $this->magika->assertIsPdf($absolutePath);
+        $this->magika->assertIsSupportedFormat($absolutePath);
 
         $hash = hash_file('sha256', $absolutePath);
 
-        $existing = Media::where('collection_name', 'source_pdf')
+        $existing = Media::where('collection_name', 'source_document')
             ->where('custom_properties->sha256', $hash)
             ->first();
 
@@ -99,9 +99,9 @@ class DocumentService
         $document
             ->addMedia($absolutePath)
             ->withCustomProperties(['sha256' => $hash])
-            ->toMediaCollection('source_pdf');
+            ->toMediaCollection('source_document');
 
-        ProcessInvoicePdf::dispatch($document);
+        ProcessInvoiceDocument::dispatch($document);
 
         return ['document' => $document, 'duplicate' => false];
     }
@@ -201,7 +201,7 @@ class DocumentService
             $this->recordActivity($doc, $by, 'reprocess_queued', 'Invoice queued for reprocessing.');
         });
 
-        ProcessInvoicePdf::dispatch($doc);
+        ProcessInvoiceDocument::dispatch($doc);
     }
 
     public function duplicate(Document $doc): Document

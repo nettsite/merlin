@@ -37,14 +37,23 @@ class MagikaResult
 
     public static function fromFallback(string $mimeType): self
     {
-        if ($mimeType === 'application/pdf') {
+        $known = [
+            'application/pdf' => ['pdf', 'PDF document (fallback)', 'document', false],
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document' => ['docx', 'DOCX document (fallback)', 'document', false],
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' => ['xlsx', 'XLSX spreadsheet (fallback)', 'spreadsheet', false],
+            'text/csv' => ['csv', 'CSV file (fallback)', 'text', true],
+        ];
+
+        if (isset($known[$mimeType])) {
+            [$label, $description, $group, $isText] = $known[$mimeType];
+
             return new self(
-                label: 'pdf',
+                label: $label,
                 score: 1.0,
-                description: 'PDF document (fallback)',
+                description: $description,
                 mimeType: $mimeType,
-                group: 'document',
-                isText: false,
+                group: $group,
+                isText: $isText,
                 usedFallback: true,
             );
         }
@@ -62,6 +71,26 @@ class MagikaResult
 
     public function isPdf(): bool
     {
-        return $this->label === 'pdf';
+        return $this->mimeType === 'application/pdf';
+    }
+
+    public function isDocx(): bool
+    {
+        return $this->mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    }
+
+    public function isXlsx(): bool
+    {
+        return $this->mimeType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    }
+
+    public function isCsv(): bool
+    {
+        return in_array($this->mimeType, ['text/csv', 'text/plain'], true) && $this->label === 'csv';
+    }
+
+    public function isSupportedFormat(): bool
+    {
+        return $this->isPdf() || $this->isDocx() || $this->isXlsx() || $this->isCsv();
     }
 }

@@ -97,13 +97,13 @@ new #[Layout('components.layout.app')] class extends Component
         $this->uploadError = '';
 
         $this->validate([
-            'uploadFile' => 'required|file|mimes:pdf|max:20480',
+            'uploadFile' => 'required|file|mimes:pdf,docx,xlsx,csv|max:20480',
         ]);
 
         $path = $this->uploadFile->getRealPath();
 
         try {
-            $result = app(DocumentService::class)->createFromPdf($path, [
+            $result = app(DocumentService::class)->createFromFile($path, [
                 'party_id' => $this->uploadPartyId ?: null,
                 'currency' => $this->uploadCurrency,
             ]);
@@ -112,7 +112,7 @@ new #[Layout('components.layout.app')] class extends Component
             $this->reset(['uploadFile', 'uploadPartyId']);
 
             if ($result['duplicate']) {
-                session()->flash('warning', 'This PDF has already been uploaded (document '.$result['document']->document_number.').');
+                session()->flash('warning', 'This invoice has already been uploaded (document '.$result['document']->document_number.').');
             } else {
                 session()->flash('success', 'Invoice uploaded and queued for processing.');
             }
@@ -504,7 +504,7 @@ new #[Layout('components.layout.app')] class extends Component
                     <td colspan="6" class="px-4 py-12 text-center">
                         <p class="font-medium text-ink">No invoices found.</p>
                         @if(!$statusFilter && !$search)
-                            <p class="mt-1 text-sm text-ink-muted">Upload a PDF to get started.</p>
+                            <p class="mt-1 text-sm text-ink-muted">Upload an invoice to get started.</p>
                         @endif
                     </td>
                 </tr>
@@ -521,7 +521,7 @@ new #[Layout('components.layout.app')] class extends Component
 <flux:modal name="upload-modal" wire:model.self="showUpload" class="w-[440px]">
     <form wire:submit="processUpload" class="flex flex-col">
         <div class="p-6 border-b border-line">
-            <flux:heading size="lg" class="font-semibold">Upload Invoice PDF</flux:heading>
+            <flux:heading size="lg" class="font-semibold">Upload Invoice</flux:heading>
         </div>
         <div class="p-6 space-y-4">
             @if($uploadError)
@@ -529,8 +529,8 @@ new #[Layout('components.layout.app')] class extends Component
             @endif
 
             <flux:field>
-                <flux:label>PDF File <span class="text-danger">*</span></flux:label>
-                <flux:input wire:model="uploadFile" type="file" accept=".pdf" />
+                <flux:label>Invoice File <span class="text-danger">*</span></flux:label>
+                <flux:input wire:model="uploadFile" type="file" accept=".pdf,.docx,.xlsx,.csv" />
                 <flux:error name="uploadFile" />
             </flux:field>
 

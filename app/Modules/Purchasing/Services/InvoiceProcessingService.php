@@ -5,14 +5,13 @@ namespace App\Modules\Purchasing\Services;
 use App\Modules\Core\Models\Party;
 use App\Modules\Core\Settings\CurrencySettings;
 use App\Modules\Purchasing\Models\Document;
-use App\Modules\Purchasing\Services\Pdf\PdfExtractor;
 use App\Modules\Purchasing\Settings\PurchasingSettings;
 use Illuminate\Support\Facades\Log;
 
 class InvoiceProcessingService
 {
     public function __construct(
-        private readonly PdfExtractor $extractor,
+        private readonly DocumentTextExtractor $extractor,
         private readonly LlmService $llm,
         private readonly SupplierResolver $supplierResolver,
         private readonly AccountResolver $accountResolver,
@@ -30,10 +29,10 @@ class InvoiceProcessingService
      */
     public function process(Document $document): void
     {
-        $media = $document->getFirstMedia('source_pdf');
+        $media = $document->getFirstMedia('source_document');
 
         if (! $media) {
-            throw new \RuntimeException("No source PDF attached to document {$document->id}");
+            throw new \RuntimeException("No source document attached to document {$document->id}");
         }
 
         // 1. Extract text from PDF (pdftotext → Claude vision fallback)

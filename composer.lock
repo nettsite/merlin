@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "8b3f9442dfa93f09bc3023f8df488f85",
+    "content-hash": "f1101c3d564e7c1e41470f6d94117a69",
     "packages": [
         {
             "name": "brick/math",
@@ -1177,6 +1177,68 @@
                 }
             ],
             "time": "2025-08-22T14:27:06+00:00"
+        },
+        {
+            "name": "inspector-apm/inspector-php",
+            "version": "3.17.1",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/inspector-apm/inspector-php.git",
+                "reference": "43ce00c8d32f50ef9b2ef30a9e0469ab829fad16"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/inspector-apm/inspector-php/zipball/43ce00c8d32f50ef9b2ef30a9e0469ab829fad16",
+                "reference": "43ce00c8d32f50ef9b2ef30a9e0469ab829fad16",
+                "shasum": ""
+            },
+            "require": {
+                "php": "^8.1"
+            },
+            "require-dev": {
+                "ext-curl": "*",
+                "friendsofphp/php-cs-fixer": "^3.75",
+                "neuron-core/neuron-ai": "^3.0",
+                "phpstan/phpstan": "^2.1",
+                "phpunit/phpunit": "^9.0",
+                "rector/rector": "^2.2",
+                "tomasvotruba/type-coverage": "^2.0"
+            },
+            "type": "library",
+            "extra": {
+                "branch-alias": {
+                    "dev-main": "3.17.x-dev",
+                    "dev-develop": "3.17.x-dev"
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Inspector\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Valerio Barbera",
+                    "email": "valerio@inspector.dev"
+                }
+            ],
+            "description": "Inspector monitoring for PHP applications.",
+            "keywords": [
+                "inspector",
+                "monitoring",
+                "observability",
+                "php",
+                "telemetry"
+            ],
+            "support": {
+                "issues": "https://github.com/inspector-apm/inspector-php/issues",
+                "source": "https://github.com/inspector-apm/inspector-php/tree/3.17.1"
+            },
+            "time": "2026-04-10T12:22:10+00:00"
         },
         {
             "name": "laravel/framework",
@@ -2808,6 +2870,78 @@
             "time": "2026-02-13T03:05:33+00:00"
         },
         {
+            "name": "neuron-core/neuron-ai",
+            "version": "3.3.11",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/neuron-core/neuron-ai.git",
+                "reference": "eab04b08cd08428fb18d44bda26e712e298c9c19"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/neuron-core/neuron-ai/zipball/eab04b08cd08428fb18d44bda26e712e298c9c19",
+                "reference": "eab04b08cd08428fb18d44bda26e712e298c9c19",
+                "shasum": ""
+            },
+            "require": {
+                "guzzlehttp/guzzle": "^7.0",
+                "inspector-apm/inspector-php": "^3.16.12",
+                "php": "^8.1",
+                "psr/http-message": "^1.0|^2.0"
+            },
+            "require-dev": {
+                "amphp/amp": "^3.1.1",
+                "amphp/http-client": "^5.3",
+                "aws/aws-sdk-php": "^3.209",
+                "elasticsearch/elasticsearch": "^8.0",
+                "ext-pdo": "*",
+                "friendsofphp/php-cs-fixer": "^3.75",
+                "google/auth": "^1.49",
+                "html2text/html2text": "^4.3",
+                "illuminate/database": "^10.0|^11.0|^12.0",
+                "laudis/neo4j-php-client": "^3.4",
+                "opensearch-project/opensearch-php": "^2.5",
+                "phpstan/phpstan": "^2.1",
+                "phpunit/phpunit": "^10.0",
+                "rector/rector": "^2.0",
+                "spatie/fork": "^1.2",
+                "tomasvotruba/type-coverage": "^2.0",
+                "typesense/typesense-php": "^5.0",
+                "vlucas/phpdotenv": "^5.6"
+            },
+            "bin": [
+                "bin/neuron"
+            ],
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "NeuronAI\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Valerio Barbera",
+                    "email": "valerio@inspector.dev"
+                }
+            ],
+            "description": "The PHP Agentic Framework.",
+            "support": {
+                "issues": "https://github.com/neuron-core/neuron-ai/issues",
+                "source": "https://github.com/neuron-core/neuron-ai/tree/3.3.11"
+            },
+            "funding": [
+                {
+                    "url": "https://github.com/neuron-core",
+                    "type": "github"
+                }
+            ],
+            "time": "2026-04-29T18:29:53+00:00"
+        },
+        {
             "name": "nikic/php-parser",
             "version": "v5.7.0",
             "source": {
@@ -2951,6 +3085,85 @@
                 }
             ],
             "time": "2026-02-16T23:10:27+00:00"
+        },
+        {
+            "name": "paperdoc-dev/paperdoc-lib",
+            "version": "v0.6.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/paperdoc-dev/paperdoc-lib.git",
+                "reference": "d4c616bd2cc1a85d68ba1079fa01a4f0c677d76a"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/paperdoc-dev/paperdoc-lib/zipball/d4c616bd2cc1a85d68ba1079fa01a4f0c677d76a",
+                "reference": "d4c616bd2cc1a85d68ba1079fa01a4f0c677d76a",
+                "shasum": ""
+            },
+            "require": {
+                "ext-dom": "*",
+                "ext-mbstring": "*",
+                "ext-zip": "*",
+                "ext-zlib": "*",
+                "neuron-core/neuron-ai": "^3.0",
+                "php": "^8.2"
+            },
+            "require-dev": {
+                "phpunit/phpunit": "^11.0"
+            },
+            "suggest": {
+                "illuminate/support": "^11.0|^12.0 Required for Laravel integration (ServiceProvider, Facade)"
+            },
+            "type": "library",
+            "extra": {
+                "laravel": {
+                    "aliases": {
+                        "Paperdoc": "Paperdoc\\Facades\\Paperdoc"
+                    },
+                    "providers": [
+                        "Paperdoc\\PaperdocServiceProvider"
+                    ]
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Paperdoc\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Paperdoc",
+                    "email": "support@paperdoc.dev"
+                }
+            ],
+            "description": "A zero-dependency PHP library for generating, parsing and converting documents (PDF, HTML, CSV, DOCX)",
+            "homepage": "https://paperdoc.dev",
+            "keywords": [
+                "converter",
+                "csv",
+                "document",
+                "docx",
+                "html",
+                "laravel",
+                "parser",
+                "pdf",
+                "writer"
+            ],
+            "support": {
+                "issues": "https://github.com/paperdoc-dev/paperdoc-lib/issues",
+                "source": "https://github.com/paperdoc-dev/paperdoc-lib/tree/v0.6.0"
+            },
+            "funding": [
+                {
+                    "url": "https://github.com/paperdoc",
+                    "type": "github"
+                }
+            ],
+            "time": "2026-04-29T15:34:03+00:00"
         },
         {
             "name": "phpdocumentor/reflection-common",

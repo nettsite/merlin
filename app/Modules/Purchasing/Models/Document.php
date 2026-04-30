@@ -7,22 +7,24 @@ use App\Modules\Core\Models\Party;
 use App\Modules\Core\Models\Person;
 use App\Modules\Core\Settings\CurrencySettings;
 use App\Traits\HasDocumentNumber;
+use Carbon\Carbon;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Spatie\Activitylog\Models\Concerns\LogsActivity;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Spatie\Activitylog\Models\Concerns\LogsActivity;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
 
 /**
- * @property \Carbon\Carbon|\Carbon\CarbonImmutable|null $due_date
- * @property \Carbon\Carbon|\Carbon\CarbonImmutable $issue_date
+ * @property Carbon|CarbonImmutable|null $due_date
+ * @property Carbon|CarbonImmutable $issue_date
  * @property-read bool $is_foreign_currency
  * @property-read bool $is_overdue
  * @property-read bool $is_paid
@@ -30,7 +32,7 @@ use Spatie\MediaLibrary\InteractsWithMedia;
  */
 class Document extends Model implements HasMedia
 {
-    use LogsActivity, HasDocumentNumber, HasFactory, HasUuids, InteractsWithMedia, SoftDeletes;
+    use HasDocumentNumber, HasFactory, HasUuids, InteractsWithMedia, LogsActivity, SoftDeletes;
 
     protected $fillable = [
         'document_type',
@@ -91,7 +93,7 @@ class Document extends Model implements HasMedia
 
     public function registerMediaCollections(): void
     {
-        $this->addMediaCollection('source_pdf')->singleFile();
+        $this->addMediaCollection('source_document')->singleFile();
         $this->addMediaCollection('attachments');
     }
 

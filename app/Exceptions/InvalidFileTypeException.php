@@ -14,4 +14,13 @@ class InvalidFileTypeException extends RuntimeException
             $detectedMimeType,
         ));
     }
+
+    public static function unsupportedFormat(string $path, string $detectedMimeType): self
+    {
+        return new self(sprintf(
+            'File "%s" is not a supported format (detected: %s). Supported: PDF, DOCX, XLSX, CSV.',
+            basename($path),
+            $detectedMimeType,
+        ));
+    }
 }

@@ -8,7 +8,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
 
-class ProcessInvoicePdf implements ShouldQueue
+class ProcessInvoiceDocument implements ShouldQueue
 {
     use Queueable;
 
@@ -25,7 +25,7 @@ class ProcessInvoicePdf implements ShouldQueue
 
     public function failed(\Throwable $e): void
     {
-        Log::error('ProcessInvoicePdf job failed', [
+        Log::error('ProcessInvoiceDocument job failed', [
             'document_id' => $this->document->id,
             'error' => $e->getMessage(),
         ]);
