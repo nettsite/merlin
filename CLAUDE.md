@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What Is This Project?
 
-Fresh TALL-stack rewrite of Merlin — a Laravel business management app for small businesses. Core feature: LLM-assisted supplier invoice processing (PDFs → GL transactions). The previous Filament-based version lives at `~/Projects/merlin` and is **read-only spec** — do not copy Filament files from it.
+Laravel business management app for small businesses. Core feature: LLM-assisted supplier invoice processing (PDFs/DOCX/XLSX/CSV → GL transactions). Previous Filament-based version at `~/Projects/merlin` is **read-only spec** — do not copy Filament files from it.
 
-**Stack:** Laravel 13, Livewire 3, Flux UI (livewire/flux), Alpine.js, Tailwind CSS 3, PHPUnit 12, Laravel Breeze (Livewire stack) for auth.
+**Stack:** Laravel 13, Livewire 3, Flux UI (livewire/flux), Volt (single-file components), Alpine.js, Tailwind CSS 3, PHPUnit 12, Laravel Breeze (Livewire stack) for auth.
 
 ## Commands
 
@@ -15,72 +15,126 @@ composer run dev          # starts server + queue + pail + vite concurrently
 composer run test         # clears config cache, then runs full PHPUnit suite
 php artisan test --compact --filter=TestName   # single test
 vendor/bin/pint --dirty   # format changed PHP files
+
+# Seeders
+php artisan db:seed --class=RolesAndPermissionsSeeder
+php artisan db:seed --class=ChartOfAccountsSeeder
+php artisan db:seed --class=DefaultAdminUserSeeder
+
+# Invoice watch folder (polls INVOICE_WATCH_DIR every INVOICE_WATCH_INTERVAL seconds)
+php artisan invoices:watch
 ```
 
-## Architecture — What's Been Built
+## Architecture
 
-Phase 1 (bootstrap) is complete: Breeze Livewire scaffold + all packages installed. Phases 2–5 are pending.
-
-### Planned Domain Structure
-
-Business logic is grouped by domain under `app/Modules/` (porting verbatim from `~/Projects/merlin`):
+### Domain Structure (`app/Modules/`)
 
 ```
 app/Modules/
-├── Core/         — User, Party, Person, Business, Address, PartyService
-├── Accounting/   — Account, AccountGroup, AccountType, FinancialYearService
-├── Purchasing/   — Document, DocumentLine, LlmLog, PostingRule + all services
-└── Billing/      — stub
-app/Policies/     — 17 domain policies (porting verbatim)
-app/Traits/       — HasUuid, HasDocumentNumber
-app/Exceptions/   — domain exceptions
+├── Core/
+│   ├── Models/     — User, Party, Person, Business, Address, ContactAssignment, PartyRelationship
+│   ├── Services/   — PartyService (create/approve suppliers, persons, businesses)
+│   ├── Settings/   — CurrencySettings (base_currency, locale)
+│   └── Policies/   — AllModulesPolicy (base; all domain policies extend this)
+├── Accounting/
+│   ├── Models/     — Account, AccountGroup, AccountType
+│   ├── Services/   — FinancialYearService (fiscal year bounds, month labels)
+│   └── Settings/   — AccountingSettings (financial_year_start_month)
+├── Purchasing/
+│   ├── Models/     — Document, DocumentLine, DocumentActivity, DocumentRelationship, LlmLog, PostingRule
+│   ├── Services/   — see "Invoice Processing Pipeline" below
+│   ├── Jobs/       — ProcessInvoiceDocument (queued)
+│   ├── DTO/        — ExtractedInvoice, ExtractedInvoiceLine, MagikaResult
+│   └── Settings/   — PurchasingSettings (autopost_confidence, tax_default_rate, etc.)
+└── Billing/        — stub (BillingService + BillingSettings)
+
+app/Policies/       — 16 domain policies, all extend AllModulesPolicy
+app/Traits/         — HasDocumentNumber (auto-generates PREFIX-YEAR-NNNNN on create)
+app/Exceptions/     — InvalidDocumentStateException, InvalidFileTypeException, LlmApiException, PdfExtractionException
 ```
 
-### CRUD Framework (Phase 3 — to build)
+**Party model uses Class Table Inheritance:** `Party` is the parent; `Person` and `Business` share its primary key. Use `$party->person` / `$party->business` and `$party->displayName`.
 
-Thin shared layer — only generalise when a pattern repeats 3×:
+### Volt Pages (`resources/views/livewire/pages/`)
+
+All pages are Volt single-file components. CRUD pages use `HasCrudTable` + `HasCrudForm` concerns.
+
+| Route | File | Notes |
+|---|---|---|
+| `/suppliers` | `suppliers/index.blade.php` | CRUD |
+| `/purchase-invoices` | `purchase-invoices/index.blade.php` | **Fully custom** — file upload, LLM pipeline, inline line editing, status machine |
+| `/posting-rules` | `posting-rules/index.blade.php` | CRUD |
+| `/accounts` | `accounts/index.blade.php` | CRUD |
+| `/account-groups` | `account-groups/index.blade.php` | CRUD |
+| `/roles` | `roles/index.blade.php` | CRUD |
+| `/users` | `users/index.blade.php` | CRUD |
+| `/llm-logs` | `llm-logs/index.blade.php` | Read-only |
+| `/reports/expenses-by-account` | `reports/expenses-by-account.blade.php` | Read-only |
+| `/reports/expenses-by-supplier` | `reports/expenses-by-supplier.blade.php` | Read-only |
+| `/reports/llm-performance` | `reports/llm-performance.blade.php` | Read-only |
+| `/settings/general` | `settings/general.blade.php` | Spatie settings form |
+| `/settings/purchasing` | `settings/purchasing.blade.php` | Spatie settings form |
+
+### CRUD Framework
 
 ```
 app/Livewire/Concerns/
-├── HasCrudTable.php   — search, sort, pagination
-└── HasCrudForm.php    — save(), delete(), redirect
+├── HasCrudTable.php   — WithPagination, $search, $sortBy, $sortDir, $perPage; sort(), updatedSearch()
+└── HasCrudForm.php    — $showForm, $editingId; create(), edit(), save(), delete(), cancelForm()
+                         Abstract: fillForm(), store(), update(), performDelete()
 
 resources/views/components/
-├── layout/app.blade.php, nav.blade.php
-└── crud/table.blade.php, th.blade.php, form.blade.php
+├── layout/app.blade.php, nav.blade.php, top-nav.blade.php
+└── crud/table.blade.php, th.blade.php, form.blade.php   ← flyout modal
 ```
 
-Flux UI (`<flux:input>`, `<flux:select>`, etc.) is used directly in Livewire templates — no custom field abstraction.
+Flux UI components (`<flux:input>`, `<flux:select>`, etc.) used directly — no custom field abstraction.
 
-### Resource Build Order (Phase 4)
+### Invoice Processing Pipeline
 
-1. Suppliers → proves the CRUD pattern
-2. Accounts + AccountGroups
-3. Roles + Users
-4. PostingRules
-5. LlmLogs (read-only)
-6. Reports (3 pages)
-7. Settings (GeneralSettings, PurchasingSettings)
-8. **PurchaseInvoices — fully custom Livewire, last** (file upload, LLM pipeline, inline lines table, status machine — does NOT use HasCrudForm)
+`InvoiceProcessingService::process(Document $doc)` orchestrates:
 
-### Navigation Groups
+1. **DocumentTextExtractor** — multi-format text extraction (PDF via PdfExtractor, DOCX/XLSX/CSV via `paperdoc-dev/paperdoc-lib`)
+2. **MagikaService** — Rust CLI (`magika`) detects actual file type; rejects unsupported formats
+3. **LlmService** — calls Claude API with `resources/views/prompts/invoice-extraction.blade.php`; returns `ExtractedInvoice` DTO; logs tokens to `LlmLog`
+4. **SupplierResolver** — tax number match → name similarity → create pending supplier via `PartyService`
+5. **AccountResolver** — history match → LLM suggestion → manual allocation fallback
+6. **ExchangeRateService** — fetches rate from ExchangeRate-API (24h cache); env `EXCHANGERATE_API_KEY`
+7. **PostingRuleService** — evaluates active rules; auto-posts if confidence/pattern thresholds met
 
-- **Expenses**: Suppliers, Purchase Invoices, Posting Rules
-- **Accounting**: Accounts, Account Groups, Reports
-- **Settings**: General Settings, Purchasing Settings, Roles, Users, LLM Logs
+`DocumentService` owns all status transitions and wraps `InvoiceProcessingService::process()` for reprocessing. **Reprocessing must delete existing lines first** — `process()` only appends.
+
+### Document State Machine
+
+Managed by `DocumentService::transition()`. Valid transitions:
+
+```
+received → processing → processed → reviewed → approved → posted
+         ↘ failed    → received   ↗           ↘ disputed → received
+```
+
+Methods: `markAsReviewed()`, `approve()`, `post()`, `dispute()`, `reject()`, `reprocess()` (deletes lines, re-runs pipeline).
+
+### Configuration Files
+
+| File | Key env vars / settings |
+|---|---|
+| `config/documents.php` | `INVOICE_WATCH_DIR`, `INVOICE_WATCH_INTERVAL`, `MAGIKA_BINARY`; document type prefixes & statuses |
+| `config/currency.php` | `EXCHANGERATE_API_KEY`; cache TTL 86400s |
+| `config/party.php` | business types, relationship types, contact roles, address types |
+| `config/paperdoc.php` | paperdoc-lib settings |
+
+### Morph Map (AppServiceProvider)
+
+16 aliases registered via `Relation::enforceMorphMap()`. Always add new morph-related models here before writing data.
 
 ## Key Rules
 
-- **Auditing:** `spatie/laravel-activitylog` (models use `LogsActivity` trait + `getActivitylogOptions()`). No `owen-it/laravel-auditing`.
+- **Auditing:** `spatie/laravel-activitylog` — models use `LogsActivity` trait + `getActivitylogOptions()`. No `owen-it/laravel-auditing`.
 - **Auth:** Laravel Breeze owns `/login`, `/register`, auth tests. Do not touch `tests/Feature/Auth/` or `tests/Feature/Settings/`.
-- **No Filament.** Do not install or reference Filament. If the old project's approach is needed, read `~/Projects/merlin` as spec only.
-- **PurchaseInvoice is always fully custom.** Never route it through HasCrudForm.
-
-## What to Port from ~/Projects/merlin (verbatim)
-
-`app/Modules/`, `app/Policies/`, `app/Exceptions/`, `app/Traits/`, `app/Concerns/`, `config/currency.php`, `config/documents.php`, `config/party.php`, `database/migrations/` (all except `create_audits_table`), `database/seeders/`, `resources/prompts/`, `tests/Feature/` (non-Auth), `tests/Unit/`.
-
-After porting: republish activitylog migration, re-register morph map + settings bindings in `AppServiceProvider`, remove all `Auditable` traits and replace with `LogsActivity`.
+- **No Filament.** Do not install or reference Filament. Read `~/Projects/merlin` as spec only.
+- **PurchaseInvoice is always fully custom.** Never route it through `HasCrudForm`.
+- **Reprocess = delete lines first.** `InvoiceProcessingService::process()` appends; `DocumentService::reprocess()` must delete existing lines before calling it.
 
 ---
 
