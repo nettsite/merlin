@@ -17,7 +17,7 @@ Each phase is independently testable. Complete all verification steps before sta
    - `create_payment_terms_table` — UUID PK, `name`, `rule` enum, `days`, `day_of_month`, timestamps, soft-deletes
    - `create_recurring_invoices_table` — all columns from spec §5.3
    - `create_recurring_invoice_lines_table` — all columns from spec §5.4
-   - `add_billing_columns_to_parties` — `client_account_id` UUID FK nullable, `payment_term_id` UUID FK nullable
+   - `add_billing_columns_to_party_relationships` — `default_receivable_account_id` UUID FK nullable, `payment_term_id` UUID FK nullable (client rows only; mirrors `default_payable_account_id` pattern for supplier rows)
    - `add_billing_columns_to_documents` — `receivable_account_id`, `bank_account_id`, `payment_term_id` (all UUID FK nullable)
    - `add_receives_invoices_to_contact_assignments` — `receives_invoices boolean default false`
 
@@ -95,21 +95,21 @@ php artisan test --compact tests/Feature/Billing/PaymentTermCrudTest.php
 ### Tasks
 
 1. **ClientAccountService** `app/Modules/Billing/Services/ClientAccountService.php`:
-   - `createForParty(Party $party): Account`
-   - Finds or seeds "Debtors" account group
+   - `createForRelationship(PartyRelationship $rel): Account`
+   - Finds "Debtors" account group (seeded in Phase 1)
    - Next code = `BillingSettings::debtor_account_code_start` + count of existing debtor accounts
-   - Creates `Account`, sets `party.client_account_id`
+   - Creates `Account`, sets `rel.default_receivable_account_id`
+   - Guard: if `default_receivable_account_id` already set on the relationship row, skip
 
-2. **Hook into PartyService** (or `Party` model observer):
-   - When `PartyRelationship` with `relationship_type = 'client'` is created, call `ClientAccountService::createForParty()`
-   - Guard: if `client_account_id` already set, skip
+2. **Hook into PartyService** (or `PartyRelationship` observer):
+   - When `PartyRelationship` with `relationship_type = 'client'` is created, call `ClientAccountService::createForRelationship()`
 
 3. **Volt page** `resources/views/livewire/pages/clients/index.blade.php`:
    - `HasCrudTable` + `HasCrudForm` — mirrors `/suppliers/index.blade.php`
-   - Extra field in form: payment term selector (`<flux:select>` from `PaymentTerm::all()`)
+   - Extra field in form: payment term selector (`<flux:select>` from `PaymentTerm::all()`) — stored on the `client` PartyRelationship row
    - Route: `GET /clients` → name `clients`
 
-4. **`parties` model** — add `clientAccount()` and `paymentTerm()` relationships
+4. **`PartyRelationship` model** — add `defaultReceivableAccount()` and `paymentTerm()` relationships
 
 5. **Nav link** for Clients
 

@@ -5,6 +5,8 @@ namespace App\Providers;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\AccountGroup;
 use App\Modules\Accounting\Models\AccountType;
+use App\Modules\Billing\Models\PaymentTerm;
+use App\Modules\Billing\Models\RecurringInvoice;
 use App\Modules\Core\Contracts\ModulePolicy;
 use App\Modules\Core\Models\Business;
 use App\Modules\Core\Models\Party;
@@ -34,7 +36,7 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         if ($this->app->environment('local')) {
-            $this->app->register(\App\Providers\TelescopeServiceProvider::class);
+            $this->app->register(TelescopeServiceProvider::class);
         }
 
         $this->app->bind(ModulePolicy::class, AllModulesPolicy::class);
@@ -73,7 +75,9 @@ class AppServiceProvider extends ServiceProvider
             'party' => Party::class,
             'party_relationship' => PartyRelationship::class,
             'person' => Person::class,
+            'payment_term' => PaymentTerm::class,
             'posting_rule' => PostingRule::class,
+            'recurring_invoice' => RecurringInvoice::class,
             'user' => User::class,
         ]);
     }

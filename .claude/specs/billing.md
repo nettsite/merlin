@@ -19,7 +19,7 @@ Outbound billing: sales invoices, client management, payment terms, payment reco
 - Account group: Debtors (seed if not present).
 - Account code: sequential from `BillingSettings::debtor_account_code_start` (e.g. 110001, 110002, …).
 - Account name: client's `displayName` at creation time.
-- `parties` table gains `client_account_id` (UUID FK → accounts, nullable).
+- `party_relationships` row (where `relationship_type = 'client'`) gains `default_receivable_account_id` (UUID FK → accounts, nullable) — mirrors `default_payable_account_id` on supplier rows.
 - The client's debtor account is the receivable account on all their sales invoices.
 
 ### 1.3 Invoice Contacts
@@ -70,7 +70,7 @@ Traits: `HasUuids`, `HasFactory`, `LogsActivity`, `SoftDeletes`.
 - For `beginning_of_next_billing_period`: next occurrence of `billing_period_day` after `invoiceDate`.
 
 ### 2.4 Assignment
-- `parties` table gains `payment_term_id` (UUID FK → payment_terms, nullable).
+- `party_relationships` row (where `relationship_type = 'client'`) gains `payment_term_id` (UUID FK → payment_terms, nullable) — a party may be both supplier and client; this column only applies to client rows.
 - Default payment term (for clients without one) configured in `BillingSettings::default_payment_term_id`.
 - Recurring template can override: `payment_term_id` on `recurring_invoices` (nullable; null = use client's term).
 
@@ -311,8 +311,8 @@ Settings page: `/settings/billing` (Volt, mirrors `/settings/purchasing`).
 | `documents` | `+ receivable_account_id UUID FK nullable` |
 | `documents` | `+ bank_account_id UUID FK nullable` |
 | `documents` | `+ payment_term_id UUID FK nullable` |
-| `parties` | `+ client_account_id UUID FK nullable` |
-| `parties` | `+ payment_term_id UUID FK nullable` |
+| `party_relationships` | `+ default_receivable_account_id UUID FK nullable` (client rows only) |
+| `party_relationships` | `+ payment_term_id UUID FK nullable` (client rows only) |
 
 ### Config Changes
 | File | Change |

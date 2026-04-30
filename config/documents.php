@@ -94,6 +94,13 @@ return [
             'default_status' => 'draft',
             'requires_due_date' => false,
         ],
+        'payment' => [
+            'label' => 'Payment',
+            'direction' => 'inbound',
+            'prefix' => 'PAY',
+            'default_status' => 'draft',
+            'requires_due_date' => false,
+        ],
     ],
 
 ];
