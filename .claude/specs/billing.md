@@ -6,6 +6,64 @@ Outbound billing: sales invoices, client management, payment terms, payment reco
 
 ---
 
+## 0. Relationship Metadata Convention (Phase 1a — prerequisite)
+
+### 0.1 Principle
+
+`party_relationships.metadata` is the canonical store for all data that is specific to a `relationship_type`. No new typed columns are added to `party_relationships` for per-type data — the table must remain stable as relationship types are added or changed.
+
+This applies to **all** relationship types, including the existing `supplier` type.
+
+### 0.2 Metadata Shape by Relationship Type
+
+```json
+// relationship_type = "supplier"
+{
+  "default_payable_account_id": "uuid | null",
+  "payment_term_id":            "uuid | null"
+}
+
+// relationship_type = "client"
+{
+  "default_receivable_account_id": "uuid | null",
+  "payment_term_id":               "uuid | null"
+}
+```
+
+Keys are optional; absent keys are treated as `null`.
+
+### 0.3 Model API
+
+`PartyRelationship` exposes typed Eloquent Attribute accessors that read and write through `metadata`. Callers use them as normal properties:
+
+```php
+$rel->default_payable_account_id      // reads metadata['default_payable_account_id']
+$rel->default_receivable_account_id   // reads metadata['default_receivable_account_id']
+$rel->payment_term_id                 // reads metadata['payment_term_id']
+```
+
+Setters merge into the existing `metadata` array (never replace the whole object).
+
+### 0.4 Impact on Existing Code
+
+| Area | Change required |
+|---|---|
+| `party_relationships` original migration | Remove `default_payable_account_id` dedicated column (was never given a FK; never read by pipeline) |
+| Phase 1 billing migration | Remove `default_receivable_account_id` and `payment_term_id` dedicated columns (just added — superseded by this convention) |
+| `PartyRelationship` model | Remove from `$fillable`; add Attribute accessors for the three keys above |
+| `DocumentService::createDocument()` | Already reads payable account from `PurchasingSettings` (account code). Add per-supplier override: if supplier's `default_payable_account_id` in metadata is set, use it first. |
+| Supplier CRUD (`/suppliers`) | Add "Default Payable Account" selector to form — stored in `metadata` on the supplier relationship row |
+| Supplier CRUD — payment term | Add "Payment Term" selector to supplier form — stored in `metadata` on the supplier relationship row |
+| `SupplierResolver` | No change — does not read `default_payable_account_id` |
+| `AccountResolver` | No change — does not read `default_payable_account_id` |
+| Tests | Update any test that sets or asserts `default_payable_account_id` as a column |
+
+### 0.5 `migrate:fresh` Approach
+
+This is a dev workstation with no real data. Phase 1a execution uses `php artisan migrate:fresh --seed` to cleanly apply the corrected schema rather than patching with additional alter-table migrations.
+
+---
+
 ## 1. Clients
 
 ### 1.1 Client as Party
@@ -19,7 +77,7 @@ Outbound billing: sales invoices, client management, payment terms, payment reco
 - Account group: Debtors (seed if not present).
 - Account code: sequential from `BillingSettings::debtor_account_code_start` (e.g. 110001, 110002, …).
 - Account name: client's `displayName` at creation time.
-- `party_relationships` row (where `relationship_type = 'client'`) gains `default_receivable_account_id` (UUID FK → accounts, nullable) — mirrors `default_payable_account_id` on supplier rows.
+- `party_relationships` row (where `relationship_type = 'client'`) stores `default_receivable_account_id` in `metadata` (see §0).
 - The client's debtor account is the receivable account on all their sales invoices.
 
 ### 1.3 Invoice Contacts
@@ -70,7 +128,7 @@ Traits: `HasUuids`, `HasFactory`, `LogsActivity`, `SoftDeletes`.
 - For `beginning_of_next_billing_period`: next occurrence of `billing_period_day` after `invoiceDate`.
 
 ### 2.4 Assignment
-- `party_relationships` row (where `relationship_type = 'client'`) gains `payment_term_id` (UUID FK → payment_terms, nullable) — a party may be both supplier and client; this column only applies to client rows.
+- `party_relationships` row (where `relationship_type = 'client'`) stores `payment_term_id` in `metadata` (see §0). Supplier rows store their `payment_term_id` in `metadata` too — same key, different row.
 - Default payment term (for clients without one) configured in `BillingSettings::default_payment_term_id`.
 - Recurring template can override: `payment_term_id` on `recurring_invoices` (nullable; null = use client's term).
 
@@ -311,8 +369,8 @@ Settings page: `/settings/billing` (Volt, mirrors `/settings/purchasing`).
 | `documents` | `+ receivable_account_id UUID FK nullable` |
 | `documents` | `+ bank_account_id UUID FK nullable` |
 | `documents` | `+ payment_term_id UUID FK nullable` |
-| `party_relationships` | `+ default_receivable_account_id UUID FK nullable` (client rows only) |
-| `party_relationships` | `+ payment_term_id UUID FK nullable` (client rows only) |
+| `party_relationships` | Remove `default_payable_account_id` dedicated column — moved to `metadata` (Phase 1a) |
+| `party_relationships` | `metadata` JSON already exists; no new typed columns added for client or supplier data |
 
 ### Config Changes
 | File | Change |

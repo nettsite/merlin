@@ -17,7 +17,7 @@ Each phase is independently testable. Complete all verification steps before sta
    - `create_payment_terms_table` — UUID PK, `name`, `rule` enum, `days`, `day_of_month`, timestamps, soft-deletes
    - `create_recurring_invoices_table` — all columns from spec §5.3
    - `create_recurring_invoice_lines_table` — all columns from spec §5.4
-   - `add_billing_columns_to_party_relationships` — `default_receivable_account_id` UUID FK nullable, `payment_term_id` UUID FK nullable (client rows only; mirrors `default_payable_account_id` pattern for supplier rows)
+   - ~~`add_billing_columns_to_party_relationships`~~ — superseded by Phase 1a (metadata convention); this migration will be revised to a no-op or deleted before `migrate:fresh`
    - `add_billing_columns_to_documents` — `receivable_account_id`, `bank_account_id`, `payment_term_id` (all UUID FK nullable)
    - `add_receives_invoices_to_contact_assignments` — `receives_invoices boolean default false`
 
@@ -44,6 +44,54 @@ php artisan db:seed --class=DebtorAccountGroupSeeder
 php artisan db:seed --class=PaymentTermSeeder
 php artisan test --compact --filter=Phase1  # placeholder; write a smoke test asserting migrations ran
 ```
+
+---
+
+## Phase 1a — Relationship Metadata Convention
+
+**Goal:** `party_relationships.metadata` is the single source of truth for all per-type data. No typed columns for type-specific fields. Existing supplier code updated to read/write through metadata. Full suite still green.
+
+**Approach:** `migrate:fresh --seed` (dev workstation, no real data). Correct migrations at source rather than layering alter-table patches.
+
+### Tasks
+
+1. **Revise `create_party_relationships_table` migration**:
+   - Remove `default_payable_account_id` column entirely. It has no FK constraint and is never read by the invoice pipeline. It moves into `metadata`.
+
+2. **Revise `add_billing_columns_to_party_relationships` migration** (Phase 1 migration):
+   - Remove `default_receivable_account_id` and `payment_term_id` dedicated columns. These belong in `metadata`, not as typed columns.
+   - Migration becomes a no-op structurally (the table already has `metadata`). Can be deleted or left empty depending on whether it simplifies history.
+
+3. **`PartyRelationship` model** — add Eloquent Attribute accessors that transparently read/write `metadata`:
+   - `default_payable_account_id` — reads/writes `metadata['default_payable_account_id']`
+   - `default_receivable_account_id` — reads/writes `metadata['default_receivable_account_id']`
+   - `payment_term_id` — reads/writes `metadata['payment_term_id']`
+   - Remove `default_payable_account_id` from `$fillable` (setters go through the accessor)
+   - Setters merge into `metadata`, never replace it wholesale
+
+4. **`DocumentService::createDocument()`** — add per-supplier payable account override:
+   - When creating a purchase invoice, check supplier's `PartyRelationship` for `default_payable_account_id` in metadata first; fall back to `PurchasingSettings::default_payable_account` account code
+
+5. **Supplier CRUD (`/suppliers/index.blade.php`)** — add two fields to the form:
+   - "Default Payable Account" — select from Liability accounts; saved to supplier relationship `metadata`
+   - "Payment Terms" — select from `PaymentTerm::all()`; saved to supplier relationship `metadata`
+   - On `edit()`: populate from supplier relationship metadata
+   - On `save()`: update metadata on the relationship row (not on `Party` directly)
+
+6. **`migrate:fresh --seed`** — run with all standard seeders:
+   ```bash
+   php artisan migrate:fresh --seed --seeder=DatabaseSeeder
+   ```
+   Ensure `DatabaseSeeder` calls `ChartOfAccountsSeeder`, `RolesAndPermissionsSeeder`, `DefaultAdminUserSeeder`, `DebtorAccountGroupSeeder`, `PaymentTermSeeder`.
+
+7. **Update tests** — check for any test that sets or asserts `default_payable_account_id` as a direct column attribute; update to use the accessor or metadata array.
+
+### Verify
+```bash
+php artisan migrate:fresh --seed
+php artisan test --compact
+```
+Full suite must be green before proceeding to Phase 2.
 
 ---
 
@@ -98,18 +146,18 @@ php artisan test --compact tests/Feature/Billing/PaymentTermCrudTest.php
    - `createForRelationship(PartyRelationship $rel): Account`
    - Finds "Debtors" account group (seeded in Phase 1)
    - Next code = `BillingSettings::debtor_account_code_start` + count of existing debtor accounts
-   - Creates `Account`, sets `rel.default_receivable_account_id`
-   - Guard: if `default_receivable_account_id` already set on the relationship row, skip
+   - Creates `Account`, sets `rel->default_receivable_account_id` via the metadata accessor (Phase 1a)
+   - Guard: if `default_receivable_account_id` already set in metadata, skip
 
 2. **Hook into PartyService** (or `PartyRelationship` observer):
    - When `PartyRelationship` with `relationship_type = 'client'` is created, call `ClientAccountService::createForRelationship()`
 
 3. **Volt page** `resources/views/livewire/pages/clients/index.blade.php`:
-   - `HasCrudTable` + `HasCrudForm` — mirrors `/suppliers/index.blade.php`
-   - Extra field in form: payment term selector (`<flux:select>` from `PaymentTerm::all()`) — stored on the `client` PartyRelationship row
+   - `HasCrudTable` + `HasCrudForm` — mirrors `/suppliers/index.blade.php` (which will already have been updated in Phase 1a)
+   - Extra field in form: payment term selector — stored in client relationship `metadata` via accessor
    - Route: `GET /clients` → name `clients`
 
-4. **`PartyRelationship` model** — add `defaultReceivableAccount()` and `paymentTerm()` relationships
+4. **`PartyRelationship` model** — `defaultReceivableAccount()` and `paymentTerm()` BelongsTo relationships added (accessors already exist from Phase 1a)
 
 5. **Nav link** for Clients
 
