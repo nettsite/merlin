@@ -20,6 +20,8 @@ vendor/bin/pint --dirty   # format changed PHP files
 php artisan db:seed --class=RolesAndPermissionsSeeder
 php artisan db:seed --class=ChartOfAccountsSeeder
 php artisan db:seed --class=DefaultAdminUserSeeder
+php artisan db:seed --class=DebtorAccountGroupSeeder
+php artisan db:seed --class=PaymentTermSeeder
 
 # Invoice watch folder (polls INVOICE_WATCH_DIR every INVOICE_WATCH_INTERVAL seconds)
 php artisan invoices:watch
@@ -46,7 +48,7 @@ app/Modules/
 │   ├── Jobs/       — ProcessInvoiceDocument (queued)
 │   ├── DTO/        — ExtractedInvoice, ExtractedInvoiceLine, MagikaResult
 │   └── Settings/   — PurchasingSettings (autopost_confidence, tax_default_rate, etc.)
-└── Billing/        — stub (BillingService + BillingSettings)
+└── Billing/        — in progress; Enums, PaymentTerm + RecurringInvoice models, seeders done (Phase 1)
 
 app/Policies/       — 16 domain policies, all extend AllModulesPolicy
 app/Traits/         — HasDocumentNumber (auto-generates PREFIX-YEAR-NNNNN on create)
@@ -126,11 +128,27 @@ Methods: `markAsReviewed()`, `approve()`, `post()`, `dispute()`, `reject()`, `re
 
 ### Morph Map (AppServiceProvider)
 
-16 aliases registered via `Relation::enforceMorphMap()`. Always add new morph-related models here before writing data.
+18 aliases registered via `Relation::enforceMorphMap()`. Always add new morph-related models here before writing data.
+
+### `party_relationships.metadata` Convention
+
+**Never add typed columns to `party_relationships` for relationship-type-specific data.** The `metadata` JSON column is the canonical store for all per-type fields. This keeps the table stable as new relationship types are introduced.
+
+Current metadata shapes:
+
+```json
+// relationship_type = "supplier"
+{ "default_payable_account_id": "uuid|null", "payment_term_id": "uuid|null" }
+
+// relationship_type = "client"
+{ "default_receivable_account_id": "uuid|null", "payment_term_id": "uuid|null" }
+```
+
+`PartyRelationship` exposes Eloquent Attribute accessors so callers use `$rel->default_payable_account_id` etc. as normal properties — they transparently read/write `metadata`. Setters merge into existing metadata; they never replace the whole object.
 
 ## Key Rules
 
-- **Auditing:** `spatie/laravel-activitylog` — models use `LogsActivity` trait + `getActivitylogOptions()`. No `owen-it/laravel-auditing`.
+- **Auditing:** `spatie/laravel-activitylog` — models use `LogsActivity` trait + `getActivitylogOptions()`. No `owen-it/laravel-auditing`. Import as `Spatie\Activitylog\Support\LogOptions` (not `Spatie\Activitylog\LogOptions` — that namespace does not exist).
 - **Auth:** Laravel Breeze owns `/login`, `/register`, auth tests. Do not touch `tests/Feature/Auth/` or `tests/Feature/Settings/`.
 - **No Filament.** Do not install or reference Filament. Read `~/Projects/merlin` as spec only.
 - **PurchaseInvoice is always fully custom.** Never route it through `HasCrudForm`.
