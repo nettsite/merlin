@@ -2,7 +2,10 @@
 
 use App\Livewire\Concerns\HasCrudForm;
 use App\Livewire\Concerns\HasCrudTable;
+use App\Modules\Accounting\Models\Account;
+use App\Modules\Billing\Models\PaymentTerm;
 use App\Modules\Core\Models\Party;
+use App\Modules\Core\Models\PartyRelationship;
 use App\Modules\Core\Services\PartyService;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Validate;
@@ -30,6 +33,12 @@ new #[Layout('components.layout.app')] class extends Component
     #[Validate('required|in:active,pending,inactive')]
     public string $status = 'active';
 
+    #[Validate('nullable|uuid|exists:accounts,id')]
+    public string $defaultPayableAccountId = '';
+
+    #[Validate('nullable|uuid|exists:payment_terms,id')]
+    public string $paymentTermId = '';
+
     public function mount(): void
     {
         $this->authorize('viewAny', Party::class);
@@ -38,7 +47,7 @@ new #[Layout('components.layout.app')] class extends Component
     public function create(): void
     {
         $this->authorize('create', Party::class);
-        $this->reset(['legalName', 'tradingName', 'email', 'phone', 'notes']);
+        $this->reset(['legalName', 'tradingName', 'email', 'phone', 'notes', 'defaultPayableAccountId', 'paymentTermId']);
         $this->status = 'active';
         $this->editingId = null;
         $this->showForm = true;
@@ -46,7 +55,7 @@ new #[Layout('components.layout.app')] class extends Component
 
     protected function fillForm(string $id): void
     {
-        $party = Party::with('business')->findOrFail($id);
+        $party = Party::with(['business', 'relationships'])->findOrFail($id);
         $this->authorize('update', $party);
         $this->legalName = $party->business?->legal_name ?? '';
         $this->tradingName = $party->business?->trading_name ?? '';
@@ -54,12 +63,16 @@ new #[Layout('components.layout.app')] class extends Component
         $this->phone = $party->primary_phone ?? '';
         $this->notes = $party->notes ?? '';
         $this->status = $party->status;
+
+        $supplierRel = $party->relationships->firstWhere('relationship_type', 'supplier');
+        $this->defaultPayableAccountId = $supplierRel?->default_payable_account_id ?? '';
+        $this->paymentTermId = $supplierRel?->payment_term_id ?? '';
     }
 
     protected function store(): void
     {
         $this->validate();
-        app(PartyService::class)->createBusiness([
+        $party = app(PartyService::class)->createBusiness([
             'business_type' => 'company',
             'legal_name' => $this->legalName,
             'trading_name' => $this->tradingName ?: $this->legalName,
@@ -68,12 +81,14 @@ new #[Layout('components.layout.app')] class extends Component
             'notes' => $this->notes ?: null,
             'status' => $this->status,
         ], ['supplier']);
+
+        $this->saveSupplierRelationshipMetadata($party);
     }
 
     protected function update(): void
     {
         $this->validate();
-        $party = Party::with('business')->findOrFail($this->editingId);
+        $party = Party::with(['business', 'relationships'])->findOrFail($this->editingId);
         $party->business?->update([
             'legal_name' => $this->legalName,
             'trading_name' => $this->tradingName ?: $this->legalName,
@@ -83,6 +98,22 @@ new #[Layout('components.layout.app')] class extends Component
             'primary_phone' => $this->phone ?: null,
             'notes' => $this->notes ?: null,
             'status' => $this->status,
+        ]);
+
+        $this->saveSupplierRelationshipMetadata($party);
+    }
+
+    private function saveSupplierRelationshipMetadata(Party $party): void
+    {
+        $rel = $party->relationships()->where('relationship_type', 'supplier')->first();
+
+        if ($rel === null) {
+            return;
+        }
+
+        $rel->mergeMetadata([
+            'default_payable_account_id' => $this->defaultPayableAccountId ?: null,
+            'payment_term_id' => $this->paymentTermId ?: null,
         ]);
     }
 
@@ -102,6 +133,11 @@ new #[Layout('components.layout.app')] class extends Component
         };
 
         return [
+            'liabilityAccounts' => Account::postable()->active()
+                ->whereHas('group.type', fn ($q) => $q->where('code', '2'))
+                ->orderBy('code')
+                ->get(['id', 'code', 'name']),
+            'paymentTerms' => PaymentTerm::orderBy('name')->get(['id', 'name']),
             'rows' => Party::suppliers()
                 ->join('businesses', 'businesses.id', '=', 'parties.id')
                 ->select('parties.*')
@@ -227,6 +263,28 @@ new #[Layout('components.layout.app')] class extends Component
             <option value="inactive">Inactive</option>
         </flux:select>
         <flux:error name="status" />
+    </flux:field>
+
+    <flux:field>
+        <flux:label>Default Payable Account</flux:label>
+        <flux:select wire:model="defaultPayableAccountId">
+            <option value="">— Use system default —</option>
+            @foreach($liabilityAccounts as $account)
+                <option value="{{ $account->id }}">{{ $account->code }} — {{ $account->name }}</option>
+            @endforeach
+        </flux:select>
+        <flux:error name="defaultPayableAccountId" />
+    </flux:field>
+
+    <flux:field>
+        <flux:label>Payment Terms</flux:label>
+        <flux:select wire:model="paymentTermId">
+            <option value="">— Use system default —</option>
+            @foreach($paymentTerms as $term)
+                <option value="{{ $term->id }}">{{ $term->name }}</option>
+            @endforeach
+        </flux:select>
+        <flux:error name="paymentTermId" />
     </flux:field>
 
     <flux:field>

@@ -144,7 +144,7 @@ Current metadata shapes:
 { "default_receivable_account_id": "uuid|null", "payment_term_id": "uuid|null" }
 ```
 
-`PartyRelationship` exposes Eloquent Attribute accessors so callers use `$rel->default_payable_account_id` etc. as normal properties — they transparently read/write `metadata`. Setters merge into existing metadata; they never replace the whole object.
+`PartyRelationship` exposes getter-only Eloquent Attribute accessors so callers read via `$rel->default_payable_account_id` etc. as normal properties. **For writing, always use `$rel->mergeMetadata([...])` — never assign to the accessor properties directly.** Eloquent `Attribute` setters that return `['metadata' => array]` bypass the 'array' cast encoder, leaving a raw PHP array in `$attributes` that breaks subsequent `json_decode` calls on the same request.
 
 ## Key Rules
 

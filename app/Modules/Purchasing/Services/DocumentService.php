@@ -4,6 +4,7 @@ namespace App\Modules\Purchasing\Services;
 
 use App\Exceptions\InvalidDocumentStateException;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Core\Models\Party;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Settings\CurrencySettings;
 use App\Modules\Purchasing\Jobs\ProcessInvoiceDocument;
@@ -93,7 +94,7 @@ class DocumentService
             'exchange_rate' => 1.0,
             'party_id' => $data['party_id'] ?? null,
             'source' => 'upload',
-            'payable_account_id' => Account::where('code', $this->purchasingSettings->default_payable_account)->value('id'),
+            'payable_account_id' => $this->resolvePayableAccountId($data['party_id'] ?? null),
         ]);
 
         $document
@@ -257,6 +258,23 @@ class DocumentService
     public function postAutonomously(Document $doc, string $reason): void
     {
         $this->transition($doc, 'posted', null, "Auto-posted: {$reason}");
+    }
+
+    private function resolvePayableAccountId(?string $partyId): ?string
+    {
+        if ($partyId !== null) {
+            $override = Party::find($partyId)
+                ?->relationships()
+                ->where('relationship_type', 'supplier')
+                ->first()
+                ?->default_payable_account_id;
+
+            if ($override !== null) {
+                return $override;
+            }
+        }
+
+        return Account::where('code', $this->purchasingSettings->default_payable_account)->value('id');
     }
 
     private function transition(Document $doc, string $to, ?User $by, string $description): void

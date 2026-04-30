@@ -16,8 +16,6 @@ return new class extends Migration
             $table->foreignUuid('party_id')->constrained('parties')->cascadeOnDelete();
             $table->string('relationship_type');
             $table->boolean('is_active')->default(true);
-            // FK to accounts.id added in Phase 3 migration
-            $table->uuid('default_payable_account_id')->nullable();
             $table->json('metadata')->nullable();
             $table->timestamps();
             $table->softDeletes();

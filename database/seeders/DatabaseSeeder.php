@@ -15,5 +15,7 @@ class DatabaseSeeder extends Seeder
         $this->call(RolesAndPermissionsSeeder::class);
         $this->call(ChartOfAccountsSeeder::class);
         $this->call(DefaultAdminUserSeeder::class);
+        $this->call(DebtorAccountGroupSeeder::class);
+        $this->call(PaymentTermSeeder::class);
     }
 }
