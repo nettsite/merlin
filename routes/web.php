@@ -20,6 +20,7 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
     Volt::route('posting-rules', 'pages.posting-rules.index')->name('posting-rules.index');
 
     // Billing
+    Volt::route('clients', 'pages.clients.index')->name('clients.index');
     Volt::route('payment-terms', 'pages.payment-terms.index')->name('payment-terms.index');
 
     // Accounting

@@ -24,6 +24,13 @@
 
     <flux:sidebar.group heading="Billing">
         <flux:sidebar.item
+            icon="user-group"
+            href="{{ route('clients.index') }}"
+            :current="request()->routeIs('clients.*')"
+            wire:navigate
+        >Clients</flux:sidebar.item>
+
+        <flux:sidebar.item
             icon="calendar-days"
             href="{{ route('payment-terms.index') }}"
             :current="request()->routeIs('payment-terms.*')"
