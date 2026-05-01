@@ -34,7 +34,7 @@ Each phase is independently testable. Complete all verification steps before sta
    - Add `'recurring_invoice'` → `RecurringInvoice::class`
 
 5. **Seeders**:
-   - `DebtorAccountGroupSeeder` — ensure "Debtors" account group exists (type: Asset)
+   - `DebtorAccountGroupSeeder` — ensure "Debtors" account group exists (type: Asset); user creates the single AR account manually via Chart of Accounts or settings
    - `PaymentTermSeeder` — seed: "30 Days" (days_after_invoice, 30), "EOM" (first_business_day_of_following_month), "25th of Month" (nth_of_following_month, 25), "Immediate" (same_as_invoice_date)
 
 ### Verify
@@ -138,37 +138,25 @@ php artisan test --compact tests/Feature/Billing/PaymentTermCrudTest.php
 
 ## Phase 3 — Clients
 
-**Goal:** `/clients` CRUD works; gaining `'client'` relationship auto-creates debtor GL account.
+**Goal:** `/clients` CRUD works. No per-client GL account — a single AR control account (configured in BillingSettings) is used on all sales invoices. Client balance is derived from `documents` filtered by `party_id`.
 
 ### Tasks
 
-1. **ClientAccountService** `app/Modules/Billing/Services/ClientAccountService.php`:
-   - `createForRelationship(PartyRelationship $rel): Account`
-   - Finds "Debtors" account group (seeded in Phase 1)
-   - Next code = `BillingSettings::debtor_account_code_start` + count of existing debtor accounts
-   - Creates `Account`, sets `rel->default_receivable_account_id` via the metadata accessor (Phase 1a)
-   - Guard: if `default_receivable_account_id` already set in metadata, skip
-
-2. **Hook into PartyService** (or `PartyRelationship` observer):
-   - When `PartyRelationship` with `relationship_type = 'client'` is created, call `ClientAccountService::createForRelationship()`
-
-3. **Volt page** `resources/views/livewire/pages/clients/index.blade.php`:
-   - `HasCrudTable` + `HasCrudForm` — mirrors `/suppliers/index.blade.php` (which will already have been updated in Phase 1a)
-   - Extra field in form: payment term selector — stored in client relationship `metadata` via accessor
+1. **Volt page** `resources/views/livewire/pages/clients/index.blade.php`:
+   - `HasCrudTable` + `HasCrudForm` — mirrors `/suppliers/index.blade.php`
+   - Form fields: party name/type, payment term selector — stored in client relationship `metadata` via accessor
    - Route: `GET /clients` → name `clients`
 
-4. **`PartyRelationship` model** — `defaultReceivableAccount()` and `paymentTerm()` BelongsTo relationships added (accessors already exist from Phase 1a)
+2. **`PartyRelationship` model** — `paymentTerm()` BelongsTo relationship added (accessor already exists from Phase 1a)
 
-5. **Nav link** for Clients
+3. **Nav link** for Clients
 
 ### Tests
-- `tests/Feature/Billing/ClientCrudTest.php` — CRUD, check debtor account created on `'client'` relationship
-- `tests/Unit/Billing/ClientAccountServiceTest.php` — code sequencing, skip if already set
+- `tests/Feature/Billing/ClientCrudTest.php` — CRUD (create client, edit payment term, delete)
 
 ### Verify
 ```bash
 php artisan test --compact tests/Feature/Billing/ClientCrudTest.php
-php artisan test --compact tests/Unit/Billing/ClientAccountServiceTest.php
 ```
 
 ---
@@ -182,7 +170,7 @@ php artisan test --compact tests/Unit/Billing/ClientAccountServiceTest.php
 1. **BillingService** `app/Modules/Billing/Services/BillingService.php`:
    - `createDraft(Party $client, array $data): Document`
      - Sets `document_type = sales_invoice`, `direction = outbound`, `status = draft`
-     - Copies `receivable_account_id` from client's `client_account_id`
+     - Sets `receivable_account_id` from `BillingSettings::default_receivable_account_id`
      - Resolves `payment_term_id` (explicit → client's → BillingSettings default)
      - Calls `DueDateCalculator::calculate()` → sets `due_date`
    - `markAsSent(Document $invoice): Document`
@@ -362,7 +350,7 @@ php artisan billing:generate-recurring --dry-run
    - Fields: debtor account code start, default bank account (select from asset accounts), default payment term (select from `PaymentTerm::all()`), tax liability account (select from liability accounts), billing period day
    - Route: `GET /settings/billing` → name `settings.billing`; nav link under Settings
 
-2. **`BillingSettings::debtor_account_code_start`** (int, 110000) — add if deferred from Phase 2
+2. **`BillingSettings::default_receivable_account_id`** (?string, null) — single AR control account selector (asset accounts)
 
 ### Tests
 - `tests/Feature/Billing/BillingSettingsTest.php` — save and retrieve each setting

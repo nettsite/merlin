@@ -25,8 +25,7 @@ This applies to **all** relationship types, including the existing `supplier` ty
 
 // relationship_type = "client"
 {
-  "default_receivable_account_id": "uuid | null",
-  "payment_term_id":               "uuid | null"
+  "payment_term_id": "uuid | null"
 }
 ```
 
@@ -38,7 +37,6 @@ Keys are optional; absent keys are treated as `null`.
 
 ```php
 $rel->default_payable_account_id      // reads metadata['default_payable_account_id']
-$rel->default_receivable_account_id   // reads metadata['default_receivable_account_id']
 $rel->payment_term_id                 // reads metadata['payment_term_id']
 ```
 
@@ -50,7 +48,7 @@ Setters merge into the existing `metadata` array (never replace the whole object
 |---|---|
 | `party_relationships` original migration | Remove `default_payable_account_id` dedicated column (was never given a FK; never read by pipeline) |
 | Phase 1 billing migration | Remove `default_receivable_account_id` and `payment_term_id` dedicated columns (just added — superseded by this convention) |
-| `PartyRelationship` model | Remove from `$fillable`; add Attribute accessors for the three keys above |
+| `PartyRelationship` model | Remove from `$fillable`; add Attribute accessors for the two keys above |
 | `DocumentService::createDocument()` | Already reads payable account from `PurchasingSettings` (account code). Add per-supplier override: if supplier's `default_payable_account_id` in metadata is set, use it first. |
 | Supplier CRUD (`/suppliers`) | Add "Default Payable Account" selector to form — stored in `metadata` on the supplier relationship row |
 | Supplier CRUD — payment term | Add "Payment Term" selector to supplier form — stored in `metadata` on the supplier relationship row |
@@ -72,13 +70,12 @@ This is a dev workstation with no real data. Phase 1a execution uses `php artisa
 - CRUD Volt page at `/clients` — mirrors `/suppliers` using `HasCrudTable` + `HasCrudForm`.
 - Client form includes payment terms selector (see §2).
 
-### 1.2 Client Debtor GL Account
-- When a Party gains the `'client'` relationship, `ClientAccountService` auto-creates a dedicated `Account`.
-- Account group: Debtors (seed if not present).
-- Account code: sequential from `BillingSettings::debtor_account_code_start` (e.g. 110001, 110002, …).
-- Account name: client's `displayName` at creation time.
-- `party_relationships` row (where `relationship_type = 'client'`) stores `default_receivable_account_id` in `metadata` (see §0).
-- The client's debtor account is the receivable account on all their sales invoices.
+### 1.2 Accounts Receivable GL Account
+- A single AR control account is shared by all clients (no per-client GL account).
+- Client balance and statement are derived directly from `documents` filtered by `party_id` — the AR control account in the GL holds only the aggregate balance.
+- `BillingSettings::default_receivable_account_id` holds the UUID of the AR control account; all sales invoices use it.
+- `party_relationships` metadata for `'client'` rows does **not** include `default_receivable_account_id` — it is unnecessary when a single AR account is used.
+- Account group: Assets → Debtors (seeded via `DebtorAccountGroupSeeder`; user creates the AR account manually or via settings).
 
 ### 1.3 Invoice Contacts
 - `contact_assignments` gains `receives_invoices boolean default false`.
@@ -343,7 +340,7 @@ For each active template where `next_invoice_date ≤ today`:
 
 | Property | Type | Default | Description |
 |---|---|---|---|
-| `debtor_account_code_start` | int | 110000 | First sequential code for client debtor accounts |
+| `default_receivable_account_id` | ?string | null | Single AR control account used on all sales invoices |
 | `default_bank_account_id` | ?string | null | Default bank/cash GL account for payments |
 | `default_payment_term_id` | ?string | null | Fallback payment term when client has none |
 | `tax_liability_account_id` | ?string | null | Output tax (VAT) GL account |
@@ -394,7 +391,6 @@ app/Modules/Billing/
 │   └── RecurringInvoiceLine.php
 ├── Services/
 │   ├── BillingService.php            — invoice creation, status transitions, payment recording
-│   ├── ClientAccountService.php      — creates GL account when Party gains 'client' relationship
 │   └── DueDateCalculator.php         — calculates due date from PaymentTerm + invoice date
 ├── Settings/
 │   └── BillingSettings.php
