@@ -38,6 +38,13 @@
         >Sales Invoices</flux:sidebar.item>
 
         <flux:sidebar.item
+            icon="arrow-path"
+            href="{{ route('recurring-invoices.index') }}"
+            :current="request()->routeIs('recurring-invoices.*')"
+            wire:navigate
+        >Recurring Invoices</flux:sidebar.item>
+
+        <flux:sidebar.item
             icon="calendar-days"
             href="{{ route('payment-terms.index') }}"
             :current="request()->routeIs('payment-terms.*')"

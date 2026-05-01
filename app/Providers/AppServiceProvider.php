@@ -5,8 +5,10 @@ namespace App\Providers;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\AccountGroup;
 use App\Modules\Accounting\Models\AccountType;
+use App\Modules\Billing\Console\GenerateRecurringInvoices;
 use App\Modules\Billing\Models\PaymentTerm;
 use App\Modules\Billing\Models\RecurringInvoice;
+use App\Modules\Billing\Models\RecurringInvoiceLine;
 use App\Modules\Core\Contracts\ModulePolicy;
 use App\Modules\Core\Models\Business;
 use App\Modules\Core\Models\ContactAssignment;
@@ -41,6 +43,8 @@ class AppServiceProvider extends ServiceProvider
         }
 
         $this->app->bind(ModulePolicy::class, AllModulesPolicy::class);
+
+        $this->commands([GenerateRecurringInvoices::class]);
 
         $this->app->singleton(ExchangeRateService::class, function ($app): ExchangeRateService {
             return new ExchangeRateService($app->make(CurrencySettings::class)->base_currency);
@@ -80,6 +84,7 @@ class AppServiceProvider extends ServiceProvider
             'payment_term' => PaymentTerm::class,
             'posting_rule' => PostingRule::class,
             'recurring_invoice' => RecurringInvoice::class,
+            'recurring_invoice_line' => RecurringInvoiceLine::class,
             'user' => User::class,
         ]);
     }

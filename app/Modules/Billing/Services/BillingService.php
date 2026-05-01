@@ -79,7 +79,7 @@ class BillingService
      *
      * @param  string[]  $recipientEmails  Explicit list; resolves from flagged contacts when empty.
      */
-    public function sendInvoice(Document $invoice, User $by, array $recipientEmails = []): Document
+    public function sendInvoice(Document $invoice, ?User $by, array $recipientEmails = []): Document
     {
         if (empty($recipientEmails)) {
             $recipientEmails = $this->resolveRecipientEmails($invoice);

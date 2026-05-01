@@ -29,7 +29,7 @@ class DocumentService
     // Status transitions
     // -------------------------------------------------------------------------
 
-    public function markAsSent(Document $doc, User $by): void
+    public function markAsSent(Document $doc, ?User $by): void
     {
         $this->transition($doc, 'sent', $by, 'Invoice sent to client.');
     }
