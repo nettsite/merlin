@@ -22,6 +22,15 @@
         >Posting Rules</flux:sidebar.item>
     </flux:sidebar.group>
 
+    <flux:sidebar.group heading="Billing">
+        <flux:sidebar.item
+            icon="calendar-days"
+            href="{{ route('payment-terms.index') }}"
+            :current="request()->routeIs('payment-terms.*')"
+            wire:navigate
+        >Payment Terms</flux:sidebar.item>
+    </flux:sidebar.group>
+
     <flux:sidebar.group heading="Accounting">
         <flux:sidebar.item
             icon="banknotes"
