@@ -7,10 +7,10 @@ use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Spatie\Activitylog\Models\Concerns\LogsActivity;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Spatie\Activitylog\Models\Concerns\LogsActivity;
 
 /**
  * @property string $display_name
@@ -18,7 +18,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  */
 class Account extends Model
 {
-    use LogsActivity, HasFactory, HasUuids, SoftDeletes;
+    use HasFactory, HasUuids, LogsActivity, SoftDeletes;
 
     protected $fillable = [
         'account_group_id',
@@ -80,6 +80,14 @@ class Account extends Model
         return $query->whereHas(
             'group.type',
             fn (Builder $q) => $q->where('code', '5'),
+        );
+    }
+
+    public function scopeIncome(Builder $query): Builder
+    {
+        return $query->whereHas(
+            'group.type',
+            fn (Builder $q) => $q->where('code', '4'),
         );
     }
 

@@ -22,6 +22,7 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
     // Billing
     Volt::route('clients', 'pages.clients.index')->name('clients.index');
     Volt::route('payment-terms', 'pages.payment-terms.index')->name('payment-terms.index');
+    Volt::route('sales-invoices', 'pages.sales-invoices.index')->name('sales-invoices.index');
 
     // Accounting
     Volt::route('accounts', 'pages.accounts.index')->name('accounts.index');

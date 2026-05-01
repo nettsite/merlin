@@ -16,10 +16,11 @@
     <flux:dropdown>
         <flux:navbar.item
             icon:trailing="chevron-down"
-            :current="request()->is('clients*', 'payment-terms*')"
+            :current="request()->is('clients*', 'payment-terms*', 'sales-invoices*')"
         >Billing</flux:navbar.item>
         <flux:navmenu>
             <flux:navmenu.item href="{{ route('clients.index') }}" wire:navigate>Clients</flux:navmenu.item>
+            <flux:navmenu.item href="{{ route('sales-invoices.index') }}" wire:navigate>Sales Invoices</flux:navmenu.item>
             <flux:navmenu.item href="{{ route('payment-terms.index') }}" wire:navigate>Payment Terms</flux:navmenu.item>
         </flux:navmenu>
     </flux:dropdown>

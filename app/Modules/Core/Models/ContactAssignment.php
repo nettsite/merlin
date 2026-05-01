@@ -4,19 +4,20 @@ namespace App\Modules\Core\Models;
 
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
-use Spatie\Activitylog\Models\Concerns\LogsActivity;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Spatie\Activitylog\Models\Concerns\LogsActivity;
 
 class ContactAssignment extends Model
 {
-    use LogsActivity, HasUuids, SoftDeletes;
+    use HasUuids, LogsActivity, SoftDeletes;
 
     protected $fillable = [
         'person_id',
         'party_id',
         'party_relationship_id',
         'role',
+        'receives_invoices',
         'is_primary',
         'is_active',
         'job_title',
@@ -27,6 +28,7 @@ class ContactAssignment extends Model
     protected function casts(): array
     {
         return [
+            'receives_invoices' => 'boolean',
             'is_primary' => 'boolean',
             'is_active' => 'boolean',
         ];

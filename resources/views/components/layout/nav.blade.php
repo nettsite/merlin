@@ -31,6 +31,13 @@
         >Clients</flux:sidebar.item>
 
         <flux:sidebar.item
+            icon="document-text"
+            href="{{ route('sales-invoices.index') }}"
+            :current="request()->routeIs('sales-invoices.*')"
+            wire:navigate
+        >Sales Invoices</flux:sidebar.item>
+
+        <flux:sidebar.item
             icon="calendar-days"
             href="{{ route('payment-terms.index') }}"
             :current="request()->routeIs('payment-terms.*')"

@@ -29,6 +29,16 @@ class DocumentService
     // Status transitions
     // -------------------------------------------------------------------------
 
+    public function markAsSent(Document $doc, User $by): void
+    {
+        $this->transition($doc, 'sent', $by, 'Invoice sent to client.');
+    }
+
+    public function voidDocument(Document $doc, User $by): void
+    {
+        $this->transition($doc, 'voided', $by, 'Invoice voided.');
+    }
+
     public function markAsReviewed(Document $doc, User $by): void
     {
         $this->transition($doc, 'reviewed', $by, 'Marked as reviewed.');
@@ -325,6 +335,11 @@ class DocumentService
                 'disputed' => ['reviewed', 'rejected'],
                 'posted' => [],
                 'rejected' => [],
+            ],
+            'sales_invoice' => [
+                'draft' => ['sent', 'voided'],
+                'sent' => ['voided'],
+                'voided' => [],
             ],
         ];
     }

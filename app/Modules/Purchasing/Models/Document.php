@@ -63,6 +63,9 @@ class Document extends Model implements HasMedia
         'terms',
         'footer',
         'payable_account_id',
+        'receivable_account_id',
+        'bank_account_id',
+        'payment_term_id',
         'source',
         'llm_confidence',
         'metadata',
@@ -117,6 +120,12 @@ class Document extends Model implements HasMedia
         return $this->belongsTo(Account::class, 'payable_account_id');
     }
 
+    /** @return BelongsTo<Account, $this> */
+    public function receivableAccount(): BelongsTo
+    {
+        return $this->belongsTo(Account::class, 'receivable_account_id');
+    }
+
     /** @return HasMany<DocumentLine, $this> */
     public function lines(): HasMany
     {
@@ -156,6 +165,11 @@ class Document extends Model implements HasMedia
     public function scopePurchaseInvoices(Builder $query): Builder
     {
         return $query->where('document_type', 'purchase_invoice');
+    }
+
+    public function scopeSalesInvoices(Builder $query): Builder
+    {
+        return $query->where('document_type', 'sales_invoice');
     }
 
     public function scopeInbound(Builder $query): Builder
