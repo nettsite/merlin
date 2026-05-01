@@ -9,6 +9,7 @@ use App\Modules\Billing\Models\PaymentTerm;
 use App\Modules\Billing\Models\RecurringInvoice;
 use App\Modules\Core\Contracts\ModulePolicy;
 use App\Modules\Core\Models\Business;
+use App\Modules\Core\Models\ContactAssignment;
 use App\Modules\Core\Models\Party;
 use App\Modules\Core\Models\PartyRelationship;
 use App\Modules\Core\Models\Person;
@@ -67,6 +68,7 @@ class AppServiceProvider extends ServiceProvider
             'account_group' => AccountGroup::class,
             'account_type' => AccountType::class,
             'business' => Business::class,
+            'contact_assignment' => ContactAssignment::class,
             'document' => Document::class,
             'document_activity' => DocumentActivity::class,
             'document_line' => DocumentLine::class,

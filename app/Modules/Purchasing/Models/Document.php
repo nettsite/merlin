@@ -3,6 +3,7 @@
 namespace App\Modules\Purchasing\Models;
 
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Billing\Models\PaymentTerm;
 use App\Modules\Core\Models\Party;
 use App\Modules\Core\Models\Person;
 use App\Modules\Core\Settings\CurrencySettings;
@@ -97,6 +98,7 @@ class Document extends Model implements HasMedia
     public function registerMediaCollections(): void
     {
         $this->addMediaCollection('source_document')->singleFile();
+        $this->addMediaCollection('invoice_pdf')->singleFile();
         $this->addMediaCollection('attachments');
     }
 
@@ -124,6 +126,12 @@ class Document extends Model implements HasMedia
     public function receivableAccount(): BelongsTo
     {
         return $this->belongsTo(Account::class, 'receivable_account_id');
+    }
+
+    /** @return BelongsTo<PaymentTerm, $this> */
+    public function paymentTerm(): BelongsTo
+    {
+        return $this->belongsTo(PaymentTerm::class);
     }
 
     /** @return HasMany<DocumentLine, $this> */

@@ -15,6 +15,9 @@ class BillingSettings extends Settings
     /** Default payment term ID applied to new sales invoices when the client has none. */
     public ?string $default_payment_term_id = null;
 
+    /** Tax liability account ID used on sales invoices. */
+    public ?string $tax_liability_account_id = null;
+
     public static function group(): string
     {
         return 'billing';

@@ -11,6 +11,7 @@ use App\Modules\Core\Services\PartyService;
 use App\Modules\Purchasing\Models\Document;
 use App\Modules\Purchasing\Services\DocumentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
 use Livewire\Volt\Volt;
 use Tests\TestCase;
 
@@ -155,13 +156,25 @@ class SalesInvoiceTest extends TestCase
 
     public function test_send_invoice_transitions_to_sent(): void
     {
-        $doc = $this->makeDraft();
+        Mail::fake();
+
+        $client = $this->makeClient();
+        $personParty = app(PartyService::class)->createPerson([
+            'first_name' => 'Billing',
+            'last_name' => 'Contact',
+            'email' => 'billing@client.com',
+            'status' => 'active',
+        ]);
+        $client->assignContact($personParty->person, ['role' => 'billing', 'receives_invoices' => true, 'is_active' => true]);
+
+        $doc = $this->makeDraft($client);
         $user = $this->userWith(['documents-view-any', 'documents-view', 'can-send-sales-invoices']);
         $this->actingAs($user);
 
         Volt::test('pages.sales-invoices.index')
             ->call('openDetail', $doc->id)
-            ->call('send');
+            ->call('openSendModal')
+            ->call('confirmSend');
 
         $this->assertEquals('sent', $doc->fresh()->status);
     }

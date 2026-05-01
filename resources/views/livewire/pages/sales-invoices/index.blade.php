@@ -59,7 +59,12 @@ new #[Layout('components.layout.app')] class extends Component
     public array $newLine = [];
 
     // Action confirms
-    public bool $showSendConfirm = false;
+    public bool $showSendModal = false;
+
+    /** @var array<int, array{name: string, email: string, selected: bool}> */
+    public array $sendRecipients = [];
+
+    public string $sendError = '';
 
     public bool $showVoidConfirm = false;
 
@@ -322,12 +327,60 @@ new #[Layout('components.layout.app')] class extends Component
     // Status actions
     // -------------------------------------------------------------------------
 
-    public function send(): void
+    public function openSendModal(): void
     {
         $this->authorize('can-send-sales-invoices');
         $doc = Document::findOrFail($this->detailId);
-        app(DocumentService::class)->markAsSent($doc, Auth::user());
-        $this->showSendConfirm = false;
+
+        $recipients = app(BillingService::class)->resolveRecipients($doc);
+
+        $this->sendRecipients = array_map(
+            fn ($r) => ['name' => $r['name'], 'email' => $r['email'], 'selected' => true],
+            $recipients,
+        );
+        $this->sendError = '';
+        $this->showSendModal = true;
+    }
+
+    public function confirmSend(): void
+    {
+        $this->authorize('can-send-sales-invoices');
+        $doc = Document::findOrFail($this->detailId);
+
+        $emails = array_column(
+            array_filter($this->sendRecipients, fn ($r) => $r['selected']),
+            'email',
+        );
+
+        try {
+            app(BillingService::class)->sendInvoice($doc, Auth::user(), $emails);
+        } catch (\RuntimeException $e) {
+            $this->sendError = $e->getMessage();
+
+            return;
+        }
+
+        $this->showSendModal = false;
+        $this->sendRecipients = [];
+    }
+
+    public function downloadPdf(): mixed
+    {
+        $doc = Document::findOrFail($this->detailId);
+        $this->authorize('view', $doc);
+
+        app(BillingService::class)->generatePdf($doc);
+        $doc->refresh();
+
+        $media = $doc->getFirstMedia('invoice_pdf');
+
+        if ($media === null) {
+            session()->flash('error', 'Could not generate PDF.');
+
+            return null;
+        }
+
+        return response()->download($media->getPath(), 'invoice-'.$doc->document_number.'.pdf');
     }
 
     public function void(): void
@@ -381,7 +434,7 @@ new #[Layout('components.layout.app')] class extends Component
         $paymentTerms = collect();
 
         if ($this->showDetail && $this->detailId) {
-            $detail = Document::with(['party.business'])->findOrFail($this->detailId);
+            $detail = Document::with(['party.business', 'paymentTerm'])->findOrFail($this->detailId);
             $lines = $detail->lines()->with('account')->get();
             $accounts = Account::postable()->income()->active()->orderBy('code')->get(['id', 'code', 'name']);
             $paymentTerms = PaymentTerm::orderBy('name')->get(['id', 'name']);
@@ -642,10 +695,13 @@ new #[Layout('components.layout.app')] class extends Component
                         @endcan
                     @endif
 
+                    {{-- PDF Download --}}
+                    <flux:button wire:click="downloadPdf" size="xs" variant="ghost" icon="arrow-down-tray">PDF</flux:button>
+
                     {{-- Send --}}
                     @if($detail->status === 'draft')
                         @can('can-send-sales-invoices')
-                            <flux:button wire:click="$set('showSendConfirm', true)" size="xs" variant="ghost" icon="paper-airplane">Send</flux:button>
+                            <flux:button wire:click="openSendModal" size="xs" variant="ghost" icon="paper-airplane">Send</flux:button>
                         @endcan
                     @endif
 
@@ -906,14 +962,54 @@ new #[Layout('components.layout.app')] class extends Component
     @endif
 </flux:modal>
 
-{{-- ===== Send Confirm ===== --}}
-<flux:modal name="send-confirm" wire:model.self="showSendConfirm" class="w-[400px]">
+{{-- ===== Send Invoice Modal ===== --}}
+<flux:modal name="send-invoice" wire:model.self="showSendModal" class="w-[480px]">
     <div class="p-6">
-        <flux:heading size="lg" class="font-semibold mb-2">Mark as Sent?</flux:heading>
-        <p class="text-sm text-ink-soft mb-6">This will transition the invoice to "sent" status.</p>
+        <flux:heading size="lg" class="font-semibold mb-1">Send Invoice</flux:heading>
+        <p class="text-sm text-ink-soft mb-5">
+            A PDF will be generated and emailed to the selected recipients. The invoice will be marked as sent.
+        </p>
+
+        @if($sendError)
+            <div class="mb-4 px-4 py-3 rounded bg-red-50 border border-red-200 text-sm text-danger">
+                {{ $sendError }}
+            </div>
+        @endif
+
+        @if(count($sendRecipients) > 0)
+            <div class="mb-5">
+                <p class="text-xs font-semibold text-ink-muted uppercase tracking-wide mb-2">Recipients</p>
+                <div class="space-y-2">
+                    @foreach($sendRecipients as $i => $recipient)
+                        <label class="flex items-center gap-3 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                wire:model="sendRecipients.{{ $i }}.selected"
+                                class="rounded border-line text-primary focus:ring-primary"
+                            />
+                            <span class="text-sm">
+                                <span class="font-medium">{{ $recipient['name'] }}</span>
+                                <span class="text-ink-muted ml-1">{{ $recipient['email'] }}</span>
+                            </span>
+                        </label>
+                    @endforeach
+                </div>
+            </div>
+        @else
+            <div class="mb-5 px-4 py-3 rounded bg-surface-alt border border-line text-sm text-ink-muted">
+                No contacts with "receives invoices" enabled found. Add contacts to the client with that flag set.
+            </div>
+        @endif
+
         <div class="flex gap-3 justify-end">
-            <flux:button variant="ghost" wire:click="$set('showSendConfirm', false)">Cancel</flux:button>
-            <flux:button variant="primary" wire:click="send">Send Invoice</flux:button>
+            <flux:button variant="ghost" wire:click="$set('showSendModal', false)">Cancel</flux:button>
+            <flux:button
+                variant="primary"
+                wire:click="confirmSend"
+                :disabled="count(array_filter($sendRecipients, fn($r) => $r['selected'])) === 0"
+            >
+                Send Invoice
+            </flux:button>
         </div>
     </div>
 </flux:modal>
