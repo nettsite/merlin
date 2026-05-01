@@ -7,8 +7,9 @@ use App\Modules\Purchasing\Services\DocumentTextExtractor;
 use App\Modules\Purchasing\Services\Pdf\MagikaService;
 use App\Modules\Purchasing\Services\Pdf\PdfExtractor;
 use Mockery;
+use Paperdoc\Contracts\DocumentInterface;
 use Paperdoc\Facades\Paperdoc;
-use PHPUnit\Framework\TestCase;
+use Tests\TestCase;
 
 class DocumentTextExtractorTest extends TestCase
 {
@@ -50,7 +51,7 @@ class DocumentTextExtractorTest extends TestCase
     public function test_docx_routes_to_paperdoc(): void
     {
         $path = '/tmp/invoice.docx';
-        $fakeDoc = new \stdClass;
+        $fakeDoc = Mockery::mock(DocumentInterface::class);
 
         $magika = Mockery::mock(MagikaService::class);
         $magika->expects('detect')->with($path)->andReturn(
@@ -71,7 +72,7 @@ class DocumentTextExtractorTest extends TestCase
     public function test_xlsx_routes_to_paperdoc(): void
     {
         $path = '/tmp/invoice.xlsx';
-        $fakeDoc = new \stdClass;
+        $fakeDoc = Mockery::mock(DocumentInterface::class);
 
         $magika = Mockery::mock(MagikaService::class);
         $magika->expects('detect')->with($path)->andReturn(
@@ -92,7 +93,7 @@ class DocumentTextExtractorTest extends TestCase
     public function test_csv_routes_to_paperdoc(): void
     {
         $path = '/tmp/invoice.csv';
-        $fakeDoc = new \stdClass;
+        $fakeDoc = Mockery::mock(DocumentInterface::class);
 
         $magika = Mockery::mock(MagikaService::class);
         $magika->expects('detect')->with($path)->andReturn($this->makeResult('text/csv'));
