@@ -35,7 +35,8 @@
         "pestphp/pest": "^4.6",
         "pestphp/pest-plugin": "^4.0",
         "pestphp/pest-plugin-laravel": "^4.1",
-        "phpunit/phpunit": "^12.5.12"
+        "phpunit/phpunit": "^12.5.12",
+        "spatie/guidelines-skills": "^1.0"
     },
     "autoload": {
         "psr-4": {

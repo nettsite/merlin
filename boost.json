@@ -9,7 +9,8 @@
     "packages": [
         "spatie/laravel-activitylog",
         "spatie/laravel-medialibrary",
-        "spatie/laravel-permission"
+        "spatie/laravel-permission",
+        "spatie/guidelines-skills"
     ],
     "sail": false,
     "skills": [
@@ -17,8 +18,13 @@
         "fluxui-development",
         "livewire-development",
         "volt-development",
+        "pest-testing",
         "tailwindcss-development",
         "medialibrary-development",
-        "laravel-permission-development"
+        "laravel-permission-development",
+        "spatie-javascript",
+        "spatie-laravel-php",
+        "spatie-security",
+        "spatie-version-control"
     ]
 }
