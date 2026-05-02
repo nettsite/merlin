@@ -5,6 +5,7 @@ namespace Tests\Feature\Suppliers;
 use App\Modules\Core\Models\Party;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Services\PartyService;
+use App\Modules\Purchasing\Models\Document;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Volt\Volt;
 use Tests\TestCase;
@@ -131,5 +132,169 @@ class SuppliersTest extends TestCase
             ->set('search', 'Alpha')
             ->assertSee('Alpha Corp')
             ->assertDontSee('Beta Ltd');
+    }
+
+    public function test_status_filter_shows_only_matching_suppliers(): void
+    {
+        $this->createSupplier(['legal_name' => 'Active Supplier', 'status' => 'active']);
+        $this->createSupplier(['legal_name' => 'Pending Supplier', 'status' => 'pending']);
+        $this->actingAs($this->userWith(['parties-view-any']));
+
+        Volt::test('pages.suppliers.index')
+            ->set('filterStatus', 'active')
+            ->assertSee('Active Supplier')
+            ->assertDontSee('Pending Supplier');
+    }
+
+    public function test_approve_supplier_sets_status_to_active(): void
+    {
+        $party = $this->createSupplier(['status' => 'pending']);
+        $this->actingAs($this->userWith(['parties-view-any', 'parties-update']));
+
+        Volt::test('pages.suppliers.index')
+            ->call('approveSupplier', $party->id)
+            ->assertHasNoErrors();
+
+        $this->assertDatabaseHas('parties', ['id' => $party->id, 'status' => 'active']);
+    }
+
+    public function test_deactivate_supplier_sets_status_to_inactive(): void
+    {
+        $party = $this->createSupplier(['status' => 'active']);
+        $this->actingAs($this->userWith(['parties-view-any', 'parties-update']));
+
+        Volt::test('pages.suppliers.index')
+            ->call('deactivateSupplier', $party->id)
+            ->assertHasNoErrors();
+
+        $this->assertDatabaseHas('parties', ['id' => $party->id, 'status' => 'inactive']);
+    }
+
+    public function test_bulk_approve_activates_selected_suppliers(): void
+    {
+        $pending = $this->createSupplier(['status' => 'pending']);
+        $inactive = $this->createSupplier(['status' => 'inactive']);
+        $this->actingAs($this->userWith(['parties-view-any', 'parties-update']));
+
+        Volt::test('pages.suppliers.index')
+            ->set('selectedIds', [$pending->id, $inactive->id])
+            ->call('bulkApprove')
+            ->assertHasNoErrors()
+            ->assertSet('selectedIds', [])
+            ->assertSet('selectAllFiltered', false);
+
+        $this->assertDatabaseHas('parties', ['id' => $pending->id, 'status' => 'active']);
+        $this->assertDatabaseHas('parties', ['id' => $inactive->id, 'status' => 'active']);
+    }
+
+    public function test_bulk_deactivate_deactivates_selected_suppliers(): void
+    {
+        $active = $this->createSupplier(['status' => 'active']);
+        $this->actingAs($this->userWith(['parties-view-any', 'parties-update']));
+
+        Volt::test('pages.suppliers.index')
+            ->set('selectedIds', [$active->id])
+            ->call('bulkDeactivate')
+            ->assertHasNoErrors();
+
+        $this->assertDatabaseHas('parties', ['id' => $active->id, 'status' => 'inactive']);
+    }
+
+    public function test_select_all_filtered_applies_bulk_action_to_all(): void
+    {
+        $a = $this->createSupplier(['status' => 'pending']);
+        $b = $this->createSupplier(['status' => 'pending']);
+        $this->actingAs($this->userWith(['parties-view-any', 'parties-update']));
+
+        Volt::test('pages.suppliers.index')
+            ->set('filterStatus', 'pending')
+            ->call('markSelectAllFiltered')
+            ->assertSet('selectAllFiltered', true)
+            ->call('bulkApprove')
+            ->assertHasNoErrors();
+
+        $this->assertDatabaseHas('parties', ['id' => $a->id, 'status' => 'active']);
+        $this->assertDatabaseHas('parties', ['id' => $b->id, 'status' => 'active']);
+    }
+
+    public function test_show_page_renders_supplier_info(): void
+    {
+        $party = $this->createSupplier(['legal_name' => 'Show Test Supplier', 'primary_email' => 'show@test.co.za']);
+        $this->actingAs($this->userWith(['parties-view-any', 'parties-view']));
+
+        Volt::test('pages.suppliers.show', ['id' => $party->id])
+            ->assertOk()
+            ->assertSee('Show Test Supplier')
+            ->assertSee('show@test.co.za');
+    }
+
+    public function test_show_page_lists_supplier_invoices(): void
+    {
+        $party = $this->createSupplier();
+        Document::factory()->create([
+            'party_id' => $party->id,
+            'document_type' => 'purchase_invoice',
+            'direction' => 'inbound',
+            'status' => 'received',
+        ]);
+        $this->actingAs($this->userWith(['parties-view-any', 'parties-view']));
+
+        Volt::test('pages.suppliers.show', ['id' => $party->id])
+            ->assertOk()
+            ->assertSee('received');
+    }
+
+    public function test_show_page_invoice_status_filter(): void
+    {
+        $party = $this->createSupplier();
+        Document::factory()->create([
+            'party_id' => $party->id,
+            'document_type' => 'purchase_invoice',
+            'direction' => 'inbound',
+            'status' => 'posted',
+            'document_number' => 'PINV-TEST-001',
+        ]);
+        Document::factory()->create([
+            'party_id' => $party->id,
+            'document_type' => 'purchase_invoice',
+            'direction' => 'inbound',
+            'status' => 'received',
+            'document_number' => 'PINV-TEST-002',
+        ]);
+        $this->actingAs($this->userWith(['parties-view-any', 'parties-view']));
+
+        Volt::test('pages.suppliers.show', ['id' => $party->id])
+            ->set('invoiceStatus', 'posted')
+            ->assertSee('PINV-TEST-001')
+            ->assertDontSee('PINV-TEST-002');
+    }
+
+    public function test_show_page_approve_sets_status_active(): void
+    {
+        $party = $this->createSupplier(['status' => 'pending']);
+        $this->actingAs($this->userWith(['parties-view-any', 'parties-view', 'parties-update']));
+
+        Volt::test('pages.suppliers.show', ['id' => $party->id])
+            ->call('approveSupplier')
+            ->assertHasNoErrors();
+
+        $this->assertDatabaseHas('parties', ['id' => $party->id, 'status' => 'active']);
+    }
+
+    public function test_show_page_edit_saves_changes(): void
+    {
+        $party = $this->createSupplier(['legal_name' => 'Before Edit Ltd']);
+        $this->actingAs($this->userWith(['parties-view-any', 'parties-view', 'parties-update']));
+
+        Volt::test('pages.suppliers.show', ['id' => $party->id])
+            ->call('openEditForm')
+            ->assertSet('showEditForm', true)
+            ->assertSet('legalName', 'Before Edit Ltd')
+            ->set('legalName', 'After Edit Ltd')
+            ->call('saveEdit')
+            ->assertHasNoErrors()
+            ->assertSet('showEditForm', false);
+
+        $this->assertDatabaseHas('businesses', ['id' => $party->id, 'legal_name' => 'After Edit Ltd']);
     }
 }

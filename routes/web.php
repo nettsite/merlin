@@ -16,6 +16,7 @@ Route::view('profile', 'profile')
 Route::middleware(['auth', 'verified'])->group(function (): void {
     // Expenses
     Volt::route('suppliers', 'pages.suppliers.index')->name('suppliers.index');
+    Volt::route('suppliers/{id}', 'pages.suppliers.show')->name('suppliers.show');
     Volt::route('purchase-invoices', 'pages.purchase-invoices.index')->name('purchase-invoices.index');
     Volt::route('posting-rules', 'pages.posting-rules.index')->name('posting-rules.index');
 

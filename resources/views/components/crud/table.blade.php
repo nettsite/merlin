@@ -25,6 +25,11 @@
         />
     </div>
 
+    {{-- Optional filter/toolbar slot --}}
+    @if(isset($filters))
+        {{ $filters }}
+    @endif
+
     {{-- Table --}}
     <div class="overflow-x-auto">
         {{ $slot }}
