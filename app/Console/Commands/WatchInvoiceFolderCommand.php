@@ -80,7 +80,7 @@ class WatchInvoiceFolderCommand extends Command
 
         $hash = hash_file('sha256', $path);
 
-        if (Media::where('collection_name', 'source_pdf')
+        if (Media::where('collection_name', 'source_document')
             ->where('custom_properties->sha256', $hash)
             ->exists()
         ) {
@@ -110,7 +110,7 @@ class WatchInvoiceFolderCommand extends Command
             $document
                 ->addMediaFromDisk($tmpRelative, 'local')
                 ->withCustomProperties(['sha256' => $hash])
-                ->toMediaCollection('source_pdf');
+                ->toMediaCollection('source_document');
 
             $service->process($document);
 

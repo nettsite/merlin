@@ -65,6 +65,24 @@ it('creates a document and deletes the pdf on success', function (): void {
     expect(Document::where('source', 'watch')->count())->toBe(1);
 });
 
+it('attaches the source file to the source_document media collection', function (): void {
+    $pdf = $this->watchDir.'/test-invoice.pdf';
+    file_put_contents($pdf, '%PDF-1.4 fake content');
+
+    $capturedDocument = null;
+    $this->serviceMock->expects('process')->once()
+        ->andReturnUsing(function (Document $doc) use (&$capturedDocument): void {
+            $capturedDocument = $doc;
+        });
+
+    $this->artisan('invoices:watch', ['folder' => $this->watchDir])
+        ->assertSuccessful();
+
+    expect($capturedDocument)->not->toBeNull()
+        ->and($capturedDocument->getFirstMedia('source_document'))
+        ->not->toBeNull('Media must be attached to the source_document collection');
+});
+
 it('moves a failed pdf to the failed subfolder and writes an error log', function (): void {
     $pdf = $this->watchDir.'/bad-invoice.pdf';
     file_put_contents($pdf, '%PDF-1.4 fake content');
@@ -94,7 +112,7 @@ it('moves an already-processed duplicate to the failed subfolder with a log', fu
         'model_type' => Document::class,
         'model_id' => Document::factory()->purchaseInvoice()->create(['payable_account_id' => $payableId])->id,
         'uuid' => \Illuminate\Support\Str::uuid(),
-        'collection_name' => 'source_pdf',
+        'collection_name' => 'source_document',
         'name' => 'duplicate',
         'file_name' => 'duplicate.pdf',
         'mime_type' => 'application/pdf',
