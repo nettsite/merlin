@@ -12,6 +12,9 @@ class BillingSettings extends Settings
     /** Default AR control account ID (UUID of an asset account). Null until configured. */
     public ?string $default_receivable_account_id = null;
 
+    /** Default bank account ID used when recording payments. */
+    public ?string $default_bank_account_id = null;
+
     /** Default payment term ID applied to new sales invoices when the client has none. */
     public ?string $default_payment_term_id = null;
 

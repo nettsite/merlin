@@ -38,6 +38,7 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
     // Settings
     Volt::route('settings/general', 'pages.settings.general')->name('settings.general');
     Volt::route('settings/purchasing', 'pages.settings.purchasing')->name('settings.purchasing');
+    Volt::route('settings/billing', 'pages.settings.billing')->name('settings.billing');
     Volt::route('roles', 'pages.roles.index')->name('roles.index');
     Volt::route('users', 'pages.users.index')->name('users.index');
     Volt::route('llm-logs', 'pages.llm-logs.index')->name('llm-logs.index');

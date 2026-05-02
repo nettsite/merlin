@@ -91,6 +91,13 @@
         >Purchasing Settings</flux:sidebar.item>
 
         <flux:sidebar.item
+            icon="banknotes"
+            href="{{ route('settings.billing') }}"
+            :current="request()->routeIs('settings.billing')"
+            wire:navigate
+        >Billing Settings</flux:sidebar.item>
+
+        <flux:sidebar.item
             icon="shield-check"
             href="{{ route('roles.index') }}"
             :current="request()->routeIs('roles.*')"
