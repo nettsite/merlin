@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Laravel business management app for small businesses. Core feature: LLM-assisted supplier invoice processing (PDFs/DOCX/XLSX/CSV → GL transactions). Previous Filament-based version at `~/Projects/merlin` is **read-only spec** — do not copy Filament files from it.
 
-**Stack:** Laravel 13, Livewire 3, Flux UI (livewire/flux), Volt (single-file components), Alpine.js, Tailwind CSS 3, PHPUnit 12, Laravel Breeze (Livewire stack) for auth.
+**Stack:** Laravel 13, Livewire 3, Flux UI (livewire/flux), Volt (single-file components), Alpine.js, Tailwind CSS 3, Pest + PHPUnit 12, Laravel Breeze (Livewire stack) for auth.
 
 ## Commands
 
@@ -48,7 +48,9 @@ app/Modules/
 │   ├── Jobs/       — ProcessInvoiceDocument (queued)
 │   ├── DTO/        — ExtractedInvoice, ExtractedInvoiceLine, MagikaResult
 │   └── Settings/   — PurchasingSettings (autopost_confidence, tax_default_rate, etc.)
-└── Billing/        — in progress; Enums, PaymentTerm + RecurringInvoice models, seeders done (Phase 1)
+└── Billing/
+    ├── Models/     — PaymentTerm, RecurringInvoice, RecurringInvoiceLine
+    └── Services/   — BillingService (PDF generation), RecurringInvoiceService, DueDateCalculator, ProRataCalculator
 
 app/Policies/       — 16 domain policies, all extend AllModulesPolicy
 app/Traits/         — HasDocumentNumber (auto-generates PREFIX-YEAR-NNNNN on create)
@@ -64,8 +66,13 @@ All pages are Volt single-file components. CRUD pages use `HasCrudTable` + `HasC
 | Route | File | Notes |
 |---|---|---|
 | `/suppliers` | `suppliers/index.blade.php` | CRUD |
+| `/suppliers/{id}` | `suppliers/show.blade.php` | Read-only detail |
 | `/purchase-invoices` | `purchase-invoices/index.blade.php` | **Fully custom** — file upload, LLM pipeline, inline line editing, status machine |
 | `/posting-rules` | `posting-rules/index.blade.php` | CRUD |
+| `/clients` | `clients/index.blade.php` | CRUD |
+| `/sales-invoices` | `sales-invoices/index.blade.php` | CRUD |
+| `/recurring-invoices` | `recurring-invoices/index.blade.php` | CRUD |
+| `/payment-terms` | `payment-terms/index.blade.php` | CRUD |
 | `/accounts` | `accounts/index.blade.php` | CRUD |
 | `/account-groups` | `account-groups/index.blade.php` | CRUD |
 | `/roles` | `roles/index.blade.php` | CRUD |
@@ -76,6 +83,7 @@ All pages are Volt single-file components. CRUD pages use `HasCrudTable` + `HasC
 | `/reports/llm-performance` | `reports/llm-performance.blade.php` | Read-only |
 | `/settings/general` | `settings/general.blade.php` | Spatie settings form |
 | `/settings/purchasing` | `settings/purchasing.blade.php` | Spatie settings form |
+| `/settings/billing` | `settings/billing.blade.php` | Spatie settings form |
 
 ### CRUD Framework
 
@@ -111,9 +119,21 @@ Flux UI components (`<flux:input>`, `<flux:select>`, etc.) used directly — no 
 Managed by `DocumentService::transition()`. Valid transitions:
 
 ```
-received → processing → processed → reviewed → approved → posted
-         ↘ failed    → received   ↗           ↘ disputed → received
+received ──→ reviewed ──→ approved ──→ posted
+    │            │            │
+    └──→ approved└──→ posted  └──→ disputed
+    │                              │
+    └──→ posted                    └──→ reviewed / approved / posted / rejected
+    │
+    └──→ disputed / rejected
 ```
+
+Full map (purchase invoices):
+- `received` → reviewed, approved, posted, disputed, rejected
+- `reviewed` → approved, posted, disputed
+- `approved` → posted, disputed
+- `disputed` → reviewed, approved, posted, rejected
+- `posted` / `rejected` → (terminal)
 
 Methods: `markAsReviewed()`, `approve()`, `post()`, `dispute()`, `reject()`, `reprocess()` (deletes lines, re-runs pipeline).
 
@@ -153,6 +173,10 @@ Current metadata shapes:
 - **No Filament.** Do not install or reference Filament. Read `~/Projects/merlin` as spec only.
 - **PurchaseInvoice is always fully custom.** Never route it through `HasCrudForm`.
 - **Reprocess = delete lines first.** `InvoiceProcessingService::process()` appends; `DocumentService::reprocess()` must delete existing lines before calling it.
+- **VAT amounts are always stored ex-VAT.** `DocumentLine.unit_price` and `line_total` are pre-tax; `tax_amount` is computed by `calculateTotals()` as `line_total × tax_rate / 100`. The LLM prompt enforces ex-VAT extraction. `InvoiceProcessingService` detects VAT-inclusive extractions (when `sum(line_totals) ≈ extracted.total` and `taxTotal > 0`) and back-calculates automatically.
+- **Source documents** are stored via Spatie MediaLibrary on the `source_document` collection of `Document`. Access the file URL with `$document->getFirstMedia('source_document')?->getUrl()`. Always eager-load `'media'` when listing documents to avoid N+1.
+- **Flux icons:** `<flux:icon.document-text class="size-4" />` — not `<x-flux::icon>` or `<flux:icon name="...">`.
+- **`$user->can()` not `$user->hasRole()`** — roles are user-configurable; permissions are the stable contract.
 
 ---
 
