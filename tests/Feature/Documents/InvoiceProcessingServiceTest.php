@@ -208,6 +208,53 @@ it('leaves exchange rate at 1.0 and no foreign amounts for a ZAR invoice', funct
         ->and($doc->foreign_total)->toBeNull();
 });
 
+// --- VAT / tax handling ---
+
+it('does not double-count VAT when LLM extracts VAT-inclusive line prices with an explicit tax rate', function (): void {
+    // Reproduces real bug: invoice total R4085 (VAT-inclusive at 15%).
+    // LLM extracted unit prices as shown on invoice (VAT-inclusive) and also
+    // set tax_rate = 15 on each line, causing the system to add 15% on top of
+    // amounts that already include VAT, producing total = R4697.75 instead of R4085.
+    $document = Document::factory()->purchaseInvoice()->create();
+    attachFakeMedia($document);
+
+    // Simulate the real invoice: five lines whose totals sum to R4085 (incl. VAT)
+    // LLM sets tax_rate=15 on each — these are the VAT-inclusive amounts.
+    $vatInclusiveLines = [
+        new ExtractedInvoiceLine('Service A', 1, 740.00, 740.00, 15.0, '5210', 0.9, ''),
+        new ExtractedInvoiceLine('Service B', 1, 1820.00, 1820.00, 15.0, '5210', 0.9, ''),
+        new ExtractedInvoiceLine('Service C', 1, 1610.00, 1610.00, 15.0, '5210', 0.9, ''),
+        new ExtractedInvoiceLine('Service D', 1, 130.00, 130.00, 15.0, '5210', 0.9, ''),
+        new ExtractedInvoiceLine('Discount', 1, -215.00, -215.00, 15.0, '5210', 0.9, ''),
+    ];
+
+    // sum(lineTotal) = 4085, which equals extracted.total → prices are VAT-inclusive
+    $extracted = new ExtractedInvoice(
+        supplierName: 'Hosting Co',
+        supplierTaxNumber: '4123456789',
+        supplierEmail: null,
+        supplierPhone: null,
+        invoiceNumber: 'INV-001',
+        issueDate: Carbon::parse('2026-02-01'),
+        dueDate: Carbon::parse('2026-03-01'),
+        currency: config('currency.base', 'ZAR'),
+        subtotal: 3552.17,
+        taxTotal: 532.83,
+        total: 4085.00,
+        lines: $vatInclusiveLines,
+        confidence: 0.95,
+        warnings: [],
+    );
+
+    $this->llmMock->allows('extractInvoice')->andReturn($extracted);
+    $this->service->process($document);
+
+    $doc = $document->fresh();
+
+    // The recorded total must match the original invoice — not be inflated by double VAT
+    expect((float) $doc->total)->toBe(4085.00);
+});
+
 it('sets exchange rate and foreign amounts when invoice is in USD', function (): void {
     // USD rate: 1 ZAR = 0.054674 USD  →  1 USD = 18.29 ZAR (approx)
     Http::fake(['*' => Http::response([

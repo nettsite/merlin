@@ -82,6 +82,14 @@ class InvoiceProcessingService
         //   3. If the header tax_total is zero, no tax on any line
         $headerHasTax = $extracted->taxTotal > 0;
 
+        // Detect VAT-inclusive line prices: if sum(extracted line totals) ≈ extracted.total
+        // and the invoice has tax, the LLM extracted amounts that already include VAT.
+        // In that case we must back-calculate to ex-VAT before storing.
+        $extractedLineSum = array_sum(array_map(fn ($l) => $l->lineTotal, $extracted->lines));
+        $vatInclusivePrices = $extracted->total > 0
+            && $headerHasTax
+            && abs($extractedLineSum - $extracted->total) / $extracted->total < 0.02;
+
         foreach ($extracted->lines as $i => $extractedLine) {
             $accountData = $this->accountResolver->resolve(
                 $extractedLine->description,
@@ -95,16 +103,28 @@ class InvoiceProcessingService
                 default => null,
             };
 
+            // When prices are VAT-inclusive, back-calculate to the ex-VAT amount so
+            // DocumentLine::calculateTotals() doesn't add tax on top of a price that
+            // already includes it.
+            $divisor = ($vatInclusivePrices && $taxRate !== null && $taxRate > 0)
+                ? (1 + $taxRate / 100)
+                : 1;
+
+            $exVatUnitPrice = round($extractedLine->unitPrice / $divisor, 4);
+            $exVatForeignLineTotal = $extractedLine->lineTotal > 0
+                ? round($extractedLine->lineTotal / $divisor, 2)
+                : round($extractedLine->lineTotal / $divisor, 2); // preserve negative discounts
+
             $line = $document->lines()->make(array_merge([
                 'line_number' => $i + 1,
                 'type' => 'service',
                 'description' => $extractedLine->description,
                 'quantity' => $extractedLine->quantity,
                 'unit_price' => $isForeign
-                    ? round($extractedLine->unitPrice * $exchangeRate, 4)
-                    : $extractedLine->unitPrice,
-                'foreign_unit_price' => $isForeign ? $extractedLine->unitPrice : null,
-                'foreign_line_total' => $isForeign ? $extractedLine->lineTotal : null,
+                    ? round($exVatUnitPrice * $exchangeRate, 4)
+                    : $exVatUnitPrice,
+                'foreign_unit_price' => $isForeign ? $exVatUnitPrice : null,
+                'foreign_line_total' => $isForeign ? $exVatForeignLineTotal : null,
                 'tax_rate' => $taxRate,
             ], $accountData));
 
