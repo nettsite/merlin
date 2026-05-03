@@ -443,7 +443,7 @@ new #[Layout('components.layout.app')] class extends Component
     public function with(): array
     {
         $rows = Document::purchaseInvoices()
-            ->with(['party.business', 'lines.account'])
+            ->with(['party.business', 'lines.account', 'media'])
             ->when($this->search, fn ($q) => $q->where(function ($q): void {
                 $q->where('document_number', 'like', "%{$this->search}%")
                     ->orWhere('reference', 'like', "%{$this->search}%")
@@ -594,7 +594,7 @@ new #[Layout('components.layout.app')] class extends Component
                 <th class="px-4 py-3 text-right text-xs font-medium text-ink-muted uppercase tracking-wide">Balance Due</th>
                 <th class="px-4 py-3 text-left text-xs font-medium text-ink-muted uppercase tracking-wide">Accounts</th>
                 <th class="px-4 py-3 text-left text-xs font-medium text-ink-muted uppercase tracking-wide">Status</th>
-                <th class="px-4 py-3 w-24"></th>
+                <th class="px-4 py-3 w-32"></th>
             </tr>
         </thead>
         <tbody>
@@ -651,14 +651,28 @@ new #[Layout('components.layout.app')] class extends Component
                     <td class="px-4 py-3">
                         @include('livewire.pages.purchase-invoices._status-badge', ['status' => $invoice->status])
                     </td>
-                    <td class="px-4 py-3 w-24 text-right" @click.stop>
-                        @if($canPost && !in_array($invoice->status, ['posted', 'rejected']))
-                            <flux:button wire:click="quickPost('{{ $invoice->id }}')" size="xs" variant="primary">Post</flux:button>
-                        @elseif($canApprove && !in_array($invoice->status, ['approved', 'posted', 'rejected']))
-                            <flux:button wire:click="quickApprove('{{ $invoice->id }}')" size="xs">Approve</flux:button>
-                        @elseif($canReview && in_array($invoice->status, ['received', 'disputed']))
-                            <flux:button wire:click="quickMarkReviewed('{{ $invoice->id }}')" size="xs">Review</flux:button>
-                        @endif
+                    <td class="px-4 py-3 w-32 text-right" @click.stop>
+                        <div class="flex items-center justify-end gap-1.5">
+                            @if($canPost && !in_array($invoice->status, ['posted', 'rejected']))
+                                <flux:button wire:click="quickPost('{{ $invoice->id }}')" size="xs" variant="primary">Post</flux:button>
+                            @elseif($canApprove && !in_array($invoice->status, ['approved', 'posted', 'rejected']))
+                                <flux:button wire:click="quickApprove('{{ $invoice->id }}')" size="xs">Approve</flux:button>
+                            @elseif($canReview && in_array($invoice->status, ['received', 'disputed']))
+                                <flux:button wire:click="quickMarkReviewed('{{ $invoice->id }}')" size="xs">Review</flux:button>
+                            @endif
+                            @php $sourceMedia = $invoice->getFirstMedia('source_document'); @endphp
+                            @if($sourceMedia)
+                                <a
+                                    href="{{ $sourceMedia->getUrl() }}"
+                                    target="_blank"
+                                    rel="noopener"
+                                    title="View original invoice"
+                                    class="inline-flex items-center justify-center rounded p-1 text-ink-muted hover:text-ink hover:bg-surface-alt transition-colors"
+                                >
+                                    <flux:icon.document-text class="size-4" />
+                                </a>
+                            @endif
+                        </div>
                     </td>
                 </tr>
             @empty
