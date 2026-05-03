@@ -46,9 +46,9 @@ it('transitions from approved to posted', function (): void {
 });
 
 it('throws when attempting an invalid status transition', function (): void {
-    $doc = Document::factory()->purchaseInvoice()->create(['status' => 'received']);
+    $doc = Document::factory()->purchaseInvoice()->create(['status' => 'approved']);
 
-    expect(fn () => $this->service->approve($doc, $this->user))
+    expect(fn () => $this->service->markAsReviewed($doc, $this->user))
         ->toThrow(InvalidDocumentStateException::class);
 });
 

@@ -57,6 +57,10 @@ new #[Layout('components.layout.app')] class extends Component
 
     public string $actionReason = '';
 
+    // Bulk selection
+    /** @var array<int, string> */
+    public array $selectedIds = [];
+
     // Header editing
     public bool $editingHeader = false;
 
@@ -72,11 +76,13 @@ new #[Layout('components.layout.app')] class extends Component
     public function updatedSearch(): void
     {
         $this->resetPage();
+        $this->selectedIds = [];
     }
 
     public function updatedStatusFilter(): void
     {
         $this->resetPage();
+        $this->selectedIds = [];
     }
 
     // -------------------------------------------------------------------------
@@ -336,10 +342,108 @@ new #[Layout('components.layout.app')] class extends Component
         $this->showDisputeReason = false;
     }
 
+    // -------------------------------------------------------------------------
+    // Quick row actions
+    // -------------------------------------------------------------------------
+
+    public function quickMarkReviewed(string $id): void
+    {
+        $this->authorize('can-review-invoices');
+        $doc = Document::findOrFail($id);
+
+        if (! in_array($doc->status, ['received', 'disputed'])) {
+            return;
+        }
+
+        app(DocumentService::class)->markAsReviewed($doc, Auth::user());
+    }
+
+    public function quickApprove(string $id): void
+    {
+        $this->authorize('can-authorise-invoices');
+        $doc = Document::findOrFail($id);
+
+        if (in_array($doc->status, ['approved', 'posted', 'rejected'])) {
+            return;
+        }
+
+        app(DocumentService::class)->approve($doc, Auth::user());
+    }
+
+    public function quickPost(string $id): void
+    {
+        $this->authorize('can-post-invoices');
+        $doc = Document::findOrFail($id);
+
+        if (in_array($doc->status, ['posted', 'rejected'])) {
+            return;
+        }
+
+        app(DocumentService::class)->post($doc, Auth::user());
+    }
+
+    // -------------------------------------------------------------------------
+    // Bulk actions
+    // -------------------------------------------------------------------------
+
+    public function bulkMarkReviewed(): void
+    {
+        $this->authorize('can-review-invoices');
+        $svc = app(DocumentService::class);
+        $count = 0;
+
+        foreach (Document::purchaseInvoices()->whereIn('id', $this->selectedIds)->get() as $doc) {
+            try {
+                $svc->markAsReviewed($doc, Auth::user());
+                $count++;
+            } catch (\Throwable) {
+            }
+        }
+
+        $this->selectedIds = [];
+        session()->flash('success', "{$count} invoice(s) marked as reviewed.");
+    }
+
+    public function bulkApprove(): void
+    {
+        $this->authorize('can-authorise-invoices');
+        $svc = app(DocumentService::class);
+        $count = 0;
+
+        foreach (Document::purchaseInvoices()->whereIn('id', $this->selectedIds)->get() as $doc) {
+            try {
+                $svc->approve($doc, Auth::user());
+                $count++;
+            } catch (\Throwable) {
+            }
+        }
+
+        $this->selectedIds = [];
+        session()->flash('success', "{$count} invoice(s) approved.");
+    }
+
+    public function bulkPost(): void
+    {
+        $this->authorize('can-post-invoices');
+        $svc = app(DocumentService::class);
+        $count = 0;
+
+        foreach (Document::purchaseInvoices()->whereIn('id', $this->selectedIds)->get() as $doc) {
+            try {
+                $svc->post($doc, Auth::user());
+                $count++;
+            } catch (\Throwable) {
+            }
+        }
+
+        $this->selectedIds = [];
+        session()->flash('success', "{$count} invoice(s) posted.");
+    }
+
     public function with(): array
     {
         $rows = Document::purchaseInvoices()
-            ->with('party.business')
+            ->with(['party.business', 'lines.account'])
             ->when($this->search, fn ($q) => $q->where(function ($q): void {
                 $q->where('document_number', 'like', "%{$this->search}%")
                     ->orWhere('reference', 'like', "%{$this->search}%")
@@ -378,6 +482,9 @@ new #[Layout('components.layout.app')] class extends Component
             'baseCurrency' => app(CurrencySettings::class)->base_currency,
             'baseCurrencySymbol' => ExchangeRateService::currencySymbol(app(CurrencySettings::class)->base_currency),
             'detailCurrencySymbol' => $detail ? ExchangeRateService::currencySymbol($detail->currency) : '',
+            'canPost' => Auth::user()->can('can-post-invoices'),
+            'canApprove' => Auth::user()->can('can-authorise-invoices'),
+            'canReview' => Auth::user()->can('can-review-invoices'),
         ];
     }
 }; ?>
@@ -449,25 +556,64 @@ new #[Layout('components.layout.app')] class extends Component
     />
 </div>
 
+{{-- Bulk action bar --}}
+@if(count($selectedIds) > 0)
+    <div class="px-6 py-2.5 bg-primary/5 border-b border-line flex items-center gap-3 flex-wrap">
+        <span class="text-sm font-medium text-ink">{{ count($selectedIds) }} selected</span>
+        @if($canReview)
+            <flux:button wire:click="bulkMarkReviewed" size="sm" variant="ghost">Mark Reviewed</flux:button>
+        @endif
+        @if($canApprove)
+            <flux:button wire:click="bulkApprove" size="sm" variant="ghost">Approve</flux:button>
+        @endif
+        @if($canPost)
+            <flux:button wire:click="bulkPost" size="sm" variant="primary">Post</flux:button>
+        @endif
+        <flux:button wire:click="$set('selectedIds', [])" size="sm" variant="ghost" class="ml-auto">Clear selection</flux:button>
+    </div>
+@endif
+
 {{-- Invoice table --}}
 <div class="overflow-x-auto">
     <table class="w-full text-sm">
         <thead>
             <tr>
+                <th class="px-4 py-3 w-10">
+                    <input
+                        type="checkbox"
+                        x-data
+                        :checked="{{ $rows->pluck('id')->toJson() }}.length > 0 && {{ $rows->pluck('id')->toJson() }}.every(id => $wire.selectedIds.includes(id))"
+                        @change="$wire.set('selectedIds', $event.target.checked ? {{ $rows->pluck('id')->toJson() }} : [])"
+                        class="rounded border-line"
+                    />
+                </th>
                 <th class="px-4 py-3 text-left text-xs font-medium text-ink-muted uppercase tracking-wide">Number</th>
                 <th class="px-4 py-3 text-left text-xs font-medium text-ink-muted uppercase tracking-wide">Supplier</th>
                 <th class="px-4 py-3 text-left text-xs font-medium text-ink-muted uppercase tracking-wide">Date</th>
                 <th class="px-4 py-3 text-right text-xs font-medium text-ink-muted uppercase tracking-wide">Total</th>
                 <th class="px-4 py-3 text-right text-xs font-medium text-ink-muted uppercase tracking-wide">Balance Due</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-ink-muted uppercase tracking-wide">Accounts</th>
                 <th class="px-4 py-3 text-left text-xs font-medium text-ink-muted uppercase tracking-wide">Status</th>
+                <th class="px-4 py-3 w-24"></th>
             </tr>
         </thead>
         <tbody>
             @forelse($rows as $invoice)
+                @php
+                    $accountNames = $invoice->lines->pluck('account.name')->filter()->unique()->values();
+                @endphp
                 <tr
                     wire:click="openDetail('{{ $invoice->id }}')"
                     class="border-t border-line hover:bg-surface-alt cursor-pointer"
                 >
+                    <td class="px-4 py-3 w-10" @click.stop>
+                        <input
+                            type="checkbox"
+                            wire:model.live="selectedIds"
+                            value="{{ $invoice->id }}"
+                            class="rounded border-line"
+                        />
+                    </td>
                     <td class="px-4 py-3 font-mono text-xs text-ink">
                         {{ $invoice->document_number ?? '—' }}
                         @if($invoice->reference)
@@ -495,13 +641,29 @@ new #[Layout('components.layout.app')] class extends Component
                             {{ number_format((float) $invoice->balance_due, 2) }}
                         </span>
                     </td>
+                    <td class="px-4 py-3 text-xs text-ink-soft max-w-[180px]">
+                        @if($accountNames->isEmpty())
+                            <span class="text-ink-muted">—</span>
+                        @else
+                            {{ $accountNames->take(2)->implode(', ') }}@if($accountNames->count() > 2)<span class="text-ink-muted">, +{{ $accountNames->count() - 2 }} more</span>@endif
+                        @endif
+                    </td>
                     <td class="px-4 py-3">
                         @include('livewire.pages.purchase-invoices._status-badge', ['status' => $invoice->status])
+                    </td>
+                    <td class="px-4 py-3 w-24 text-right" @click.stop>
+                        @if($canPost && !in_array($invoice->status, ['posted', 'rejected']))
+                            <flux:button wire:click="quickPost('{{ $invoice->id }}')" size="xs" variant="primary">Post</flux:button>
+                        @elseif($canApprove && !in_array($invoice->status, ['approved', 'posted', 'rejected']))
+                            <flux:button wire:click="quickApprove('{{ $invoice->id }}')" size="xs">Approve</flux:button>
+                        @elseif($canReview && in_array($invoice->status, ['received', 'disputed']))
+                            <flux:button wire:click="quickMarkReviewed('{{ $invoice->id }}')" size="xs">Review</flux:button>
+                        @endif
                     </td>
                 </tr>
             @empty
                 <tr>
-                    <td colspan="6" class="px-4 py-12 text-center">
+                    <td colspan="9" class="px-4 py-12 text-center">
                         <p class="font-medium text-ink">No invoices found.</p>
                         @if(!$statusFilter && !$search)
                             <p class="mt-1 text-sm text-ink-muted">Upload an invoice to get started.</p>
