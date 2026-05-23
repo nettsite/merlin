@@ -10,6 +10,7 @@ use App\Modules\Purchasing\Models\LlmLog;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\View\View;
 
 class LlmService
 {
@@ -75,7 +76,7 @@ class LlmService
 
     private function buildExtractionPrompt(string $text, array $history): string
     {
-        /** @var \Illuminate\View\View $view */
+        /** @var View $view */
         $view = view('prompts.invoice-extraction', [
             'invoice_text' => $text,
             'chart_of_accounts' => $this->getCoaForPrompt(),
@@ -178,7 +179,7 @@ class LlmService
         $durationMs = (int) round((hrtime(true) - $startNs) / 1_000_000);
 
         LlmLog::create([
-            'loggable_type' => $loggable ? get_class($loggable) : null,
+            'loggable_type' => $loggable?->getMorphClass(),
             'loggable_id' => $loggable?->getKey(),
             'prompt_tokens' => $promptTokens,
             'completion_tokens' => $completionTokens,

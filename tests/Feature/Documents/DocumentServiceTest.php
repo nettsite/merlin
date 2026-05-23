@@ -11,6 +11,7 @@ use App\Modules\Purchasing\Services\DocumentService;
 use App\Modules\Purchasing\Services\Pdf\MagikaService;
 use App\Modules\Purchasing\Settings\PurchasingSettings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
 
 uses(RefreshDatabase::class);
 
@@ -189,6 +190,44 @@ it('recomputes line base amounts when rate is finalised', function (): void {
 
     expect((float) $line->unit_price)->toBe(round(100.0 * 18.5, 4))
         ->and((float) $line->line_total)->toBe(round(100.0 * 18.5, 2));
+});
+
+// --- Reprocess invariant ---
+
+it('reprocess deletes existing lines before re-running the pipeline', function (): void {
+    Queue::fake();
+
+    $doc = Document::factory()->purchaseInvoice()->create(['status' => 'received']);
+    DocumentLine::factory()->for($doc)->count(3)->create();
+
+    expect($doc->lines()->count())->toBe(3);
+
+    $this->service->reprocess($doc, $this->user);
+
+    // CLAUDE.md hard rule: InvoiceProcessingService::process() only appends,
+    // so reprocess must clear lines first. Otherwise a re-run of the same
+    // invoice doubles line counts.
+    expect($doc->fresh()->lines()->count())->toBe(0);
+});
+
+it('reprocess resets status to received and records activity', function (): void {
+    Queue::fake();
+
+    $doc = Document::factory()->purchaseInvoice()->create(['status' => 'disputed']);
+
+    $this->service->reprocess($doc, $this->user);
+
+    expect($doc->fresh()->status)->toBe('received');
+    expect($doc->activities()->where('activity_type', 'reprocess_queued')->count())->toBe(1);
+});
+
+it('reprocess refuses from a terminal status', function (): void {
+    Queue::fake();
+
+    $doc = Document::factory()->purchaseInvoice()->create(['status' => 'posted']);
+
+    expect(fn () => $this->service->reprocess($doc, $this->user))
+        ->toThrow(InvalidArgumentException::class);
 });
 
 it('rejects an unsupported file in createFromFile before touching the database', function (): void {

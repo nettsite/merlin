@@ -4,6 +4,7 @@ use App\Exceptions\LlmApiException;
 use App\Modules\Core\Models\User;
 use App\Modules\Purchasing\DTO\ExtractedInvoice;
 use App\Modules\Purchasing\DTO\ExtractedInvoiceLine;
+use App\Modules\Purchasing\Models\Document;
 use App\Modules\Purchasing\Models\LlmLog;
 use App\Modules\Purchasing\Services\LlmService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -126,7 +127,58 @@ it('throws a RuntimeException when the llm returns invalid json', function (): v
     ]);
 
     expect(fn () => $this->service->extractInvoice('text'))
-        ->toThrow(\RuntimeException::class, 'invalid JSON');
+        ->toThrow(RuntimeException::class, 'invalid JSON');
+});
+
+it('strips markdown code fences before parsing JSON', function (): void {
+    // Real-world: Claude sometimes wraps JSON output in ```json … ``` fences.
+    // parseJsonResponse must strip them, otherwise json_decode fails.
+    $wrapped = "```json\n".$this->fixtureJson."\n```";
+
+    Http::fake(['api.anthropic.com/*' => Http::response(anthropicResponse($wrapped))]);
+
+    $result = $this->service->extractInvoice('text');
+
+    expect($result)->toBeInstanceOf(ExtractedInvoice::class)
+        ->and($result->supplierName)->toBe('Acme Hosting (Pty) Ltd');
+});
+
+it('records the loggable model on llm_logs when provided', function (): void {
+    Http::fake(['api.anthropic.com/*' => Http::response(anthropicResponse($this->fixtureJson))]);
+
+    $doc = Document::factory()->purchaseInvoice()->create();
+
+    $this->service->extractInvoice('text', loggable: $doc);
+
+    $log = LlmLog::first();
+    expect($log->loggable_id)->toBe($doc->id)
+        // Morph map alias, not FQCN — verifies enforceMorphMap is active.
+        ->and($log->loggable_type)->toBe('document');
+});
+
+it('throws LlmApiException when response is missing content field', function (): void {
+    // Malformed envelope: 200 OK but no content[0].text. Service must not
+    // crash with "Undefined array key" — it must raise LlmApiException.
+    Http::fake([
+        'api.anthropic.com/*' => Http::response([
+            'id' => 'msg_x',
+            'type' => 'message',
+            'content' => [],
+            'usage' => ['input_tokens' => 1, 'output_tokens' => 0],
+        ]),
+    ]);
+
+    expect(fn () => $this->service->extractInvoice('text'))
+        ->toThrow(LlmApiException::class);
+});
+
+it('records duration_ms on successful calls', function (): void {
+    Http::fake(['api.anthropic.com/*' => Http::response(anthropicResponse($this->fixtureJson))]);
+
+    $this->service->extractInvoice('text');
+
+    $log = LlmLog::first();
+    expect($log->duration_ms)->toBeGreaterThanOrEqual(0);
 });
 
 it('parses null dates gracefully', function (): void {
