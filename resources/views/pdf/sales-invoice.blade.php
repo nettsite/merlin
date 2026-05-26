@@ -51,6 +51,10 @@
     .totals-table .label { text-align: right; color: #6b7280; width: 80%; }
     .totals-table .amount { text-align: right; width: 20%; min-width: 80px; }
     .totals-table .grand-total td { font-size: 13px; font-weight: bold; border-top: 2px solid #1a1a1a; padding-top: 6px; }
+    .totals-table .payment-row td { color: #374151; }
+    .totals-table .balance-due td { font-size: 13px; font-weight: bold; border-top: 2px solid #1a1a1a; padding-top: 6px; }
+    .totals-table .balance-paid td { color: #16a34a; }
+    .paid-stamp { display: inline-block; border: 3px solid #16a34a; color: #16a34a; font-size: 18px; font-weight: bold; letter-spacing: 0.12em; padding: 4px 12px; border-radius: 4px; transform: rotate(-8deg); margin-top: 12px; }
 
     /* Notes */
     .notes-section { margin-top: 24px; padding-top: 16px; border-top: 1px solid #e5e7eb; }
@@ -62,6 +66,10 @@
 </head>
 <body>
 <div class="page">
+
+@php
+    $currencySymbol = \App\Modules\Purchasing\Services\ExchangeRateService::currencySymbol($invoice->currency);
+@endphp
 
     {{-- ===== Header ===== --}}
     <table class="header-table">
@@ -149,9 +157,6 @@
             <tr>
                 <td>
                     <div class="desc">{{ $line->description }}</div>
-                    @if($line->account)
-                        <div class="account">{{ $line->account->code }} {{ $line->account->name }}</div>
-                    @endif
                 </td>
                 <td class="right">{{ rtrim(rtrim(number_format((float)$line->quantity, 4, '.', ''), '0'), '.') }}</td>
                 <td class="right">{{ number_format((float)$line->unit_price, 2, '.', ',') }}</td>
@@ -170,19 +175,56 @@
     <table class="totals-table">
         <tr>
             <td class="label">Subtotal</td>
-            <td class="amount">{{ $invoice->currency }} {{ number_format((float)$invoice->subtotal, 2, '.', ',') }}</td>
+            <td class="amount">{{ $currencySymbol }}{{ number_format((float)$invoice->subtotal, 2, '.', ',') }}</td>
         </tr>
         @if((float)$invoice->tax_total > 0)
         <tr>
             <td class="label">Tax</td>
-            <td class="amount">{{ $invoice->currency }} {{ number_format((float)$invoice->tax_total, 2, '.', ',') }}</td>
+            <td class="amount">{{ $currencySymbol }}{{ number_format((float)$invoice->tax_total, 2, '.', ',') }}</td>
         </tr>
         @endif
         <tr class="grand-total">
-            <td class="label">Total</td>
-            <td class="amount">{{ $invoice->currency }} {{ number_format((float)$invoice->total, 2, '.', ',') }}</td>
+            <td class="label">Invoice Total</td>
+            <td class="amount">{{ $currencySymbol }}{{ number_format((float)$invoice->total, 2, '.', ',') }}</td>
         </tr>
+
+        @php
+            $payments = $invoice->childDocuments()
+                ->wherePivot('relationship_type', 'payment_for')
+                ->orderBy('issue_date')
+                ->get();
+        @endphp
+
+        @if($payments->isNotEmpty())
+            @foreach($payments as $payment)
+            <tr class="payment-row">
+                <td class="label">
+                    Payment received {{ $payment->issue_date?->format('d M Y') }}
+                    @if($payment->reference) - {{ $payment->reference }}@endif
+                </td>
+                <td class="amount">{{ $currencySymbol }}{{ number_format((float)$payment->total, 2, '.', ',') }}</td>
+            </tr>
+            @endforeach
+
+            @if((float)$invoice->balance_due <= 0)
+            <tr class="balance-paid">
+                <td class="label">Balance Due</td>
+                <td class="amount">{{ $currencySymbol }}0.00</td>
+            </tr>
+            @else
+            <tr class="balance-due">
+                <td class="label">Balance Due</td>
+                <td class="amount">{{ $currencySymbol }}{{ number_format((float)$invoice->balance_due, 2, '.', ',') }}</td>
+            </tr>
+            @endif
+        @endif
     </table>
+
+    @if(in_array($invoice->status, ['paid']) )
+    <div style="text-align: right; margin-top: 8px;">
+        <span class="paid-stamp">PAID</span>
+    </div>
+    @endif
 
     {{-- ===== Notes ===== --}}
     @if($invoice->notes)
