@@ -168,6 +168,11 @@ class DocumentService
                 $doc->foreign_balance_due = round((float) $doc->foreign_total - $foreignPaid, 2);
             }
 
+            // Transition sales invoice status based on remaining balance.
+            if ($doc->document_type === 'sales_invoice' && in_array($doc->status, ['sent', 'partially_paid'])) {
+                $doc->status = $newBalanceDue <= 0 ? 'paid' : 'partially_paid';
+            }
+
             $doc->saveQuietly();
 
             $currency = $doc->currency ?? $this->currencySettings->base_currency;
@@ -338,7 +343,9 @@ class DocumentService
             ],
             'sales_invoice' => [
                 'draft' => ['sent', 'voided'],
-                'sent' => ['voided'],
+                'sent' => ['partially_paid', 'paid', 'voided'],
+                'partially_paid' => ['paid', 'voided'],
+                'paid' => [],
                 'voided' => [],
             ],
         ];

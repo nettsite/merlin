@@ -70,6 +70,16 @@ new #[Layout('components.layout.app')] class extends Component
 
     public bool $showDeleteConfirm = false;
 
+    public bool $showPaymentModal = false;
+
+    /** @var array<string, mixed> */
+    public array $paymentForm = [
+        'amount' => '',
+        'date' => '',
+        'reference' => '',
+        'bank_account_id' => '',
+    ];
+
     public function mount(): void
     {
         $this->authorize('viewAny', Document::class);
@@ -392,6 +402,49 @@ new #[Layout('components.layout.app')] class extends Component
     }
 
     // -------------------------------------------------------------------------
+    // Record Payment
+    // -------------------------------------------------------------------------
+
+    public function openPaymentModal(): void
+    {
+        $this->authorize('can-record-payments');
+
+        $doc = Document::findOrFail($this->detailId);
+
+        $this->paymentForm = [
+            'amount' => number_format((float) $doc->balance_due, 2, '.', ''),
+            'date' => now()->toDateString(),
+            'reference' => '',
+            'bank_account_id' => app(\App\Modules\Billing\Settings\BillingSettings::class)->default_bank_account_id ?? '',
+        ];
+        $this->showPaymentModal = true;
+    }
+
+    public function submitPayment(): void
+    {
+        $this->authorize('can-record-payments');
+
+        $this->validate([
+            'paymentForm.amount' => 'required|numeric|min:0.01',
+            'paymentForm.date' => 'required|date',
+            'paymentForm.reference' => 'nullable|string|max:255',
+            'paymentForm.bank_account_id' => 'nullable|uuid|exists:accounts,id',
+        ]);
+
+        $doc = Document::findOrFail($this->detailId);
+
+        app(BillingService::class)->recordPayment($doc, [
+            'amount' => (float) $this->paymentForm['amount'],
+            'date' => $this->paymentForm['date'],
+            'reference' => $this->paymentForm['reference'] ?: null,
+            'bank_account_id' => $this->paymentForm['bank_account_id'] ?: null,
+        ], Auth::user());
+
+        $this->showPaymentModal = false;
+        $this->openDetail($doc->id);
+    }
+
+    // -------------------------------------------------------------------------
     // Delete
     // -------------------------------------------------------------------------
 
@@ -669,6 +722,8 @@ new #[Layout('components.layout.app')] class extends Component
                             $badgeClass = match($detail->status) {
                                 'draft' => 'bg-surface-alt text-ink-muted',
                                 'sent' => 'bg-blue-50 text-blue-700',
+                                'partially_paid' => 'bg-amber-50 text-amber-700',
+                                'paid' => 'bg-green-50 text-green-700',
                                 'voided' => 'bg-red-50 text-danger',
                                 default => 'bg-surface-alt text-ink-muted',
                             };
@@ -705,8 +760,15 @@ new #[Layout('components.layout.app')] class extends Component
                         @endcan
                     @endif
 
+                    {{-- Record Payment --}}
+                    @if(in_array($detail->status, ['sent', 'partially_paid']))
+                        @can('can-record-payments')
+                            <flux:button wire:click="openPaymentModal" size="xs" variant="ghost" icon="banknotes">Record Payment</flux:button>
+                        @endcan
+                    @endif
+
                     {{-- Void --}}
-                    @if(in_array($detail->status, ['draft', 'sent']))
+                    @if(in_array($detail->status, ['draft', 'sent', 'partially_paid']))
                         @can('can-void-sales-invoices')
                             <flux:button wire:click="$set('showVoidConfirm', true)" size="xs" variant="ghost" class="text-danger">Void</flux:button>
                         @endcan
@@ -957,6 +1019,42 @@ new #[Layout('components.layout.app')] class extends Component
                     <p class="text-sm text-ink">{{ $detail->notes }}</p>
                 </div>
             @endif
+
+            {{-- Payments --}}
+            @php
+                $payments = $detail->childDocuments()
+                    ->wherePivot('relationship_type', 'payment_for')
+                    ->orderBy('issue_date')
+                    ->get();
+            @endphp
+            @if($payments->isNotEmpty() || in_array($detail->status, ['partially_paid', 'paid']))
+                <div class="px-6 py-4">
+                    <p class="text-xs font-medium text-ink-muted uppercase tracking-wide mb-3">Payments</p>
+                    @if($payments->isEmpty())
+                        <p class="text-sm text-ink-muted">No payments recorded.</p>
+                    @else
+                        <div class="space-y-2">
+                            @foreach($payments as $payment)
+                                <div class="flex items-center justify-between text-sm">
+                                    <div class="flex items-center gap-3">
+                                        <span class="text-ink-muted">{{ $payment->issue_date?->format('d M Y') }}</span>
+                                        @if($payment->reference)
+                                            <span class="text-ink-soft">{{ $payment->reference }}</span>
+                                        @endif
+                                    </div>
+                                    <span class="font-medium tabular-nums">{{ $detail->currency }} {{ number_format((float) $payment->total, 2) }}</span>
+                                </div>
+                            @endforeach
+                        </div>
+                        <div class="mt-3 pt-3 border-t border-line flex justify-between text-sm">
+                            <span class="text-ink-muted">Balance due</span>
+                            <span class="font-semibold tabular-nums {{ (float) $detail->balance_due <= 0 ? 'text-success' : 'text-ink' }}">
+                                {{ $detail->currency }} {{ number_format((float) $detail->balance_due, 2) }}
+                            </span>
+                        </div>
+                    @endif
+                </div>
+            @endif
         </div>
     </div>
     @endif
@@ -1022,6 +1120,39 @@ new #[Layout('components.layout.app')] class extends Component
         <div class="flex gap-3 justify-end">
             <flux:button variant="ghost" wire:click="$set('showVoidConfirm', false)">Cancel</flux:button>
             <flux:button variant="danger" wire:click="void">Void Invoice</flux:button>
+        </div>
+    </div>
+</flux:modal>
+
+{{-- ===== Record Payment Modal ===== --}}
+<flux:modal name="record-payment" wire:model.self="showPaymentModal" class="w-[440px]">
+    <div class="p-6">
+        <flux:heading size="lg" class="font-semibold mb-1">Record Payment</flux:heading>
+        <p class="text-sm text-ink-soft mb-5">Record a payment received against this invoice.</p>
+
+        <div class="space-y-4">
+            <flux:field>
+                <flux:label>Amount <span class="text-danger">*</span></flux:label>
+                <flux:input type="number" wire:model="paymentForm.amount" step="0.01" min="0.01" placeholder="0.00" />
+                @error('paymentForm.amount') <flux:error>{{ $message }}</flux:error> @enderror
+            </flux:field>
+
+            <flux:field>
+                <flux:label>Date <span class="text-danger">*</span></flux:label>
+                <flux:input type="date" wire:model="paymentForm.date" />
+                @error('paymentForm.date') <flux:error>{{ $message }}</flux:error> @enderror
+            </flux:field>
+
+            <flux:field>
+                <flux:label>Reference</flux:label>
+                <flux:input wire:model="paymentForm.reference" placeholder="Bank reference, cheque number, etc." />
+                @error('paymentForm.reference') <flux:error>{{ $message }}</flux:error> @enderror
+            </flux:field>
+        </div>
+
+        <div class="flex gap-3 justify-end mt-6">
+            <flux:button variant="ghost" wire:click="$set('showPaymentModal', false)">Cancel</flux:button>
+            <flux:button variant="primary" wire:click="submitPayment">Record Payment</flux:button>
         </div>
     </div>
 </flux:modal>

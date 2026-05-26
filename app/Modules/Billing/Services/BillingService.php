@@ -9,6 +9,7 @@ use App\Modules\Core\Models\Party;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Settings\CurrencySettings;
 use App\Modules\Purchasing\Models\Document;
+use App\Modules\Purchasing\Models\DocumentRelationship;
 use App\Modules\Purchasing\Services\DocumentService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
@@ -102,6 +103,52 @@ class BillingService
         app(DocumentService::class)->markAsSent($invoice, $by);
 
         return $invoice->refresh();
+    }
+
+    /**
+     * Record a payment against a sales invoice.
+     *
+     * Creates a payment Document, links it to the invoice via DocumentRelationship,
+     * then delegates amount/balance updates to DocumentService::recordPayment().
+     *
+     * @param  array{amount: float, date: string, reference?: string|null, bank_account_id?: string|null}  $data
+     */
+    public function recordPayment(Document $invoice, array $data, ?User $by): Document
+    {
+        if (! in_array($invoice->status, ['sent', 'partially_paid'])) {
+            throw new RuntimeException("Cannot record payment against a {$invoice->status} invoice.");
+        }
+
+        $amount = (float) $data['amount'];
+        $date = Carbon::parse($data['date']);
+        $reference = $data['reference'] ?? null;
+        $bankAccountId = $data['bank_account_id'] ?? $this->billingSettings->default_bank_account_id;
+
+        $payment = Document::create([
+            'document_type' => 'payment',
+            'direction' => 'inbound',
+            'status' => 'draft',
+            'party_id' => $invoice->party_id,
+            'issue_date' => $date->toDateString(),
+            'currency' => $invoice->currency,
+            'exchange_rate' => $invoice->exchange_rate ?? 1.0,
+            'subtotal' => $amount,
+            'tax_total' => 0,
+            'total' => $amount,
+            'bank_account_id' => $bankAccountId,
+            'source' => 'manual',
+            'reference' => $reference,
+        ]);
+
+        DocumentRelationship::create([
+            'parent_document_id' => $invoice->id,
+            'child_document_id' => $payment->id,
+            'relationship_type' => 'payment_for',
+        ]);
+
+        app(DocumentService::class)->recordPayment($invoice, $amount, $date, $reference);
+
+        return $payment;
     }
 
     /**
