@@ -69,13 +69,33 @@
 
 @php
     $currencySymbol = \App\Modules\Purchasing\Services\ExchangeRateService::currencySymbol($invoice->currency);
+    $company = app(\App\Modules\Core\Settings\CompanySettings::class);
+    $companyName = $company->name ?: config('app.name');
+    $logoPath = $company->logo_path ? \Illuminate\Support\Facades\Storage::disk('public')->path($company->logo_path) : null;
 @endphp
 
     {{-- ===== Header ===== --}}
     <table class="header-table">
         <tr>
             <td style="vertical-align: top; width: 50%;">
-                <div class="company-name">{{ config('app.name') }}</div>
+                @if($logoPath && file_exists($logoPath))
+                    <img src="{{ $logoPath }}" alt="{{ $companyName }}" style="max-height: 60px; max-width: 200px; margin-bottom: 6px; display: block;">
+                @else
+                    <div class="company-name">{{ $companyName }}</div>
+                @endif
+                @if($company->address_line_1)
+                    <div style="font-size: 10px; color: #6b7280; margin-top: 4px; line-height: 1.6;">
+                        <div>{{ $company->address_line_1 }}</div>
+                        @if($company->address_line_2)<div>{{ $company->address_line_2 }}</div>@endif
+                        @if($company->city || $company->postal_code)
+                            <div>{{ implode(' ', array_filter([$company->city, $company->postal_code])) }}</div>
+                        @endif
+                        @if($company->country)<div>{{ $company->country }}</div>@endif
+                        @if($company->phone)<div>{{ $company->phone }}</div>@endif
+                        @if($company->email)<div>{{ $company->email }}</div>@endif
+                        @if($company->tax_number)<div>Tax No: {{ $company->tax_number }}</div>@endif
+                    </div>
+                @endif
             </td>
             <td style="vertical-align: top; text-align: right; width: 50%;">
                 <div class="invoice-title">INVOICE</div>
@@ -244,7 +264,7 @@
 
     {{-- ===== Footer ===== --}}
     <div class="footer">
-        {{ config('app.name') }} &bull; Generated {{ now()->format('d M Y') }}
+        {{ $companyName }} &bull; Generated {{ now()->format('d M Y') }}
     </div>
 
 </div>
