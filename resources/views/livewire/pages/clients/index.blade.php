@@ -3,6 +3,7 @@
 use App\Livewire\Concerns\HasCrudForm;
 use App\Livewire\Concerns\HasCrudTable;
 use App\Modules\Billing\Models\PaymentTerm;
+use App\Modules\Core\Models\ContactAssignment;
 use App\Modules\Core\Models\Party;
 use App\Modules\Core\Models\PartyRelationship;
 use App\Modules\Core\Services\PartyService;
@@ -13,6 +14,8 @@ use Livewire\Volt\Component;
 new #[Layout('components.layout.app')] class extends Component
 {
     use HasCrudTable, HasCrudForm;
+
+    // ── Client fields ────────────────────────────────────────
 
     #[Validate('required|string|max:255')]
     public string $legalName = '';
@@ -35,6 +38,37 @@ new #[Layout('components.layout.app')] class extends Component
     #[Validate('nullable|uuid|exists:payment_terms,id')]
     public string $paymentTermId = '';
 
+    // ── First contact (create form only — optional) ──────────
+
+    #[Validate('nullable|string|max:100')]
+    public string $contactFirstName = '';
+
+    #[Validate('nullable|string|max:100')]
+    public string $contactLastName = '';
+
+    #[Validate('nullable|email|max:255')]
+    public string $contactEmail = '';
+
+    #[Validate('nullable|string|max:50')]
+    public string $contactPhone = '';
+
+    public bool $contactReceivesInvoices = true;
+
+    // ── Contacts list (edit form only) ───────────────────────
+
+    /** @var array<int, array{id: string, full_name: string, email: string, phone: string, receives_invoices: bool, is_primary: bool}> */
+    public array $contacts = [];
+
+    public bool $showAddContact = false;
+
+    public string $newContactFirstName = '';
+    public string $newContactLastName = '';
+    public string $newContactEmail = '';
+    public string $newContactPhone = '';
+    public bool $newContactReceivesInvoices = true;
+
+    // ── Lifecycle ────────────────────────────────────────────
+
     public function mount(): void
     {
         $this->authorize('viewAny', Party::class);
@@ -43,8 +77,15 @@ new #[Layout('components.layout.app')] class extends Component
     public function create(): void
     {
         $this->authorize('create', Party::class);
-        $this->reset(['legalName', 'tradingName', 'email', 'phone', 'notes', 'paymentTermId']);
+        $this->reset([
+            'legalName', 'tradingName', 'email', 'phone', 'notes', 'paymentTermId',
+            'contactFirstName', 'contactLastName', 'contactEmail', 'contactPhone',
+            'contacts', 'showAddContact',
+            'newContactFirstName', 'newContactLastName', 'newContactEmail', 'newContactPhone',
+        ]);
         $this->status = 'active';
+        $this->contactReceivesInvoices = true;
+        $this->newContactReceivesInvoices = true;
         $this->editingId = null;
         $this->showForm = true;
     }
@@ -62,22 +103,57 @@ new #[Layout('components.layout.app')] class extends Component
 
         $clientRel = $party->relationships->firstWhere('relationship_type', 'client');
         $this->paymentTermId = $clientRel?->payment_term_id ?? '';
+
+        // Load contacts
+        $this->showAddContact = false;
+        $this->reset(['newContactFirstName', 'newContactLastName', 'newContactEmail', 'newContactPhone']);
+        $this->newContactReceivesInvoices = true;
+
+        $this->contacts = $party->contactAssignments()
+            ->with('person')
+            ->where('is_active', true)
+            ->get()
+            ->map(fn (ContactAssignment $a) => [
+                'id'                => $a->id,
+                'full_name'         => $a->person->full_name,
+                'email'             => $a->person->email ?? '',
+                'phone'             => $a->person->mobile ?? '',
+                'receives_invoices' => $a->receives_invoices,
+                'is_primary'        => $a->is_primary,
+            ])
+            ->toArray();
     }
 
     protected function store(): void
     {
         $this->validate();
+
         $party = app(PartyService::class)->createBusiness([
             'business_type' => 'company',
-            'legal_name' => $this->legalName,
-            'trading_name' => $this->tradingName ?: $this->legalName,
+            'legal_name'    => $this->legalName,
+            'trading_name'  => $this->tradingName ?: $this->legalName,
             'primary_email' => $this->email ?: null,
             'primary_phone' => $this->phone ?: null,
-            'notes' => $this->notes ?: null,
-            'status' => $this->status,
+            'notes'         => $this->notes ?: null,
+            'status'        => $this->status,
         ], ['client']);
 
         $this->saveClientRelationshipMetadata($party);
+
+        if ($this->contactFirstName !== '') {
+            $personParty = app(PartyService::class)->createPerson([
+                'first_name' => $this->contactFirstName,
+                'last_name'  => $this->contactLastName ?: '',
+                'email'      => $this->contactEmail ?: null,
+                'mobile'     => $this->contactPhone ?: null,
+            ]);
+
+            $party->assignContact($personParty->person, [
+                'receives_invoices' => $this->contactReceivesInvoices,
+                'is_primary'        => true,
+                'is_active'         => true,
+            ]);
+        }
     }
 
     protected function update(): void
@@ -85,17 +161,74 @@ new #[Layout('components.layout.app')] class extends Component
         $this->validate();
         $party = Party::with(['business', 'relationships'])->findOrFail($this->editingId);
         $party->business?->update([
-            'legal_name' => $this->legalName,
+            'legal_name'   => $this->legalName,
             'trading_name' => $this->tradingName ?: $this->legalName,
         ]);
         $party->update([
             'primary_email' => $this->email ?: null,
             'primary_phone' => $this->phone ?: null,
-            'notes' => $this->notes ?: null,
-            'status' => $this->status,
+            'notes'         => $this->notes ?: null,
+            'status'        => $this->status,
         ]);
 
         $this->saveClientRelationshipMetadata($party);
+    }
+
+    public function addContact(): void
+    {
+        $this->validate([
+            'newContactFirstName' => 'required|string|max:100',
+            'newContactLastName'  => 'nullable|string|max:100',
+            'newContactEmail'     => 'nullable|email|max:255',
+            'newContactPhone'     => 'nullable|string|max:50',
+        ]);
+
+        $party = Party::findOrFail($this->editingId);
+        $this->authorize('update', $party);
+
+        $personParty = app(PartyService::class)->createPerson([
+            'first_name' => $this->newContactFirstName,
+            'last_name'  => $this->newContactLastName ?: '',
+            'email'      => $this->newContactEmail ?: null,
+            'mobile'     => $this->newContactPhone ?: null,
+        ]);
+
+        $party->assignContact($personParty->person, [
+            'receives_invoices' => $this->newContactReceivesInvoices,
+            'is_primary'        => count($this->contacts) === 0,
+            'is_active'         => true,
+        ]);
+
+        // Refresh
+        $this->contacts = $party->contactAssignments()
+            ->with('person')
+            ->where('is_active', true)
+            ->get()
+            ->map(fn (ContactAssignment $a) => [
+                'id'                => $a->id,
+                'full_name'         => $a->person->full_name,
+                'email'             => $a->person->email ?? '',
+                'phone'             => $a->person->mobile ?? '',
+                'receives_invoices' => $a->receives_invoices,
+                'is_primary'        => $a->is_primary,
+            ])
+            ->toArray();
+
+        $this->reset(['newContactFirstName', 'newContactLastName', 'newContactEmail', 'newContactPhone']);
+        $this->newContactReceivesInvoices = true;
+        $this->showAddContact = false;
+    }
+
+    public function removeContact(string $assignmentId): void
+    {
+        $party = Party::findOrFail($this->editingId);
+        $this->authorize('update', $party);
+
+        ContactAssignment::findOrFail($assignmentId)->delete();
+
+        $this->contacts = array_values(
+            array_filter($this->contacts, fn ($c) => $c['id'] !== $assignmentId)
+        );
     }
 
     private function saveClientRelationshipMetadata(Party $party): void
@@ -121,9 +254,9 @@ new #[Layout('components.layout.app')] class extends Component
     public function with(): array
     {
         $sortColumn = match ($this->sortBy) {
-            'status' => 'parties.status',
+            'status'        => 'parties.status',
             'primary_email' => 'parties.primary_email',
-            default => 'businesses.legal_name',
+            default         => 'businesses.legal_name',
         };
 
         return [
@@ -271,5 +404,122 @@ new #[Layout('components.layout.app')] class extends Component
         <flux:textarea wire:model="notes" rows="3" placeholder="Internal notes..." />
         <flux:error name="notes" />
     </flux:field>
+
+    {{-- ===== First Contact (create only) ===== --}}
+    @if($editingId === null)
+    <div class="border-t border-line pt-4">
+        <p class="text-sm font-semibold text-ink mb-3">First Contact <span class="font-normal text-ink-muted">(optional)</span></p>
+        <div class="space-y-3">
+            <div class="grid grid-cols-2 gap-3">
+                <flux:field>
+                    <flux:label>First Name</flux:label>
+                    <flux:input wire:model="contactFirstName" placeholder="Jane" />
+                    <flux:error name="contactFirstName" />
+                </flux:field>
+                <flux:field>
+                    <flux:label>Last Name</flux:label>
+                    <flux:input wire:model="contactLastName" placeholder="Smith" />
+                    <flux:error name="contactLastName" />
+                </flux:field>
+            </div>
+            <flux:field>
+                <flux:label>Contact Email</flux:label>
+                <flux:input wire:model="contactEmail" type="email" placeholder="jane@client.com" />
+                <flux:error name="contactEmail" />
+            </flux:field>
+            <flux:field>
+                <flux:label>Contact Phone</flux:label>
+                <flux:input wire:model="contactPhone" placeholder="+27 82 000 0000" />
+                <flux:error name="contactPhone" />
+            </flux:field>
+            <label class="flex items-center gap-2 text-sm text-ink cursor-pointer">
+                <input type="checkbox" wire:model="contactReceivesInvoices" class="rounded border-line text-primary">
+                Receives invoices
+            </label>
+        </div>
+    </div>
+    @endif
+
+    {{-- ===== Contacts (edit only) ===== --}}
+    @if($editingId !== null)
+    <div class="border-t border-line pt-4">
+        <div class="flex items-center justify-between mb-3">
+            <p class="text-sm font-semibold text-ink">Contacts</p>
+            @if(! $showAddContact)
+                <flux:button wire:click="$set('showAddContact', true)" size="sm" variant="ghost" icon="plus">
+                    Add Contact
+                </flux:button>
+            @endif
+        </div>
+
+        {{-- Existing contacts list --}}
+        @forelse($contacts as $contact)
+        <div class="flex items-start justify-between py-2.5 border-b border-line last:border-0 group">
+            <div>
+                <div class="flex items-center gap-2">
+                    <span class="text-sm font-medium text-ink">{{ $contact['full_name'] }}</span>
+                    @if($contact['is_primary'])
+                        <span class="text-xs px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 font-medium">Primary</span>
+                    @endif
+                    @if($contact['receives_invoices'])
+                        <span class="text-xs px-1.5 py-0.5 rounded bg-surface-alt text-ink-muted">Invoices</span>
+                    @endif
+                </div>
+                @if($contact['email'])
+                    <div class="text-xs text-ink-muted mt-0.5">{{ $contact['email'] }}</div>
+                @endif
+                @if($contact['phone'])
+                    <div class="text-xs text-ink-muted">{{ $contact['phone'] }}</div>
+                @endif
+            </div>
+            <flux:button
+                wire:click="removeContact('{{ $contact['id'] }}')"
+                wire:confirm="Remove this contact?"
+                size="sm" variant="ghost" icon="trash"
+                class="text-danger hover:text-danger opacity-0 group-hover:opacity-100 transition-opacity"
+            />
+        </div>
+        @empty
+            <p class="text-sm text-ink-muted py-2">No contacts yet.</p>
+        @endforelse
+
+        {{-- Add contact inline form --}}
+        @if($showAddContact)
+        <div class="mt-3 p-3 rounded-lg border border-line bg-surface-alt space-y-3">
+            <p class="text-xs font-semibold text-ink-muted uppercase tracking-wide">New Contact</p>
+            <div class="grid grid-cols-2 gap-3">
+                <flux:field>
+                    <flux:label>First Name <span class="text-danger">*</span></flux:label>
+                    <flux:input wire:model="newContactFirstName" placeholder="Jane" />
+                    <flux:error name="newContactFirstName" />
+                </flux:field>
+                <flux:field>
+                    <flux:label>Last Name</flux:label>
+                    <flux:input wire:model="newContactLastName" placeholder="Smith" />
+                    <flux:error name="newContactLastName" />
+                </flux:field>
+            </div>
+            <flux:field>
+                <flux:label>Email</flux:label>
+                <flux:input wire:model="newContactEmail" type="email" placeholder="jane@client.com" />
+                <flux:error name="newContactEmail" />
+            </flux:field>
+            <flux:field>
+                <flux:label>Phone</flux:label>
+                <flux:input wire:model="newContactPhone" placeholder="+27 82 000 0000" />
+                <flux:error name="newContactPhone" />
+            </flux:field>
+            <label class="flex items-center gap-2 text-sm text-ink cursor-pointer">
+                <input type="checkbox" wire:model="newContactReceivesInvoices" class="rounded border-line text-primary">
+                Receives invoices
+            </label>
+            <div class="flex items-center gap-2 pt-1">
+                <flux:button wire:click="addContact" size="sm" variant="primary">Save Contact</flux:button>
+                <flux:button wire:click="$set('showAddContact', false)" size="sm" variant="ghost">Cancel</flux:button>
+            </div>
+        </div>
+        @endif
+    </div>
+    @endif
 </x-crud.form>
 </div>
