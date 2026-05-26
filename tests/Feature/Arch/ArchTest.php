@@ -16,10 +16,14 @@ use Illuminate\Database\Eloquent\Relations\Relation;
  *
  * Roles are user-configurable at runtime; permissions are the stable contract.
  * Catches reintroduction of hasRole() in app/ before merge.
+ *
+ * AppServiceProvider is the one documented exception: Gate::before needs
+ * hasRole() to bootstrap the super-admin bypass before permissions resolve.
  */
 arch('no hasRole() calls in app code')
     ->expect('App')
-    ->not->toUse('hasRole');
+    ->not->toUse('hasRole')
+    ->ignoring(App\Providers\AppServiceProvider::class);
 
 /**
  * All concrete Policy classes live in App\Policies. Confirm they expose at least
