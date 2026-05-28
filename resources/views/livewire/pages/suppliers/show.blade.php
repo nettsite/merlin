@@ -18,6 +18,10 @@ new #[Layout('components.layout.app')] class extends Component
 
     public bool $showEditForm = false;
 
+    public string $clientPaymentTermId = '';
+
+    public bool $showAddClientForm = false;
+
     #[Validate('required|string|max:255')]
     public string $legalName = '';
 
@@ -48,9 +52,12 @@ new #[Layout('components.layout.app')] class extends Component
 
     public function mount(string $id): void
     {
-        $party = Party::findOrFail($id);
+        $party = Party::with('relationships')->findOrFail($id);
         $this->authorize('view', $party);
         $this->partyId = $id;
+
+        $clientRel = $party->relationships->firstWhere('relationship_type', 'client');
+        $this->clientPaymentTermId = $clientRel?->payment_term_id ?? '';
     }
 
     public function updatedInvoiceStatus(): void
@@ -123,6 +130,28 @@ new #[Layout('components.layout.app')] class extends Component
         $this->showEditForm = false;
     }
 
+    public function addClientRelationship(): void
+    {
+        $this->validate(['clientPaymentTermId' => 'nullable|uuid|exists:payment_terms,id']);
+        $party = Party::findOrFail($this->partyId);
+        $this->authorize('update', $party);
+
+        $rel = $party->relationships()->firstOrCreate(
+            ['relationship_type' => 'client'],
+            ['is_active' => true],
+        );
+        $rel->mergeMetadata(['payment_term_id' => $this->clientPaymentTermId ?: null]);
+        $this->showAddClientForm = false;
+    }
+
+    public function removeClientRelationship(): void
+    {
+        $party = Party::findOrFail($this->partyId);
+        $this->authorize('update', $party);
+        $party->relationships()->where('relationship_type', 'client')->first()?->delete();
+        $this->clientPaymentTermId = '';
+    }
+
     public function approveSupplier(): void
     {
         $party = Party::findOrFail($this->partyId);
@@ -141,6 +170,7 @@ new #[Layout('components.layout.app')] class extends Component
     {
         $party = Party::with(['business', 'relationships'])->findOrFail($this->partyId);
         $supplierRel = $party->relationships->firstWhere('relationship_type', 'supplier');
+        $clientRel = $party->relationships->firstWhere('relationship_type', 'client');
 
         $invoices = Document::purchaseInvoices()
             ->forParty($party)
@@ -158,6 +188,7 @@ new #[Layout('components.layout.app')] class extends Component
         return [
             'party' => $party,
             'supplierRel' => $supplierRel,
+            'clientRel' => $clientRel,
             'invoices' => $invoices,
             'statusCounts' => $statusCounts,
             'liabilityAccounts' => Account::postable()->active()
@@ -245,6 +276,59 @@ new #[Layout('components.layout.app')] class extends Component
             <div class="col-span-2 sm:col-span-3 lg:col-span-4">
                 <p class="text-xs font-medium uppercase tracking-wide text-ink-muted">Notes</p>
                 <p class="mt-1 text-sm text-ink">{{ $party->notes }}</p>
+            </div>
+        @endif
+    </div>
+
+    {{-- Client relationship section --}}
+    <div class="border-b border-line px-6 py-5">
+        <div class="flex items-center justify-between">
+            <div>
+                <h2 class="text-sm font-semibold text-ink">Also a Client</h2>
+                <p class="mt-0.5 text-xs text-ink-muted">This party can also be invoiced as a client.</p>
+            </div>
+            @can('update', $party)
+                @if($clientRel === null && ! $showAddClientForm)
+                    <flux:button wire:click="$set('showAddClientForm', true)" size="sm" variant="ghost" icon="plus">
+                        Add as Client
+                    </flux:button>
+                @endif
+            @endcan
+        </div>
+
+        @if($clientRel !== null)
+            <div class="mt-3 flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <span class="inline-flex items-center rounded px-2 py-0.5 text-xs font-medium bg-blue-50 text-blue-600">Client</span>
+                    <span class="text-sm text-ink-soft">
+                        {{ $paymentTerms->firstWhere('id', $clientRel->payment_term_id)?->name ?? 'Default payment terms' }}
+                    </span>
+                </div>
+                @can('update', $party)
+                    <flux:button
+                        wire:click="removeClientRelationship"
+                        wire:confirm="Remove client relationship for this party?"
+                        size="sm" variant="ghost" icon="trash"
+                        class="text-danger hover:text-danger"
+                    />
+                @endcan
+            </div>
+        @elseif($showAddClientForm)
+            <div class="mt-3 space-y-3 rounded-lg border border-line bg-surface-alt p-3">
+                <flux:field>
+                    <flux:label>Payment Terms</flux:label>
+                    <flux:select wire:model="clientPaymentTermId">
+                        <option value="">— Use system default —</option>
+                        @foreach($paymentTerms as $term)
+                            <option value="{{ $term->id }}">{{ $term->name }}</option>
+                        @endforeach
+                    </flux:select>
+                    <flux:error name="clientPaymentTermId" />
+                </flux:field>
+                <div class="flex items-center gap-2">
+                    <flux:button wire:click="addClientRelationship" size="sm" variant="primary">Add as Client</flux:button>
+                    <flux:button wire:click="$set('showAddClientForm', false)" size="sm" variant="ghost">Cancel</flux:button>
+                </div>
             </div>
         @endif
     </div>

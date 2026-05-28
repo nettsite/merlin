@@ -2,6 +2,7 @@
 
 use App\Livewire\Concerns\HasCrudForm;
 use App\Livewire\Concerns\HasCrudTable;
+use App\Modules\Accounting\Models\Account;
 use App\Modules\Billing\Models\PaymentTerm;
 use App\Modules\Core\Models\ContactAssignment;
 use App\Modules\Core\Models\Party;
@@ -66,6 +67,20 @@ new #[Layout('components.layout.app')] class extends Component
     public string $newContactEmail = '';
     public string $newContactPhone = '';
     public bool $newContactReceivesInvoices = true;
+
+    // ── Supplier cross-link ──────────────────────────────────
+
+    public ?string $addingSupplierForId = null;
+
+    public bool $showSupplierRelationshipModal = false;
+
+    public bool $supplierRelExists = false;
+
+    #[Validate('nullable|uuid|exists:accounts,id')]
+    public string $supplierPayableAccountId = '';
+
+    #[Validate('nullable|uuid|exists:payment_terms,id')]
+    public string $supplierPaymentTermId = '';
 
     // ── Lifecycle ────────────────────────────────────────────
 
@@ -244,6 +259,53 @@ new #[Layout('components.layout.app')] class extends Component
         ]);
     }
 
+    public function openSupplierRelationshipForm(string $id): void
+    {
+        $party = Party::with('relationships')->findOrFail($id);
+        $this->authorize('update', $party);
+
+        $rel = $party->relationships->firstWhere('relationship_type', 'supplier');
+        $this->supplierPayableAccountId = $rel?->default_payable_account_id ?? '';
+        $this->supplierPaymentTermId = $rel?->payment_term_id ?? '';
+        $this->supplierRelExists = $rel !== null;
+        $this->addingSupplierForId = $id;
+        $this->showSupplierRelationshipModal = true;
+    }
+
+    public function saveSupplierRelationship(): void
+    {
+        $this->validate([
+            'supplierPayableAccountId' => 'nullable|uuid|exists:accounts,id',
+            'supplierPaymentTermId'    => 'nullable|uuid|exists:payment_terms,id',
+        ]);
+
+        $party = Party::findOrFail($this->addingSupplierForId);
+        $this->authorize('update', $party);
+
+        $rel = $party->relationships()->firstOrCreate(
+            ['relationship_type' => 'supplier'],
+            ['is_active' => true],
+        );
+        $rel->mergeMetadata([
+            'default_payable_account_id' => $this->supplierPayableAccountId ?: null,
+            'payment_term_id'            => $this->supplierPaymentTermId ?: null,
+        ]);
+
+        $this->supplierRelExists = true;
+        $this->showSupplierRelationshipModal = false;
+        $this->addingSupplierForId = null;
+    }
+
+    public function removeSupplierRelationship(string $id): void
+    {
+        $party = Party::findOrFail($id);
+        $this->authorize('update', $party);
+        $party->relationships()->where('relationship_type', 'supplier')->first()?->delete();
+        $this->supplierRelExists = false;
+        $this->showSupplierRelationshipModal = false;
+        $this->addingSupplierForId = null;
+    }
+
     protected function performDelete(string $id): void
     {
         $party = Party::findOrFail($id);
@@ -261,10 +323,14 @@ new #[Layout('components.layout.app')] class extends Component
 
         return [
             'paymentTerms' => PaymentTerm::orderBy('name')->get(['id', 'name']),
+            'liabilityAccounts' => Account::postable()->active()
+                ->whereHas('group.type', fn ($q) => $q->where('code', '2'))
+                ->orderBy('code')
+                ->get(['id', 'code', 'name']),
             'rows' => Party::clients()
                 ->join('businesses', 'businesses.id', '=', 'parties.id')
                 ->select('parties.*')
-                ->with('business')
+                ->with(['business', 'relationships'])
                 ->when(
                     $this->search,
                     fn ($q) => $q->where(function ($q): void {
@@ -324,6 +390,15 @@ new #[Layout('components.layout.app')] class extends Component
                     <td class="px-4 py-3 text-right">
                         <div class="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                             @can('update', $party)
+                                @php $isSupplier = $party->relationships->firstWhere('relationship_type', 'supplier') !== null @endphp
+                                <flux:button
+                                    wire:click="openSupplierRelationshipForm('{{ $party->id }}')"
+                                    size="sm" variant="ghost"
+                                    :class="$isSupplier ? 'text-blue-600' : ''"
+                                    title="{{ $isSupplier ? 'Manage supplier relationship' : 'Add as supplier' }}"
+                                >
+                                    {{ $isSupplier ? 'Supplier ✓' : 'Add as Supplier' }}
+                                </flux:button>
                                 <flux:button wire:click="edit('{{ $party->id }}')" size="sm" variant="ghost" icon="pencil" />
                             @endcan
                             @can('delete', $party)
@@ -352,6 +427,52 @@ new #[Layout('components.layout.app')] class extends Component
         {{ $rows->links() }}
     </x-slot>
 </x-crud.table>
+
+{{-- Supplier relationship modal --}}
+<flux:modal wire:model="showSupplierRelationshipModal" name="supplier-relationship" class="w-full max-w-lg">
+    <div class="flex flex-col gap-4">
+        <flux:heading>{{ $supplierRelExists ? 'Supplier Relationship' : 'Add as Supplier' }}</flux:heading>
+
+        <flux:field>
+            <flux:label>Default Payable Account</flux:label>
+            <flux:select wire:model="supplierPayableAccountId">
+                <option value="">— Use system default —</option>
+                @foreach($liabilityAccounts as $account)
+                    <option value="{{ $account->id }}">{{ $account->code }} — {{ $account->name }}</option>
+                @endforeach
+            </flux:select>
+            <flux:error name="supplierPayableAccountId" />
+        </flux:field>
+
+        <flux:field>
+            <flux:label>Payment Terms</flux:label>
+            <flux:select wire:model="supplierPaymentTermId">
+                <option value="">— Use system default —</option>
+                @foreach($paymentTerms as $term)
+                    <option value="{{ $term->id }}">{{ $term->name }}</option>
+                @endforeach
+            </flux:select>
+            <flux:error name="supplierPaymentTermId" />
+        </flux:field>
+
+        <div class="flex items-center justify-between pt-2">
+            @if($supplierRelExists)
+                <flux:button
+                    wire:click="removeSupplierRelationship('{{ $addingSupplierForId }}')"
+                    wire:confirm="Remove supplier relationship for this party?"
+                    size="sm" variant="ghost"
+                    class="text-danger hover:text-danger"
+                >Remove Supplier</flux:button>
+            @else
+                <div></div>
+            @endif
+            <div class="flex gap-2">
+                <flux:button wire:click="$set('showSupplierRelationshipModal', false)" variant="ghost">Cancel</flux:button>
+                <flux:button wire:click="saveSupplierRelationship" variant="primary">Save</flux:button>
+            </div>
+        </div>
+    </div>
+</flux:modal>
 
 <x-crud.form title="Client" :editing="$editingId !== null">
     <flux:field>
