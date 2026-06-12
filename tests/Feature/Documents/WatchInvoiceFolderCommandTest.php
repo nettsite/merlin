@@ -7,6 +7,7 @@ use App\Modules\Purchasing\Services\InvoiceProcessingService;
 use App\Modules\Purchasing\Services\Pdf\MagikaService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
 
 uses(RefreshDatabase::class);
@@ -40,7 +41,7 @@ beforeEach(function (): void {
 afterEach(function (): void {
     // Remove any leftover files in temp dir
     if (is_dir($this->watchDir)) {
-        array_map('unlink', glob($this->watchDir.'/*.pdf') ?: []);
+        array_map('unlink', array_filter(glob($this->watchDir.'/*') ?: [], 'is_file'));
         array_map('unlink', glob($this->watchDir.'/failed/*') ?: []);
         @rmdir($this->watchDir.'/failed');
         rmdir($this->watchDir);
@@ -88,7 +89,7 @@ it('moves a failed pdf to the failed subfolder and writes an error log', functio
     file_put_contents($pdf, '%PDF-1.4 fake content');
 
     $this->serviceMock->expects('process')->once()
-        ->andThrow(new \RuntimeException('LLM extraction failed'));
+        ->andThrow(new RuntimeException('LLM extraction failed'));
 
     $this->artisan('invoices:watch', ['folder' => $this->watchDir])
         ->assertSuccessful();
@@ -111,7 +112,7 @@ it('moves an already-processed duplicate to the failed subfolder with a log', fu
     Media::create([
         'model_type' => Document::class,
         'model_id' => Document::factory()->purchaseInvoice()->create(['payable_account_id' => $payableId])->id,
-        'uuid' => \Illuminate\Support\Str::uuid(),
+        'uuid' => Str::uuid(),
         'collection_name' => 'source_document',
         'name' => 'duplicate',
         'file_name' => 'duplicate.pdf',
@@ -135,7 +136,7 @@ it('moves an already-processed duplicate to the failed subfolder with a log', fu
     expect(file_exists($this->watchDir.'/failed/duplicate.already-processed.log'))->toBeTrue();
 });
 
-it('moves a non-PDF file to failed/ with a not-a-pdf log and creates no document', function (): void {
+it('moves an unsupported file to failed/ with an unsupported-format log and creates no document', function (): void {
     $notPdf = $this->watchDir.'/fake-invoice.pdf';
     file_put_contents($notPdf, 'THIS IS NOT A PDF — no magic bytes');
 
@@ -146,6 +147,19 @@ it('moves a non-PDF file to failed/ with a not-a-pdf log and creates no document
 
     expect(file_exists($notPdf))->toBeFalse('Original file should be moved')
         ->and(file_exists($this->watchDir.'/failed/fake-invoice.pdf'))->toBeTrue()
-        ->and(file_exists($this->watchDir.'/failed/fake-invoice.not-a-pdf.log'))->toBeTrue()
+        ->and(file_exists($this->watchDir.'/failed/fake-invoice.unsupported-format.log'))->toBeTrue()
         ->and(Document::count())->toBe(0);
+});
+
+it('processes a csv invoice from the watch folder', function (): void {
+    $csv = $this->watchDir.'/bank-invoice.csv';
+    file_put_contents($csv, "description,quantity,unit_price\nHosting,1,500.00\n");
+
+    $this->serviceMock->expects('process')->once();
+
+    $this->artisan('invoices:watch', ['folder' => $this->watchDir])
+        ->assertSuccessful();
+
+    expect(file_exists($csv))->toBeFalse('CSV should be deleted after successful processing');
+    expect(Document::where('source', 'watch')->count())->toBe(1);
 });

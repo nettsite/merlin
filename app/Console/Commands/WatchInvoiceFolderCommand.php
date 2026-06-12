@@ -21,7 +21,7 @@ class WatchInvoiceFolderCommand extends Command
                             {--watch : Run continuously until stopped with Ctrl+C}
                             {--interval=10 : Polling interval in seconds when using --watch}';
 
-    protected $description = 'Process all PDF invoices found in the watch folder';
+    protected $description = 'Process all invoice files (PDF, DOCX, XLSX, CSV) found in the watch folder';
 
     public function handle(InvoiceProcessingService $service, MagikaService $magika): int
     {
@@ -48,10 +48,13 @@ class WatchInvoiceFolderCommand extends Command
 
     protected function scan(string $folder, InvoiceProcessingService $service, MagikaService $magika): void
     {
-        $files = array_merge(
-            glob($folder.'/*.pdf') ?: [],
-            glob($folder.'/*.PDF') ?: [],
-        );
+        $supported = ['pdf', 'docx', 'xlsx', 'csv'];
+
+        $files = array_values(array_filter(
+            glob($folder.'/*') ?: [],
+            fn (string $path) => is_file($path)
+                && in_array(strtolower(pathinfo($path, PATHINFO_EXTENSION)), $supported, true),
+        ));
 
         if (empty($files)) {
             return;
@@ -69,11 +72,11 @@ class WatchInvoiceFolderCommand extends Command
         $basename = basename($path);
 
         try {
-            $magika->assertIsPdf($path);
+            $magika->assertIsSupportedFormat($path);
         } catch (InvalidFileTypeException $e) {
-            Log::warning('invoices:watch — rejected non-PDF file', ['file' => $basename, 'error' => $e->getMessage()]);
+            Log::warning('invoices:watch — rejected unsupported file', ['file' => $basename, 'error' => $e->getMessage()]);
             $this->warn("⊘ {$basename}: {$e->getMessage()}");
-            $this->moveFailed($path, $folder, 'not-a-pdf', $e);
+            $this->moveFailed($path, $folder, 'unsupported-format', $e);
 
             return;
         }
