@@ -509,7 +509,11 @@ new #[Layout('components.layout.app')] class extends Component
                 ->selectRaw('status, COUNT(*) as count')
                 ->groupBy('status')
                 ->pluck('count', 'status'),
-            'clients' => Party::clients()->with('business')->get(),
+            // Client dropdown only renders inside the create modal and the
+            // header edit form — skip the query on every other interaction.
+            'clients' => ($this->showCreateModal || ($this->showDetail && $this->editingHeader))
+                ? Party::clients()->with('business')->get()
+                : collect(),
             'paymentTerms' => PaymentTerm::orderBy('name')->get(['id', 'name']),
             'detail' => $detail,
             'lines' => $lines,

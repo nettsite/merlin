@@ -468,13 +468,17 @@ new #[Layout('components.layout.app')] class extends Component
             $accounts = Account::postable()->active()->orderBy('code')->get(['id', 'code', 'name']);
         }
 
+        // The supplier dropdown only renders inside the upload modal and the
+        // header edit form — skip the query on every other interaction.
+        $needsSuppliers = $this->showUpload || ($this->showDetail && $this->editingHeader);
+
         return [
             'rows' => $rows,
             'statusCounts' => Document::purchaseInvoices()
                 ->selectRaw('status, COUNT(*) as count')
                 ->groupBy('status')
                 ->pluck('count', 'status'),
-            'suppliers' => Party::suppliers()->with('business')->get(),
+            'suppliers' => $needsSuppliers ? Party::suppliers()->with('business')->get() : collect(),
             'detail' => $detail,
             'lines' => $lines,
             'activities' => $activities,

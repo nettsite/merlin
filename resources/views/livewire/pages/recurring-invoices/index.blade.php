@@ -199,7 +199,8 @@ new #[Layout('components.layout.app')] class extends Component
                 ))
                 ->orderBy('next_invoice_date')
                 ->paginate($this->perPage),
-            'clients' => Party::clients()->with('business')->get(),
+            // Client dropdown only renders inside the form flyout.
+            'clients' => $this->showForm ? Party::clients()->with('business')->get() : collect(),
             'paymentTerms' => PaymentTerm::orderBy('name')->get(['id', 'name']),
             'accounts' => Account::postable()->income()->active()->orderBy('code')->get(['id', 'code', 'name']),
             'frequencies' => RecurringFrequency::cases(),
