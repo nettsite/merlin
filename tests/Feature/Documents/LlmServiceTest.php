@@ -8,6 +8,7 @@ use App\Modules\Purchasing\Models\Document;
 use App\Modules\Purchasing\Models\LlmLog;
 use App\Modules\Purchasing\Services\LlmService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 
 uses(RefreshDatabase::class);
@@ -179,6 +180,21 @@ it('records duration_ms on successful calls', function (): void {
 
     $log = LlmLog::first();
     expect($log->duration_ms)->toBeGreaterThanOrEqual(0);
+});
+
+it('wraps connection failures in LlmApiException and logs them', function (): void {
+    Http::fake([
+        'api.anthropic.com/*' => fn () => throw new ConnectionException(
+            'cURL error 28: Operation timed out'
+        ),
+    ]);
+
+    expect(fn () => $this->service->extractInvoice('text'))
+        ->toThrow(LlmApiException::class, 'timed out');
+
+    $log = LlmLog::first();
+    expect($log)->not->toBeNull()
+        ->and($log->error)->toContain('timed out');
 });
 
 it('omits base64 document data from the logged request payload', function (): void {

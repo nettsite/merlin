@@ -82,7 +82,10 @@ class ExchangeRateService
                 $key = config('currency.providers.exchangerate_api.key');
                 $url = config('currency.providers.exchangerate_api.url');
 
-                $response = Http::get("{$url}/{$key}/latest/{$base}");
+                $response = Http::connectTimeout(5)
+                    ->timeout(15)
+                    ->retry(2, 500)
+                    ->get("{$url}/{$key}/latest/{$base}");
 
                 if (! $response->successful() || $response->json('result') !== 'success') {
                     throw new RuntimeException(

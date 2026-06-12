@@ -8,6 +8,7 @@ use App\Modules\Core\Settings\CurrencySettings;
 use App\Modules\Purchasing\DTO\ExtractedInvoice;
 use App\Modules\Purchasing\Models\LlmLog;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
@@ -110,11 +111,26 @@ class LlmService
             'messages' => $messages,
         ];
 
-        $response = Http::withHeaders([
-            'x-api-key' => config('services.anthropic.key'),
-            'anthropic-version' => '2023-06-01',
-            'anthropic-beta' => 'pdfs-2024-09-25',
-        ])->post(self::API_URL, $body);
+        try {
+            // 110s keeps the HTTP client inside the queue job's 120s budget;
+            // vision extraction of large PDFs can far exceed the 30s default.
+            $response = Http::connectTimeout(10)
+                ->timeout(110)
+                ->withHeaders([
+                    'x-api-key' => config('services.anthropic.key'),
+                    'anthropic-version' => '2023-06-01',
+                    'anthropic-beta' => 'pdfs-2024-09-25',
+                ])->post(self::API_URL, $body);
+        } catch (ConnectionException $e) {
+            $this->log(
+                loggable: $loggable,
+                requestBody: $body,
+                rawResponse: '',
+                startNs: $startNs,
+                error: $e->getMessage(),
+            );
+            throw new LlmApiException("Anthropic API connection error: {$e->getMessage()}", previous: $e);
+        }
 
         $data = $response->json();
 
