@@ -5,6 +5,7 @@ use App\Modules\Core\Models\User;
 use App\Modules\Core\Settings\CurrencySettings;
 use App\Modules\Purchasing\DTO\ExtractedInvoice;
 use App\Modules\Purchasing\DTO\ExtractedInvoiceLine;
+use App\Modules\Purchasing\Jobs\ProcessInvoiceDocument;
 use App\Modules\Purchasing\Models\Document;
 use App\Modules\Purchasing\Models\DocumentActivity;
 use App\Modules\Purchasing\Models\DocumentLine;
@@ -132,6 +133,21 @@ it('creates document lines from extracted invoice data', function (): void {
     expect($line->description)->toBe('Monthly hosting fee')
         ->and($line->quantity)->toBe('1.0000')
         ->and($line->unit_price)->toBe('1000.0000');
+});
+
+it('does not duplicate lines when the job runs twice', function (): void {
+    // process() appends lines; the queued job has tries=3, so a retry after a
+    // partial failure must clear the previous attempt's lines first.
+    $document = Document::factory()->purchaseInvoice()->create();
+    attachFakeMedia($document);
+
+    $this->llmMock->allows('extractInvoice')->andReturn(fakeExtracted([fakeLine()]));
+
+    $job = new ProcessInvoiceDocument($document);
+    $job->handle($this->service);
+    $job->handle($this->service); // simulated queue retry
+
+    expect(DocumentLine::where('document_id', $document->id)->count())->toBe(1);
 });
 
 it('sets llm_confidence on the document', function (): void {

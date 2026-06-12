@@ -20,6 +20,11 @@ class ProcessInvoiceDocument implements ShouldQueue
 
     public function handle(InvoiceProcessingService $service): void
     {
+        // process() appends lines and never clears them. With $tries > 1 a
+        // retry after a partial failure would duplicate every extracted line,
+        // so drop any lines left behind by a previous attempt first.
+        $this->document->lines()->delete();
+
         $service->process($this->document);
     }
 
