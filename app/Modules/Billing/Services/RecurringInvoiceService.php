@@ -51,6 +51,7 @@ class RecurringInvoiceService
             'next_invoice_date' => $nextInvoiceDate->toDateString(),
             'status' => RecurringInvoiceStatus::Active,
             'currency' => strtoupper($data['currency'] ?? $this->currencySettings->base_currency),
+            'auto_send' => $data['auto_send'] ?? true,
             'notes' => $data['notes'] ?? null,
             'terms' => $data['terms'] ?? null,
             'footer' => $data['footer'] ?? null,
@@ -157,6 +158,10 @@ class RecurringInvoiceService
 
             return $doc;
         });
+
+        if (! $template->auto_send) {
+            return $doc->fresh();
+        }
 
         $recipientEmails = $this->resolveTemplateRecipientEmails($template);
 

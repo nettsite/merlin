@@ -1,5 +1,6 @@
 <?php
 
+use App\Mail\SalesInvoiceMail;
 use App\Modules\Billing\Enums\RecurringFrequency;
 use App\Modules\Billing\Enums\RecurringInvoiceStatus;
 use App\Modules\Billing\Models\RecurringInvoice;
@@ -353,6 +354,79 @@ it('does nothing if there is no end_date', function (): void {
     app(RecurringInvoiceService::class)->completeIfExpired($template);
 
     expect($template->fresh()->status)->toBe(RecurringInvoiceStatus::Active);
+});
+
+// --- auto_send ---
+
+it('keeps the generated invoice as a draft when auto_send is disabled', function (): void {
+    Mail::fake();
+
+    $client = recurringClient();
+    $template = RecurringInvoice::create([
+        'client_id' => $client->id,
+        'frequency' => RecurringFrequency::Monthly,
+        'billing_period_day' => 1,
+        'start_date' => '2026-05-01',
+        'next_invoice_date' => '2026-05-01',
+        'status' => RecurringInvoiceStatus::Active,
+        'currency' => 'ZAR',
+        'auto_send' => false,
+    ]);
+    $template->lines()->create([
+        'line_number' => 1,
+        'description' => 'Service',
+        'quantity' => 1,
+        'unit_price' => 500,
+        'discount_percent' => 0,
+        'tax_rate' => 15,
+    ]);
+
+    $doc = app(RecurringInvoiceService::class)->generateFromTemplate($template);
+
+    expect($doc->status)->toBe('draft');
+    Mail::assertNothingOutgoing();
+});
+
+it('emails the generated invoice when auto_send is enabled and a recipient exists', function (): void {
+    Mail::fake();
+
+    $client = recurringClient();
+
+    $personParty = app(PartyService::class)->createPerson([
+        'first_name' => 'Invoice',
+        'last_name' => 'Recipient',
+        'email' => 'recurring@example.com',
+        'status' => 'active',
+    ]);
+    $client->assignContact($personParty->person, [
+        'role' => 'billing',
+        'receives_invoices' => true,
+        'is_active' => true,
+    ]);
+
+    $template = RecurringInvoice::create([
+        'client_id' => $client->id,
+        'frequency' => RecurringFrequency::Monthly,
+        'billing_period_day' => 1,
+        'start_date' => '2026-05-01',
+        'next_invoice_date' => '2026-05-01',
+        'status' => RecurringInvoiceStatus::Active,
+        'currency' => 'ZAR',
+        'auto_send' => true,
+    ]);
+    $template->lines()->create([
+        'line_number' => 1,
+        'description' => 'Service',
+        'quantity' => 1,
+        'unit_price' => 500,
+        'discount_percent' => 0,
+        'tax_rate' => 15,
+    ]);
+
+    $doc = app(RecurringInvoiceService::class)->generateFromTemplate($template);
+
+    expect($doc->status)->toBe('sent');
+    Mail::assertSent(SalesInvoiceMail::class, fn ($m) => $m->hasTo('recurring@example.com'));
 });
 
 // --- Pause / activate ---

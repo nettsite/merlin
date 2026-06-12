@@ -41,6 +41,9 @@ new #[Layout('components.layout.app')] class extends Component
     #[Validate('nullable|string|max:2000')]
     public string $notes = '';
 
+    #[Validate('boolean')]
+    public bool $autoSend = true;
+
     /** @var array<int, array<string, mixed>> */
     public array $formLines = [];
 
@@ -55,6 +58,7 @@ new #[Layout('components.layout.app')] class extends Component
     {
         $this->authorize('create', RecurringInvoice::class);
         $this->reset(['clientId', 'paymentTermId', 'notes', 'endDate', 'formLines']);
+        $this->autoSend = true;
         $this->frequency = 'monthly';
         $this->billingPeriodDay = 1;
         $this->startDate = now()->toDateString();
@@ -75,6 +79,7 @@ new #[Layout('components.layout.app')] class extends Component
         $this->endDate = $template->end_date?->toDateString() ?? '';
         $this->paymentTermId = $template->payment_term_id ?? '';
         $this->notes = $template->notes ?? '';
+        $this->autoSend = $template->auto_send;
         $this->activeTab = 'details';
 
         $this->formLines = $template->lines->map(fn ($line) => [
@@ -99,6 +104,7 @@ new #[Layout('components.layout.app')] class extends Component
             'end_date' => $this->endDate ?: null,
             'payment_term_id' => $this->paymentTermId ?: null,
             'notes' => $this->notes ?: null,
+            'auto_send' => $this->autoSend,
             'lines' => $this->formLines,
         ]);
     }
@@ -118,6 +124,7 @@ new #[Layout('components.layout.app')] class extends Component
             'end_date' => $this->endDate ?: null,
             'payment_term_id' => $this->paymentTermId ?: null,
             'notes' => $this->notes ?: null,
+            'auto_send' => $this->autoSend,
         ]);
 
         // Sync lines: replace all
@@ -404,6 +411,12 @@ new #[Layout('components.layout.app')] class extends Component
                         <flux:label>Notes</flux:label>
                         <flux:textarea wire:model="notes" rows="2" placeholder="Internal notes…" />
                         <flux:error name="notes" />
+                    </flux:field>
+
+                    <flux:field class="col-span-2" variant="inline">
+                        <flux:checkbox wire:model="autoSend" />
+                        <flux:label>Email generated invoices to the client automatically</flux:label>
+                        <flux:error name="autoSend" />
                     </flux:field>
                 </div>
 
