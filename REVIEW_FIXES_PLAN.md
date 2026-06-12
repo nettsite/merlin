@@ -123,6 +123,7 @@ Companion to `REVIEW.md` (2026-06-11). Phases ordered by risk reduction per unit
 
 ### 4.5 G1 / G3 / G4 — GL journal layer, foreign-currency sales, credit notes
 - Scope decisions, not fixes. Write up options + effort; do not implement without explicit go-ahead. Until G3 is decided, validate/reject non-base `currency` input in `createTemplate` rather than silently storing it.
+- **Will, 2026-06-12: G3 (foreign-currency sales) is very low priority — park it at the bottom of the backlog; do not plan or build it ahead of G1/G4 or the 4.6 roadmap items.**
 
 ### 4.6 G9 — Competitive roadmap backlog (from competitive-plan.html)
 Outstanding items recorded in REVIEW.md §G9, in plan priority order. Suggested build order (each its own commit + tests, after Phases 0–2 land):
