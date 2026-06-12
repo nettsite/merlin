@@ -38,10 +38,8 @@ Companion to `REVIEW.md` (2026-06-11). Phases ordered by risk reduction per unit
 - Tests: template created with explicit `'currency' => 'USD'` stores USD; without input stores base currency (set base to non-ZAR in test to prove no hardcoding).
 - Note: generated sales invoices still come out base-currency via `BillingService::createDraft` (G3) — template currency is stored but not yet propagated; document this in the service docblock until G3 is decided.
 
-### 1.2 C2 — Group orWhere inside whereHas
-- `SupplierResolver::matchByName()`: nest the name pair inside `$q->where(fn ($q) => …)`.
-- Fix identical pattern in `purchase-invoices/index.blade.php:450` search closure; grep all pages: `grep -rn "orWhere" resources/views/livewire/pages | grep -i "whereHas" -B2` and fix any sibling (recurring-invoices, sales-invoices, clients searches use `whereHas` with internal `orWhere` — each needs the nested group).
-- Tests (SupplierResolverTest): create two suppliers, B's `legal_name` equals the extracted name, A is alphabetically/insertion first with non-matching names → resolver must pick B, not A. Add a search test asserting a non-matching invoice is excluded when another party's business matches by legal name.
+### 1.2 C2 — WITHDRAWN (done: coverage test only)
+- Finding was wrong: `whereHas` applies callbacks via `callScope`, which auto-groups OR constraints. Verified in framework source + a decoy-supplier test that passes against unmodified code. Test kept in `SupplierResolverTest`; no production change.
 
 ### 1.3 C3 — Idempotent processing job
 - Chosen approach: make `ProcessInvoiceDocument::handle()` defensive — before calling `process()`, delete existing lines (`$this->document->lines()->delete()`) iff status is `received` (re-entry implies a prior partial attempt). Keep `$tries = 3` for transient-failure resilience.
@@ -163,7 +161,7 @@ Outstanding items recorded in REVIEW.md §G9, in plan priority order. Suggested 
 | 1 | test(billing): freeze time in recurring tests; cover pause/activate; commit pending UI work | F1, T2, T4, G8 |
 | 2 | test(settings): update currency settings test for company fields | F2 |
 | 3 | fix(billing): respect requested currency on recurring templates | C1 |
-| 4 | fix(purchasing): group orWhere in supplier matching and searches | C2 |
+| 4 | ~~fix(purchasing): group orWhere~~ — withdrawn, coverage test only | C2 |
 | 5 | fix(purchasing): make invoice processing job idempotent | C3 |
 | 6 | fix(purchasing): omit base64 payloads from llm_logs | P1 |
 | 7 | fix(billing): atomic recurring generation + schedule overlap guard | C5 |

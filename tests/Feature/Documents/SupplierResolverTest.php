@@ -93,6 +93,28 @@ it('matches supplier by legal name when no trading name', function (): void {
     expect($document->fresh()->party_id)->toBe($supplier->id);
 });
 
+it('does not match a different party when another business shares the name', function (): void {
+    // Guards the orWhere inside the whereHas callback: Laravel groups callback
+    // constraints via callScope, so the legal_name OR must not escape the
+    // relation key constraint and match an unrelated party.
+    $decoy = $this->service->createBusiness([
+        'business_type' => 'company',
+        'legal_name' => 'Decoy Ltd',
+    ], relationships: ['supplier']);
+
+    $target = $this->service->createBusiness([
+        'business_type' => 'company',
+        'legal_name' => 'Target Corp',
+    ], relationships: ['supplier']);
+
+    $document = Document::factory()->purchaseInvoice()->create(['party_id' => null]);
+
+    $this->resolver->resolve($document, extractedInvoice('Target Corp'));
+
+    expect($document->fresh()->party_id)->toBe($target->id)
+        ->and($document->fresh()->party_id)->not->toBe($decoy->id);
+});
+
 it('creates a pending supplier when no match is found', function (): void {
     $document = Document::factory()->purchaseInvoice()->create(['party_id' => null]);
 

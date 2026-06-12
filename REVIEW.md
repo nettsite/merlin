@@ -50,20 +50,8 @@ Fails with `"companyName" => ["The company name field is required."]`. The gener
 
 **Fix:** `'currency' => strtoupper($data['currency'] ?? $this->currencySettings->base_currency)` (inject `CurrencySettings`).
 
-### C2 — Ungrouped `orWhere` inside `whereHas` can match the wrong supplier (HIGH)
-`app/Modules/Purchasing/Services/SupplierResolver.php:54-60`:
-
-```php
-Party::whereIn('status', ['active', 'pending'])
-    ->whereHas('business', fn ($q) => $q->where('trading_name', $name)->orWhere('legal_name', $name))
-    ->first();
-```
-
-Laravel does **not** auto-group constraints added inside a `whereHas` closure. The generated subquery is `WHERE businesses.id = parties.id AND trading_name = ? OR legal_name = ?` — the `OR` escapes the relation constraint. If *any* business in the table has `legal_name = $name`, the `EXISTS` is satisfied for **every** active/pending party, and `first()` attaches an arbitrary supplier to the invoice. This silently mis-attributes invoices to the wrong supplier.
-
-The same ungrouped pattern exists in the search filter of `resources/views/livewire/pages/purchase-invoices/index.blade.php:450` (`orWhereHas('party.business', fn ($b) => $b->where(...)->orWhere(...))`) and should be checked in any other page that copied it (recurring-invoices search uses the same shape).
-
-**Fix:** wrap in a nested group: `fn ($q) => $q->where(fn ($q) => $q->where('trading_name', $name)->orWhere('legal_name', $name))`.
+### C2 — ~~Ungrouped `orWhere` inside `whereHas`~~ (WITHDRAWN — not a bug)
+Initially flagged `SupplierResolver::matchByName()` (and the page search filters) for `orWhere` inside `whereHas` closures escaping the relation constraint. **Verified against the framework source during Phase 1: this is wrong.** `Builder::has()` applies the callback via `$hasQuery->callScope($callback)`, which wraps callback constraints in a nested where group precisely so ORs cannot escape (`vendor/laravel/framework/.../QueriesRelationships.php`). A regression-style test (decoy supplier sharing the extracted name) was written and **passes against the unmodified code**; it is kept in `SupplierResolverTest` as coverage. No code change required.
 
 ### C3 — Queue retries duplicate invoice lines (HIGH)
 `app/Modules/Purchasing/Jobs/ProcessInvoiceDocument.php` declares `public int $tries = 3;`, but `InvoiceProcessingService::process()` is append-only (per the project's own rule: "Reprocess = delete lines first"). If attempt 1 creates 4 lines and then fails (e.g. on activity creation, posting-rule evaluation, or a transient DB error), attempt 2 re-extracts and **appends 4 more lines**. The LLM call is also repeated, doubling token spend.
@@ -188,7 +176,7 @@ The same ungrouped pattern exists in the search filter of `resources/views/livew
 | # | Finding | Severity | Effort |
 |---|---|---|---|
 | C1 | Recurring currency hardcoded ZAR | High | XS |
-| C2 | whereHas/orWhere wrong-supplier match | High | XS |
+| C2 | ~~whereHas/orWhere wrong-supplier match~~ | Withdrawn | — |
 | C3 | Job retry duplicates lines | High | S |
 | F1/F2 | 2 failing tests | High | S |
 | P1 | base64 PDF in llm_logs | High | XS |
