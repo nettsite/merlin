@@ -145,6 +145,11 @@ Methods: `markAsReviewed()`, `approve()`, `post()`, `dispute()`, `reject()`, `re
 | `config/currency.php` | `EXCHANGERATE_API_KEY`; cache TTL 86400s |
 | `config/party.php` | business types, relationship types, contact roles, address types |
 | `config/paperdoc.php` | paperdoc-lib settings |
+| `config/nettmail.php` | `NETTMAIL_*` driver/SMTP/provider settings; `nettmail.layout` set to `layout.app` so NettMail admin pages (Templates, Contacts, Lists, Segments, Campaigns under "Emails" nav group) render inside Merlin's layout |
+
+### NettMail Integration
+
+`nettsite/nettmail-laravel` (Composer package, pinned version — bump deliberately) provides transactional + campaign email. Sales invoice emails are authored as Unlayer templates (not static Blade views) — `InvoiceEmailTemplateService` (`app/Modules/Billing/Services/`) renders the template selected via `BillingSettings::invoice_email_template_id` (Settings > Billing) with merge tags. `SalesInvoiceMail` consumes this rendered HTML. NettMail admin pages live under its own routes/nav group "Emails"; both `nav.blade.php` and `top-nav.blade.php` were updated to add this group (see [[feedback_dual_nav]] convention).
 
 ### Morph Map (AppServiceProvider)
 
