@@ -53,6 +53,13 @@ class DocumentLine extends Model
         ];
     }
 
+    /**
+     * When false, saved/deleted events skip the per-line document total
+     * recalculation. Bulk writers (the extraction pipeline) disable this and
+     * call Document::recalculateTotals() once after the loop.
+     */
+    public static bool $recalculatesDocumentTotals = true;
+
     protected static function booted(): void
     {
         static::saving(function (DocumentLine $line) {
@@ -60,13 +67,15 @@ class DocumentLine extends Model
         });
 
         static::saved(function (DocumentLine $line) {
-            if (! $line->trashed()) {
+            if (static::$recalculatesDocumentTotals && ! $line->trashed()) {
                 Document::find($line->document_id)?->recalculateTotals();
             }
         });
 
         static::deleted(function (DocumentLine $line) {
-            Document::find($line->document_id)?->recalculateTotals();
+            if (static::$recalculatesDocumentTotals) {
+                Document::find($line->document_id)?->recalculateTotals();
+            }
         });
     }
 

@@ -248,10 +248,12 @@ class Document extends Model implements HasMedia
 
     protected function isForeignCurrency(): Attribute
     {
+        // shouldCache: computed once per model instance — Blade row loops
+        // access this several times per row and each call resolves settings.
         return Attribute::make(
             get: fn (): bool => strtoupper((string) $this->currency)
                 !== strtoupper(app(CurrencySettings::class)->base_currency),
-        );
+        )->shouldCache();
     }
 
     // Methods

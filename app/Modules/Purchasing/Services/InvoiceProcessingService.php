@@ -5,6 +5,7 @@ namespace App\Modules\Purchasing\Services;
 use App\Modules\Core\Models\Party;
 use App\Modules\Core\Settings\CurrencySettings;
 use App\Modules\Purchasing\Models\Document;
+use App\Modules\Purchasing\Models\DocumentLine;
 use App\Modules\Purchasing\Settings\PurchasingSettings;
 use Illuminate\Support\Facades\Log;
 
@@ -90,52 +91,62 @@ class InvoiceProcessingService
             && $headerHasTax
             && abs($extractedLineSum - $extracted->total) / $extracted->total < 0.02;
 
-        foreach ($extracted->lines as $i => $extractedLine) {
-            $accountData = $this->accountResolver->resolve(
-                $extractedLine->description,
-                $document->party_id,
-                $extractedLine,
-            );
+        // Suspend the per-line document recalculation (2–4 SUM queries + a
+        // save per line) and recalculate once after all lines are created.
+        DocumentLine::$recalculatesDocumentTotals = false;
 
-            $taxRate = match (true) {
-                $extractedLine->taxRate !== null => $extractedLine->taxRate,
-                $headerHasTax => $this->purchasingSettings->tax_default_rate,
-                default => null,
-            };
+        try {
+            foreach ($extracted->lines as $i => $extractedLine) {
+                $accountData = $this->accountResolver->resolve(
+                    $extractedLine->description,
+                    $document->party_id,
+                    $extractedLine,
+                );
 
-            // When prices are VAT-inclusive, back-calculate to the ex-VAT amount so
-            // DocumentLine::calculateTotals() doesn't add tax on top of a price that
-            // already includes it.
-            $divisor = ($vatInclusivePrices && $taxRate !== null && $taxRate > 0)
-                ? (1 + $taxRate / 100)
-                : 1;
+                $taxRate = match (true) {
+                    $extractedLine->taxRate !== null => $extractedLine->taxRate,
+                    $headerHasTax => $this->purchasingSettings->tax_default_rate,
+                    default => null,
+                };
 
-            $exVatUnitPrice = round($extractedLine->unitPrice / $divisor, 4);
-            $exVatForeignLineTotal = $extractedLine->lineTotal > 0
-                ? round($extractedLine->lineTotal / $divisor, 2)
-                : round($extractedLine->lineTotal / $divisor, 2); // preserve negative discounts
+                // When prices are VAT-inclusive, back-calculate to the ex-VAT amount so
+                // DocumentLine::calculateTotals() doesn't add tax on top of a price that
+                // already includes it.
+                $divisor = ($vatInclusivePrices && $taxRate !== null && $taxRate > 0)
+                    ? (1 + $taxRate / 100)
+                    : 1;
 
-            $line = $document->lines()->make(array_merge([
-                'line_number' => $i + 1,
-                'type' => 'service',
-                'description' => $extractedLine->description,
-                'quantity' => $extractedLine->quantity,
-                'unit_price' => $isForeign
-                    ? round($exVatUnitPrice * $exchangeRate, 4)
-                    : $exVatUnitPrice,
-                'foreign_unit_price' => $isForeign ? $exVatUnitPrice : null,
-                'foreign_line_total' => $isForeign ? $exVatForeignLineTotal : null,
-                'tax_rate' => $taxRate,
-            ], $accountData));
+                $exVatUnitPrice = round($extractedLine->unitPrice / $divisor, 4);
+                $exVatForeignLineTotal = $extractedLine->lineTotal > 0
+                    ? round($extractedLine->lineTotal / $divisor, 2)
+                    : round($extractedLine->lineTotal / $divisor, 2); // preserve negative discounts
 
-            if ($isForeign && $line->foreign_line_total !== null) {
-                $line->foreign_tax_amount = $line->tax_rate !== null
-                    ? round((float) $line->foreign_line_total * ((float) $line->tax_rate / 100), 2)
-                    : 0;
+                $line = $document->lines()->make(array_merge([
+                    'line_number' => $i + 1,
+                    'type' => 'service',
+                    'description' => $extractedLine->description,
+                    'quantity' => $extractedLine->quantity,
+                    'unit_price' => $isForeign
+                        ? round($exVatUnitPrice * $exchangeRate, 4)
+                        : $exVatUnitPrice,
+                    'foreign_unit_price' => $isForeign ? $exVatUnitPrice : null,
+                    'foreign_line_total' => $isForeign ? $exVatForeignLineTotal : null,
+                    'tax_rate' => $taxRate,
+                ], $accountData));
+
+                if ($isForeign && $line->foreign_line_total !== null) {
+                    $line->foreign_tax_amount = $line->tax_rate !== null
+                        ? round((float) $line->foreign_line_total * ((float) $line->tax_rate / 100), 2)
+                        : 0;
+                }
+
+                $line->save();
             }
-
-            $line->save();
+        } finally {
+            DocumentLine::$recalculatesDocumentTotals = true;
         }
+
+        $document->recalculateTotals();
 
         // 8. Record LLM extraction activity
         $document->activities()->create([
