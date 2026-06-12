@@ -117,11 +117,49 @@
             :current="request()->routeIs('llm-logs.*')"
             wire:navigate
         >LLM Logs</flux:sidebar.item>
+    </flux:sidebar.group>
+
+    <flux:sidebar.group heading="Emails">
+        <flux:sidebar.item
+            icon="chart-bar"
+            href="{{ route('nettmail.dashboard') }}"
+            :current="request()->routeIs('nettmail.dashboard')"
+        >Dashboard</flux:sidebar.item>
 
         <flux:sidebar.item
             icon="envelope"
             href="{{ route('nettmail.templates.index') }}"
-            :current="request()->routeIs('nettmail.*')"
-        >Email Templates</flux:sidebar.item>
+            :current="request()->routeIs('nettmail.templates.*')"
+        >Templates</flux:sidebar.item>
+
+        <flux:sidebar.item
+            icon="user-group"
+            href="{{ route('nettmail.contacts.index') }}"
+            :current="request()->routeIs('nettmail.contacts.*')"
+        >Contacts</flux:sidebar.item>
+
+        <flux:sidebar.item
+            icon="queue-list"
+            href="{{ route('nettmail.lists.index') }}"
+            :current="request()->routeIs('nettmail.lists.*')"
+        >Lists</flux:sidebar.item>
+
+        <flux:sidebar.item
+            icon="funnel"
+            href="{{ route('nettmail.segments.index') }}"
+            :current="request()->routeIs('nettmail.segments.*')"
+        >Segments</flux:sidebar.item>
+
+        <flux:sidebar.item
+            icon="megaphone"
+            href="{{ route('nettmail.campaigns.index') }}"
+            :current="request()->routeIs('nettmail.campaigns.*')"
+        >Campaigns</flux:sidebar.item>
+
+        <flux:sidebar.item
+            icon="cog-6-tooth"
+            href="{{ route('nettmail.settings') }}"
+            :current="request()->routeIs('nettmail.settings')"
+        >Settings</flux:sidebar.item>
     </flux:sidebar.group>
 </flux:sidebar.nav>

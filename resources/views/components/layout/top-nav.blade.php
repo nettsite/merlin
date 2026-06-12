@@ -41,7 +41,7 @@
     <flux:dropdown>
         <flux:navbar.item
             icon:trailing="chevron-down"
-            :current="request()->is('settings/*', 'roles*', 'users*', 'llm-logs*', 'nettmail*')"
+            :current="request()->is('settings/*', 'roles*', 'users*', 'llm-logs*')"
         >Settings</flux:navbar.item>
         <flux:navmenu>
             <flux:navmenu.item href="{{ route('settings.general') }}" wire:navigate>General Settings</flux:navmenu.item>
@@ -50,7 +50,22 @@
             <flux:navmenu.item href="{{ route('roles.index') }}" wire:navigate>Roles</flux:navmenu.item>
             <flux:navmenu.item href="{{ route('users.index') }}" wire:navigate>Users</flux:navmenu.item>
             <flux:navmenu.item href="{{ route('llm-logs.index') }}" wire:navigate>LLM Logs</flux:navmenu.item>
-            <flux:navmenu.item href="{{ route('nettmail.templates.index') }}">Email Templates</flux:navmenu.item>
+        </flux:navmenu>
+    </flux:dropdown>
+
+    <flux:dropdown>
+        <flux:navbar.item
+            icon:trailing="chevron-down"
+            :current="request()->is('nettmail*')"
+        >Emails</flux:navbar.item>
+        <flux:navmenu>
+            <flux:navmenu.item href="{{ route('nettmail.dashboard') }}">Dashboard</flux:navmenu.item>
+            <flux:navmenu.item href="{{ route('nettmail.templates.index') }}">Templates</flux:navmenu.item>
+            <flux:navmenu.item href="{{ route('nettmail.contacts.index') }}">Contacts</flux:navmenu.item>
+            <flux:navmenu.item href="{{ route('nettmail.lists.index') }}">Lists</flux:navmenu.item>
+            <flux:navmenu.item href="{{ route('nettmail.segments.index') }}">Segments</flux:navmenu.item>
+            <flux:navmenu.item href="{{ route('nettmail.campaigns.index') }}">Campaigns</flux:navmenu.item>
+            <flux:navmenu.item href="{{ route('nettmail.settings') }}">Settings</flux:navmenu.item>
         </flux:navmenu>
     </flux:dropdown>
 </flux:navbar>

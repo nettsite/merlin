@@ -77,6 +77,11 @@ return [
      */
     'nav_group' => env('NETTMAIL_NAV_GROUP', 'NettMail'),
 
+    /*
+     * Render NettMail admin pages inside Merlin's own layout.
+     */
+    'layout' => env('NETTMAIL_LAYOUT', 'layout.app'),
+
     'tracking' => [
         'opens' => env('NETTMAIL_TRACK_OPENS', true),
         'clicks' => env('NETTMAIL_TRACK_CLICKS', true),
