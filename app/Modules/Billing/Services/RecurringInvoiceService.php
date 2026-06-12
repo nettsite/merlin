@@ -8,6 +8,7 @@ use App\Modules\Billing\Models\RecurringInvoice;
 use App\Modules\Billing\Settings\BillingSettings;
 use App\Modules\Core\Models\Person;
 use App\Modules\Core\Models\User;
+use App\Modules\Core\Settings\CurrencySettings;
 use App\Modules\Purchasing\Models\Document;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
@@ -19,6 +20,7 @@ class RecurringInvoiceService
         private readonly BillingService $billingService,
         private readonly ProRataCalculator $proRataCalculator,
         private readonly BillingSettings $billingSettings,
+        private readonly CurrencySettings $currencySettings,
     ) {}
 
     /**
@@ -47,7 +49,7 @@ class RecurringInvoiceService
             'end_date' => isset($data['end_date']) ? Carbon::parse($data['end_date'])->toDateString() : null,
             'next_invoice_date' => $nextInvoiceDate->toDateString(),
             'status' => RecurringInvoiceStatus::Active,
-            'currency' => $data['currency'] ?? $this->billingSettings->default_receivable_account_id ? 'ZAR' : 'ZAR',
+            'currency' => strtoupper($data['currency'] ?? $this->currencySettings->base_currency),
             'notes' => $data['notes'] ?? null,
             'terms' => $data['terms'] ?? null,
             'footer' => $data['footer'] ?? null,

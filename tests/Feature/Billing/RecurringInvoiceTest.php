@@ -7,6 +7,7 @@ use App\Modules\Billing\Services\RecurringInvoiceService;
 use App\Modules\Core\Models\Party;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Services\PartyService;
+use App\Modules\Core\Settings\CurrencySettings;
 use App\Modules\Purchasing\Models\Document;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Mail;
@@ -99,6 +100,34 @@ it('creates pro rata invoice when starting mid-period', function (): void {
     expect($doc)->not->toBeNull()
         ->and($doc->issue_date->toDateString())->toBe('2026-05-15')
         ->and($doc->lines->first()?->description)->toContain('pro rata');
+});
+
+it('stores an explicitly requested template currency', function (): void {
+    Mail::fake();
+
+    $client = recurringClient();
+
+    $template = app(RecurringInvoiceService::class)->createTemplate(
+        array_merge(baseTemplateData($client, '2026-06-01'), ['currency' => 'usd'])
+    );
+
+    expect($template->currency)->toBe('USD');
+});
+
+it('defaults template currency to the configured base currency', function (): void {
+    Mail::fake();
+
+    $currencySettings = app(CurrencySettings::class);
+    $currencySettings->base_currency = 'EUR';
+    $currencySettings->save();
+
+    $client = recurringClient();
+
+    $template = app(RecurringInvoiceService::class)->createTemplate(
+        baseTemplateData($client, '2026-06-01')
+    );
+
+    expect($template->currency)->toBe('EUR');
 });
 
 it('stores lines on template create', function (): void {
