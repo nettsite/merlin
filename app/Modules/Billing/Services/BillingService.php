@@ -13,6 +13,7 @@ use App\Modules\Purchasing\Models\DocumentRelationship;
 use App\Modules\Purchasing\Services\DocumentService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use RuntimeException;
 
@@ -124,31 +125,35 @@ class BillingService
         $reference = $data['reference'] ?? null;
         $bankAccountId = $data['bank_account_id'] ?? $this->billingSettings->default_bank_account_id;
 
-        $payment = Document::create([
-            'document_type' => 'payment',
-            'direction' => 'inbound',
-            'status' => 'draft',
-            'party_id' => $invoice->party_id,
-            'issue_date' => $date->toDateString(),
-            'currency' => $invoice->currency,
-            'exchange_rate' => $invoice->exchange_rate ?? 1.0,
-            'subtotal' => $amount,
-            'tax_total' => 0,
-            'total' => $amount,
-            'bank_account_id' => $bankAccountId,
-            'source' => 'manual',
-            'reference' => $reference,
-        ]);
+        // Transactional so a rejected payment (e.g. overpayment guard in
+        // DocumentService) doesn't leave an orphaned payment document behind.
+        return DB::transaction(function () use ($invoice, $amount, $date, $reference, $bankAccountId) {
+            $payment = Document::create([
+                'document_type' => 'payment',
+                'direction' => 'inbound',
+                'status' => 'draft',
+                'party_id' => $invoice->party_id,
+                'issue_date' => $date->toDateString(),
+                'currency' => $invoice->currency,
+                'exchange_rate' => $invoice->exchange_rate ?? 1.0,
+                'subtotal' => $amount,
+                'tax_total' => 0,
+                'total' => $amount,
+                'bank_account_id' => $bankAccountId,
+                'source' => 'manual',
+                'reference' => $reference,
+            ]);
 
-        DocumentRelationship::create([
-            'parent_document_id' => $invoice->id,
-            'child_document_id' => $payment->id,
-            'relationship_type' => 'payment_for',
-        ]);
+            DocumentRelationship::create([
+                'parent_document_id' => $invoice->id,
+                'child_document_id' => $payment->id,
+                'relationship_type' => 'payment_for',
+            ]);
 
-        app(DocumentService::class)->recordPayment($invoice, $amount, $date, $reference);
+            app(DocumentService::class)->recordPayment($invoice, $amount, $date, $reference);
 
-        return $payment;
+            return $payment;
+        });
     }
 
     /**

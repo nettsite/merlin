@@ -39,6 +39,37 @@ function sipSentInvoice($client = null): Document
     return $doc->fresh();
 }
 
+it('rejects a payment exceeding the balance due', function () {
+    $invoice = sipSentInvoice(); // total 1000.00
+
+    expect(fn () => app(BillingService::class)->recordPayment($invoice, [
+        'amount' => 1500.00,
+        'date' => '2026-05-10',
+    ], null))->toThrow(InvalidArgumentException::class, 'exceeds the balance due');
+
+    $fresh = $invoice->fresh();
+    expect((float) $fresh->amount_paid)->toBe(0.0)
+        ->and($fresh->status)->toBe('sent')
+        // Transaction rollback: no orphaned payment document.
+        ->and(Document::where('document_type', 'payment')->count())->toBe(0);
+});
+
+it('rejects a zero or negative payment amount', function () {
+    $invoice = sipSentInvoice();
+
+    expect(fn () => app(BillingService::class)->recordPayment($invoice, [
+        'amount' => 0.0,
+        'date' => '2026-05-10',
+    ], null))->toThrow(InvalidArgumentException::class, 'greater than zero');
+
+    expect(fn () => app(BillingService::class)->recordPayment($invoice, [
+        'amount' => -50.0,
+        'date' => '2026-05-10',
+    ], null))->toThrow(InvalidArgumentException::class, 'greater than zero');
+
+    expect(Document::where('document_type', 'payment')->count())->toBe(0);
+});
+
 it('creates a payment document linked to the invoice', function () {
     $invoice = sipSentInvoice();
 

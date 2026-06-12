@@ -132,6 +132,10 @@ class DocumentService
         ?string $reference = null,
         bool $finaliseRate = false,
     ): void {
+        if ($amount <= 0) {
+            throw new \InvalidArgumentException('Payment amount must be greater than zero.');
+        }
+
         DB::transaction(function () use ($doc, $amount, $date, $reference, $finaliseRate) {
 
             if ($finaliseRate && $doc->is_foreign_currency && (float) $doc->foreign_total > 0) {
@@ -158,6 +162,16 @@ class DocumentService
 
             $newAmountPaid = (float) $doc->amount_paid + $amount;
             $newBalanceDue = (float) $doc->total - $newAmountPaid;
+
+            // Reject overpayment. The 1-cent epsilon tolerates FX rounding
+            // when the rate is finalised from the actual amount paid.
+            if ($newBalanceDue < -0.01) {
+                throw new \InvalidArgumentException(sprintf(
+                    'Payment of %.2f exceeds the balance due of %.2f.',
+                    $amount,
+                    (float) $doc->total - (float) $doc->amount_paid,
+                ));
+            }
 
             $doc->amount_paid = $newAmountPaid;
             $doc->balance_due = $newBalanceDue;

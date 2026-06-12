@@ -433,12 +433,18 @@ new #[Layout('components.layout.app')] class extends Component
 
         $doc = Document::findOrFail($this->detailId);
 
-        app(BillingService::class)->recordPayment($doc, [
-            'amount' => (float) $this->paymentForm['amount'],
-            'date' => $this->paymentForm['date'],
-            'reference' => $this->paymentForm['reference'] ?: null,
-            'bank_account_id' => $this->paymentForm['bank_account_id'] ?: null,
-        ], Auth::user());
+        try {
+            app(BillingService::class)->recordPayment($doc, [
+                'amount' => (float) $this->paymentForm['amount'],
+                'date' => $this->paymentForm['date'],
+                'reference' => $this->paymentForm['reference'] ?: null,
+                'bank_account_id' => $this->paymentForm['bank_account_id'] ?: null,
+            ], Auth::user());
+        } catch (\InvalidArgumentException|\RuntimeException $e) {
+            $this->addError('paymentForm.amount', $e->getMessage());
+
+            return;
+        }
 
         $this->showPaymentModal = false;
         $this->openDetail($doc->id);
