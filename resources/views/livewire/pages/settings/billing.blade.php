@@ -6,6 +6,8 @@ use App\Modules\Billing\Settings\BillingSettings;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Validate;
 use Livewire\Volt\Component;
+use NettSite\NettMail\Models\Template;
+use Nettsite\NettMail\Core\Domain\Templates\TemplateType;
 
 new #[Layout('components.layout.app')] class extends Component
 {
@@ -24,6 +26,9 @@ new #[Layout('components.layout.app')] class extends Component
     #[Validate('required|integer|min:1|max:28')]
     public int $billingPeriodDay = 1;
 
+    #[Validate('nullable|uuid|exists:nettmail_templates,id')]
+    public ?string $invoiceEmailTemplateId = null;
+
     public bool $saved = false;
 
     public function mount(): void
@@ -36,6 +41,7 @@ new #[Layout('components.layout.app')] class extends Component
         $this->defaultPaymentTermId = $settings->default_payment_term_id;
         $this->taxLiabilityAccountId = $settings->tax_liability_account_id;
         $this->billingPeriodDay = $settings->billing_period_day;
+        $this->invoiceEmailTemplateId = $settings->invoice_email_template_id;
     }
 
     public function save(): void
@@ -48,6 +54,7 @@ new #[Layout('components.layout.app')] class extends Component
         $settings->default_payment_term_id = $this->defaultPaymentTermId ?: null;
         $settings->tax_liability_account_id = $this->taxLiabilityAccountId ?: null;
         $settings->billing_period_day = $this->billingPeriodDay;
+        $settings->invoice_email_template_id = $this->invoiceEmailTemplateId ?: null;
         $settings->save();
 
         $this->saved = true;
@@ -65,6 +72,10 @@ new #[Layout('components.layout.app')] class extends Component
                 ->orderBy('code')
                 ->get(['id', 'code', 'name']),
             'paymentTerms' => PaymentTerm::orderBy('name')->get(['id', 'name']),
+            'emailTemplates' => Template::where('type', TemplateType::Transactional)
+                ->whereNull('archived_at')
+                ->orderBy('name')
+                ->get(['id', 'name']),
         ];
     }
 }; ?>
@@ -137,6 +148,22 @@ new #[Layout('components.layout.app')] class extends Component
                 <flux:input wire:model="billingPeriodDay" type="number" min="1" max="28" class="max-w-xs" />
                 <flux:description>Day of month on which billing periods begin (1–28)</flux:description>
                 <flux:error name="billingPeriodDay" />
+            </flux:field>
+        </div>
+
+        <div class="space-y-5">
+            <h2 class="text-sm font-semibold text-ink border-b border-line pb-2">Email</h2>
+
+            <flux:field>
+                <flux:label>Invoice Email Template</flux:label>
+                <flux:select wire:model="invoiceEmailTemplateId" class="max-w-xs">
+                    <flux:select.option value="">— None —</flux:select.option>
+                    @foreach ($emailTemplates as $template)
+                        <flux:select.option value="{{ $template->id }}">{{ $template->name }}</flux:select.option>
+                    @endforeach
+                </flux:select>
+                <flux:description>Template used for the sales invoice email sent to clients</flux:description>
+                <flux:error name="invoiceEmailTemplateId" />
             </flux:field>
         </div>
 

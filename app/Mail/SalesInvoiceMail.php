@@ -4,30 +4,32 @@ namespace App\Mail;
 
 use App\Modules\Purchasing\Models\Document;
 use Illuminate\Bus\Queueable;
-use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Attachment;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
+use NettSite\NettMail\Mail\NettMailMailable;
 
-class SalesInvoiceMail extends Mailable
+class SalesInvoiceMail extends NettMailMailable
 {
     use Queueable, SerializesModels;
 
-    public function __construct(public Document $invoice) {}
+    public function __construct(public Document $invoice, public string $emailSubject, public string $emailHtml)
+    {
+        $this->transactionalKey('sales_invoice')->trackOpens()->trackClicks();
+    }
 
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Invoice '.$this->invoice->document_number,
+            subject: $this->emailSubject,
         );
     }
 
     public function content(): Content
     {
         return new Content(
-            markdown: 'mail.sales-invoice',
-            with: ['invoice' => $this->invoice->load('paymentTerm')],
+            htmlString: $this->emailHtml,
         );
     }
 

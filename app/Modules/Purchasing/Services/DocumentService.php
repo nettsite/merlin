@@ -35,6 +35,11 @@ class DocumentService
         $this->transition($doc, 'sent', $by, 'Invoice sent to client.');
     }
 
+    public function recordResend(Document $doc, ?User $by): void
+    {
+        $this->recordActivity($doc, $by, 'resent', 'Invoice resent to client.');
+    }
+
     public function voidDocument(Document $doc, User $by): void
     {
         $this->transition($doc, 'voided', $by, 'Invoice voided.');

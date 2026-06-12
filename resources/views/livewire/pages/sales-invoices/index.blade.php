@@ -770,6 +770,13 @@ new #[Layout('components.layout.app')] class extends Component
                         @endcan
                     @endif
 
+                    {{-- Resend --}}
+                    @if(in_array($detail->status, ['sent', 'partially_paid', 'paid']))
+                        @can('can-send-sales-invoices')
+                            <flux:button wire:click="openSendModal" size="xs" variant="ghost" icon="paper-airplane">Resend</flux:button>
+                        @endcan
+                    @endif
+
                     {{-- Record Payment --}}
                     @if(in_array($detail->status, ['sent', 'partially_paid']))
                         @can('can-record-payments')
@@ -1073,9 +1080,13 @@ new #[Layout('components.layout.app')] class extends Component
 {{-- ===== Send Invoice Modal ===== --}}
 <flux:modal name="send-invoice" wire:model.self="showSendModal" class="w-[480px]">
     <div class="p-6">
-        <flux:heading size="lg" class="font-semibold mb-1">Send Invoice</flux:heading>
+        <flux:heading size="lg" class="font-semibold mb-1">{{ $detail?->status === 'draft' ? 'Send Invoice' : 'Resend Invoice' }}</flux:heading>
         <p class="text-sm text-ink-soft mb-5">
-            A PDF will be generated and emailed to the selected recipients. The invoice will be marked as sent.
+            @if($detail?->status === 'draft')
+                A PDF will be generated and emailed to the selected recipients. The invoice will be marked as sent.
+            @else
+                A new PDF will be generated and emailed to the selected recipients.
+            @endif
         </p>
 
         @if($sendError)
@@ -1116,7 +1127,7 @@ new #[Layout('components.layout.app')] class extends Component
                 wire:click="confirmSend"
                 :disabled="count(array_filter($sendRecipients, fn($r) => $r['selected'])) === 0"
             >
-                Send Invoice
+                {{ $detail?->status === 'draft' ? 'Send Invoice' : 'Resend Invoice' }}
             </flux:button>
         </div>
     </div>

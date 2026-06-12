@@ -110,6 +110,7 @@ it('sendInvoice queues mail to flagged recipients', function (): void {
     app(BillingService::class)->sendInvoice($doc, User::factory()->create());
 
     Mail::assertSent(SalesInvoiceMail::class, fn ($mail) => $mail->hasTo('billing@client.com'));
+    Mail::assertSent(SalesInvoiceMail::class, fn ($mail) => str_contains($mail->emailHtml, $doc->document_number));
 });
 
 it('sendInvoice transitions doc to sent', function (): void {
@@ -151,6 +152,35 @@ it('sendInvoice generates a PDF for the attachment', function (): void {
     app(BillingService::class)->sendInvoice($doc, User::factory()->create());
 
     expect($doc->fresh()->getFirstMedia('invoice_pdf'))->not->toBeNull();
+});
+
+it('sendInvoice resends an already sent invoice without changing its status', function (): void {
+    Mail::fake();
+
+    $client = sendClient();
+    addInvoiceRecipient($client, 'billing@client.com');
+    $doc = sendDraft($client);
+
+    app(BillingService::class)->sendInvoice($doc, User::factory()->create());
+    expect($doc->fresh()->status)->toBe('sent');
+
+    app(BillingService::class)->sendInvoice($doc, User::factory()->create());
+
+    expect($doc->fresh()->status)->toBe('sent');
+    Mail::assertSent(SalesInvoiceMail::class, fn ($mail) => $mail->hasTo('billing@client.com'), 2);
+});
+
+it('sendInvoice records a resend activity for an already sent invoice', function (): void {
+    Mail::fake();
+
+    $client = sendClient();
+    addInvoiceRecipient($client);
+    $doc = sendDraft($client);
+
+    app(BillingService::class)->sendInvoice($doc, User::factory()->create());
+    app(BillingService::class)->sendInvoice($doc, User::factory()->create());
+
+    expect($doc->activities()->where('activity_type', 'resent')->exists())->toBeTrue();
 });
 
 // --- Volt UI ---

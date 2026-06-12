@@ -97,11 +97,17 @@ class BillingService
 
         $invoice->refresh();
 
+        $rendered = app(InvoiceEmailTemplateService::class)->render($invoice);
+
         foreach ($recipientEmails as $email) {
-            Mail::to($email)->send(new SalesInvoiceMail($invoice));
+            Mail::mailer('nettmail')->to($email)->send(new SalesInvoiceMail($invoice, $rendered['subject'], $rendered['html']));
         }
 
-        app(DocumentService::class)->markAsSent($invoice, $by);
+        if ($invoice->status === 'draft') {
+            app(DocumentService::class)->markAsSent($invoice, $by);
+        } else {
+            app(DocumentService::class)->recordResend($invoice, $by);
+        }
 
         return $invoice->refresh();
     }

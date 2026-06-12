@@ -117,5 +117,11 @@
             :current="request()->routeIs('llm-logs.*')"
             wire:navigate
         >LLM Logs</flux:sidebar.item>
+
+        <flux:sidebar.item
+            icon="envelope"
+            href="{{ route('nettmail.templates.index') }}"
+            :current="request()->routeIs('nettmail.*')"
+        >Email Templates</flux:sidebar.item>
     </flux:sidebar.group>
 </flux:sidebar.nav>

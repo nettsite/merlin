@@ -21,6 +21,9 @@ class BillingSettings extends Settings
     /** Tax liability account ID used on sales invoices. */
     public ?string $tax_liability_account_id = null;
 
+    /** NettMail template ID used for the sales invoice transactional email. */
+    public ?string $invoice_email_template_id = null;
+
     public static function group(): string
     {
         return 'billing';
