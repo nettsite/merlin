@@ -35,6 +35,13 @@ class Document extends Model implements HasMedia
 {
     use HasDocumentNumber, HasFactory, HasUuids, InteractsWithMedia, LogsActivity, SoftDeletes;
 
+    /**
+     * Statuses that mean "in the ledger" for purchase invoices: posted plus
+     * the payment states reached after posting. Any query that means
+     * "posted" in the accounting sense must use these, not just 'posted'.
+     */
+    public const POSTED_STATUSES = ['posted', 'partially_paid', 'paid'];
+
     protected $fillable = [
         'document_type',
         'direction',
@@ -193,11 +200,20 @@ class Document extends Model implements HasMedia
             : $query->where('status', $status);
     }
 
+    public function scopePostedOnwards(Builder $query): Builder
+    {
+        return $query->whereIn('status', self::POSTED_STATUSES);
+    }
+
     public function scopeOverdue(Builder $query): Builder
     {
+        // Overdue = past due with money still owing. Posted purchase
+        // invoices are awaiting payment, so they count; settled, rejected,
+        // voided, and unsent drafts do not.
         return $query->whereNotNull('due_date')
-            ->where('due_date', '<', now())
-            ->whereNotIn('status', ['posted', 'rejected']);
+            ->whereDate('due_date', '<', now()->toDateString())
+            ->where('balance_due', '>', 0)
+            ->whereNotIn('status', ['draft', 'rejected', 'voided']);
     }
 
     public function scopeUnpaid(Builder $query): Builder
@@ -218,7 +234,8 @@ class Document extends Model implements HasMedia
         return Attribute::make(
             get: fn (): bool => $this->due_date !== null
                 && $this->due_date->isPast()
-                && ! in_array($this->status, ['posted', 'rejected']),
+                && (float) $this->balance_due > 0
+                && ! in_array($this->status, ['draft', 'rejected', 'voided']),
         );
     }
 
@@ -237,7 +254,7 @@ class Document extends Model implements HasMedia
                     return 0;
                 }
 
-                if (in_array($this->status, ['posted', 'rejected'])) {
+                if ((float) $this->balance_due <= 0 || in_array($this->status, ['draft', 'rejected', 'voided'])) {
                     return 0;
                 }
 

@@ -26,6 +26,19 @@ function piUser(string ...$permissions): User
     return $user;
 }
 
+// --- Extraction failure badge ---
+
+it('shows an extraction-failed badge on flagged invoices', function (): void {
+    $this->actingAs(piUser('documents-view-any', 'documents-view'));
+
+    Document::factory()->purchaseInvoice()->create([
+        'metadata' => ['extraction_failed' => true],
+    ]);
+
+    Volt::test('pages.purchase-invoices.index')
+        ->assertSee('Extraction failed');
+});
+
 // --- Inline line editing ---
 
 it('editLine populates editingLine from the existing record', function (): void {

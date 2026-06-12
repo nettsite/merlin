@@ -37,7 +37,7 @@ class FinancialYearService
         $startMonth = $this->startMonth();
 
         $earliestDate = Document::where('document_type', 'purchase_invoice')
-            ->where('status', 'posted')
+            ->postedOnwards()
             ->min('issue_date');
 
         if ($earliestDate) {

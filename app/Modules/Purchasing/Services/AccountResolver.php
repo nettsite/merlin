@@ -4,6 +4,7 @@ namespace App\Modules\Purchasing\Services;
 
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Purchasing\DTO\ExtractedInvoiceLine;
+use App\Modules\Purchasing\Models\Document;
 use App\Modules\Purchasing\Models\DocumentLine;
 
 class AccountResolver
@@ -29,7 +30,8 @@ class AccountResolver
         // 1. History match: same supplier + exact description in a posted document line
         if ($partyId !== null) {
             $accountId = DocumentLine::query()
-                ->whereHas('document', fn ($q) => $q->where('party_id', $partyId)->where('status', 'posted'))
+                ->whereHas('document', fn ($q) => $q->where('party_id', $partyId)
+                    ->whereIn('status', Document::POSTED_STATUSES))
                 ->where('description', $description)
                 ->whereNotNull('account_id')
                 ->orderByDesc('created_at')

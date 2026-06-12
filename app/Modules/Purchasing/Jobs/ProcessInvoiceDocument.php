@@ -35,8 +35,16 @@ class ProcessInvoiceDocument implements ShouldQueue
             'error' => $e->getMessage(),
         ]);
 
+        // Flag the document so the UI can distinguish "extraction failed"
+        // from "still processing". Cleared on the next successful run.
+        $this->document->update([
+            'metadata' => array_merge($this->document->metadata ?? [], [
+                'extraction_failed' => true,
+            ]),
+        ]);
+
         $this->document->activities()->create([
-            'activity_type' => 'llm_extracted',
+            'activity_type' => 'extraction_failed',
             'description' => 'Automatic extraction failed: '.$e->getMessage(),
             'metadata' => ['error' => $e->getMessage()],
         ]);

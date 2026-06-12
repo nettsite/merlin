@@ -14,6 +14,7 @@ use App\Modules\Purchasing\Models\DocumentRelationship;
 use App\Modules\Purchasing\Services\Pdf\MagikaService;
 use App\Modules\Purchasing\Settings\PurchasingSettings;
 use Carbon\CarbonInterface;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
 
@@ -182,8 +183,12 @@ class DocumentService
                 $doc->foreign_balance_due = round((float) $doc->foreign_total - $foreignPaid, 2);
             }
 
-            // Transition sales invoice status based on remaining balance.
+            // Transition invoice status based on remaining balance.
             if ($doc->document_type === 'sales_invoice' && in_array($doc->status, ['sent', 'partially_paid'])) {
+                $doc->status = $newBalanceDue <= 0 ? 'paid' : 'partially_paid';
+            }
+
+            if ($doc->document_type === 'purchase_invoice' && in_array($doc->status, ['posted', 'partially_paid'])) {
                 $doc->status = $newBalanceDue <= 0 ? 'paid' : 'partially_paid';
             }
 
@@ -204,9 +209,58 @@ class DocumentService
         });
     }
 
+    /**
+     * Record a payment against a posted purchase invoice: creates an outbound
+     * payment document linked via DocumentRelationship, then delegates
+     * amount/balance/status updates to recordPayment().
+     *
+     * @param  array{amount: float, date: string, reference?: string|null, finalise_rate?: bool}  $data
+     */
+    public function recordPurchasePayment(Document $invoice, array $data, ?User $by): Document
+    {
+        if ($invoice->document_type !== 'purchase_invoice') {
+            throw new \InvalidArgumentException('recordPurchasePayment only accepts purchase invoices.');
+        }
+
+        if (! in_array($invoice->status, ['posted', 'partially_paid'])) {
+            throw new \InvalidArgumentException("Cannot record payment against a {$invoice->status} purchase invoice.");
+        }
+
+        $amount = (float) $data['amount'];
+        $date = Carbon::parse($data['date']);
+        $reference = $data['reference'] ?? null;
+
+        return DB::transaction(function () use ($invoice, $amount, $date, $reference, $data) {
+            $payment = Document::create([
+                'document_type' => 'payment',
+                'direction' => 'outbound',
+                'status' => 'draft',
+                'party_id' => $invoice->party_id,
+                'issue_date' => $date->toDateString(),
+                'currency' => $invoice->currency,
+                'exchange_rate' => $invoice->exchange_rate ?? 1.0,
+                'subtotal' => $amount,
+                'tax_total' => 0,
+                'total' => $amount,
+                'source' => 'manual',
+                'reference' => $reference,
+            ]);
+
+            DocumentRelationship::create([
+                'parent_document_id' => $invoice->id,
+                'child_document_id' => $payment->id,
+                'relationship_type' => 'payment_for',
+            ]);
+
+            $this->recordPayment($invoice, $amount, $date, $reference, (bool) ($data['finalise_rate'] ?? false));
+
+            return $payment;
+        });
+    }
+
     public function deleteDocument(Document $doc, User $by): void
     {
-        if ($doc->status === 'posted') {
+        if (in_array($doc->status, Document::POSTED_STATUSES)) {
             throw new \InvalidArgumentException('Cannot delete a posted invoice.');
         }
 
@@ -352,7 +406,11 @@ class DocumentService
                 'reviewed' => ['approved', 'posted', 'disputed'],
                 'approved' => ['posted', 'disputed'],
                 'disputed' => ['reviewed', 'approved', 'posted', 'rejected'],
-                'posted' => [],
+                // Payment states are set by recordPayment() based on balance,
+                // mirroring the sales flow — listed here for documentation.
+                'posted' => ['partially_paid', 'paid'],
+                'partially_paid' => ['paid'],
+                'paid' => [],
                 'rejected' => [],
             ],
             'sales_invoice' => [

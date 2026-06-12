@@ -36,7 +36,7 @@ new #[Layout('components.layout.app')] class extends Component
                 SUM(document_lines.line_total + COALESCE(document_lines.tax_amount, 0)) as total_incl
             ')
             ->where('documents.document_type', 'purchase_invoice')
-            ->where('documents.status', 'posted')
+            ->whereIn('documents.status', \App\Modules\Purchasing\Models\Document::POSTED_STATUSES)
             // The manual join bypasses Document's SoftDeletes scope.
             ->whereNull('documents.deleted_at')
             ->whereNotNull('document_lines.account_id')

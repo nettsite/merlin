@@ -150,6 +150,30 @@ it('does not duplicate lines when the job runs twice', function (): void {
     expect(DocumentLine::where('document_id', $document->id)->count())->toBe(1);
 });
 
+it('flags the document when the processing job fails permanently', function (): void {
+    $document = Document::factory()->purchaseInvoice()->create();
+
+    (new ProcessInvoiceDocument($document))->failed(new RuntimeException('LLM exploded'));
+
+    expect($document->fresh()->metadata['extraction_failed'] ?? false)->toBeTrue()
+        ->and(DocumentActivity::where('document_id', $document->id)
+            ->where('activity_type', 'extraction_failed')
+            ->exists())->toBeTrue();
+});
+
+it('clears the extraction failure flag on successful processing', function (): void {
+    $document = Document::factory()->purchaseInvoice()->create([
+        'metadata' => ['extraction_failed' => true],
+    ]);
+    attachFakeMedia($document);
+
+    $this->llmMock->allows('extractInvoice')->andReturn(fakeExtracted([fakeLine()]));
+
+    $this->service->process($document);
+
+    expect($document->fresh()->metadata['extraction_failed'] ?? false)->toBeFalse();
+});
+
 it('sets llm_confidence on the document', function (): void {
     $document = Document::factory()->purchaseInvoice()->create();
     attachFakeMedia($document);

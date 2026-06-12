@@ -57,6 +57,17 @@ new #[Layout('components.layout.app')] class extends Component
 
     public string $actionReason = '';
 
+    // Payment recording
+    public bool $showPaymentModal = false;
+
+    /** @var array<string, mixed> */
+    public array $paymentForm = [
+        'amount' => '',
+        'date' => '',
+        'reference' => '',
+        'finalise_rate' => false,
+    ];
+
     // Bulk selection
     /** @var array<int, string> */
     public array $selectedIds = [];
@@ -343,6 +354,54 @@ new #[Layout('components.layout.app')] class extends Component
     }
 
     // -------------------------------------------------------------------------
+    // Payment recording
+    // -------------------------------------------------------------------------
+
+    public function openPaymentModal(): void
+    {
+        $this->authorize('can-record-payments');
+        $doc = Document::findOrFail($this->detailId);
+
+        $this->paymentForm = [
+            'amount' => number_format((float) $doc->balance_due, 2, '.', ''),
+            'date' => now()->toDateString(),
+            'reference' => '',
+            // Default to finalising when the FX rate is still provisional —
+            // the actual amount paid fixes the true cost.
+            'finalise_rate' => (bool) ($doc->is_foreign_currency && $doc->exchange_rate_provisional),
+        ];
+        $this->showPaymentModal = true;
+    }
+
+    public function submitPayment(): void
+    {
+        $this->validate([
+            'paymentForm.amount' => 'required|numeric|min:0.01',
+            'paymentForm.date' => 'required|date',
+            'paymentForm.reference' => 'nullable|string|max:255',
+            'paymentForm.finalise_rate' => 'boolean',
+        ]);
+
+        $this->authorize('can-record-payments');
+        $doc = Document::findOrFail($this->detailId);
+
+        try {
+            app(DocumentService::class)->recordPurchasePayment($doc, [
+                'amount' => (float) $this->paymentForm['amount'],
+                'date' => $this->paymentForm['date'],
+                'reference' => $this->paymentForm['reference'] ?: null,
+                'finalise_rate' => (bool) $this->paymentForm['finalise_rate'],
+            ], Auth::user());
+        } catch (\InvalidArgumentException $e) {
+            $this->addError('paymentForm.amount', $e->getMessage());
+
+            return;
+        }
+
+        $this->showPaymentModal = false;
+    }
+
+    // -------------------------------------------------------------------------
     // Quick row actions
     // -------------------------------------------------------------------------
 
@@ -363,7 +422,7 @@ new #[Layout('components.layout.app')] class extends Component
         $this->authorize('can-authorise-invoices');
         $doc = Document::findOrFail($id);
 
-        if (in_array($doc->status, ['approved', 'posted', 'rejected'])) {
+        if (in_array($doc->status, ['approved', 'posted', 'partially_paid', 'paid', 'rejected'])) {
             return;
         }
 
@@ -375,7 +434,7 @@ new #[Layout('components.layout.app')] class extends Component
         $this->authorize('can-post-invoices');
         $doc = Document::findOrFail($id);
 
-        if (in_array($doc->status, ['posted', 'rejected'])) {
+        if (in_array($doc->status, ['posted', 'partially_paid', 'paid', 'rejected'])) {
             return;
         }
 
@@ -528,6 +587,8 @@ new #[Layout('components.layout.app')] class extends Component
             'reviewed' => 'Reviewed',
             'approved' => 'Approved',
             'posted' => 'Posted',
+            'partially_paid' => 'Part Paid',
+            'paid' => 'Paid',
             'disputed' => 'Disputed',
             'rejected' => 'Rejected',
         ];
@@ -654,12 +715,17 @@ new #[Layout('components.layout.app')] class extends Component
                     </td>
                     <td class="px-4 py-3">
                         @include('livewire.pages.purchase-invoices._status-badge', ['status' => $invoice->status])
+                        @if($invoice->metadata['extraction_failed'] ?? false)
+                            <span class="ml-1 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-50 text-danger" title="Automatic extraction failed — open the invoice and use Reprocess to retry.">
+                                Extraction failed
+                            </span>
+                        @endif
                     </td>
                     <td class="px-4 py-3 w-32 text-right" @click.stop>
                         <div class="flex items-center justify-end gap-1.5">
-                            @if($canPost && !in_array($invoice->status, ['posted', 'rejected']))
+                            @if($canPost && !in_array($invoice->status, ['posted', 'partially_paid', 'paid', 'rejected']))
                                 <flux:button wire:click="quickPost('{{ $invoice->id }}')" size="xs" variant="primary">Post</flux:button>
-                            @elseif($canApprove && !in_array($invoice->status, ['approved', 'posted', 'rejected']))
+                            @elseif($canApprove && !in_array($invoice->status, ['approved', 'posted', 'partially_paid', 'paid', 'rejected']))
                                 <flux:button wire:click="quickApprove('{{ $invoice->id }}')" size="xs">Approve</flux:button>
                             @elseif($canReview && in_array($invoice->status, ['received', 'disputed']))
                                 <flux:button wire:click="quickMarkReviewed('{{ $invoice->id }}')" size="xs">Review</flux:button>
@@ -745,6 +811,14 @@ new #[Layout('components.layout.app')] class extends Component
     <div class="flex flex-col h-full">
         {{-- Header --}}
         <div class="p-6 border-b border-line">
+            @if($detail->metadata['extraction_failed'] ?? false)
+                <div class="mb-4 px-4 py-3 rounded bg-red-50 border border-red-200 text-sm text-danger">
+                    Automatic extraction failed — the invoice has no extracted data.
+                    @can('can-reprocess-invoices')
+                        Use <strong>Reprocess</strong> below to retry.
+                    @endcan
+                </div>
+            @endif
             <div class="flex items-start justify-between">
                 <div>
                     <div class="flex items-center gap-3">
@@ -1009,7 +1083,9 @@ new #[Layout('components.layout.app')] class extends Component
                 'reviewed' => ['approve', 'reject', 'dispute'],
                 'approved' => ['post', 'dispute'],
                 'disputed' => ['review', 'reject'],
-                'posted' => [],
+                'posted' => ['payment'],
+                'partially_paid' => ['payment'],
+                'paid' => [],
                 'rejected' => [],
             ][$detail->status] ?? [];
         @endphp
@@ -1029,6 +1105,11 @@ new #[Layout('components.layout.app')] class extends Component
                 @if(in_array('post', $allowedActions))
                     @can('can-post-invoices')
                         <flux:button wire:click="post" size="sm" variant="primary">Post to GL</flux:button>
+                    @endcan
+                @endif
+                @if(in_array('payment', $allowedActions) && (float) $detail->balance_due > 0)
+                    @can('can-record-payments')
+                        <flux:button wire:click="openPaymentModal" size="sm" variant="primary">Record Payment</flux:button>
                     @endcan
                 @endif
                 <flux:spacer />
@@ -1060,6 +1141,46 @@ new #[Layout('components.layout.app')] class extends Component
         <div class="flex justify-end gap-3">
             <flux:button type="button" variant="ghost" wire:click="$set('showRejectReason', false)">Cancel</flux:button>
             <flux:button type="submit" variant="danger">Reject</flux:button>
+        </div>
+    </form>
+</flux:modal>
+
+{{-- Payment modal --}}
+<flux:modal name="payment-modal" wire:model.self="showPaymentModal" class="w-[420px]">
+    <form wire:submit="submitPayment" class="p-6 space-y-4">
+        <flux:heading>Record Payment</flux:heading>
+        @if($detail)
+            <p class="text-sm text-ink-soft">
+                Balance due: {{ $detailCurrencySymbol }}{{ number_format((float) ($detail->is_foreign_currency ? $detail->foreign_balance_due : $detail->balance_due), 2) }}
+                @if($detail->is_foreign_currency)
+                    ({{ $baseCurrencySymbol }}{{ number_format((float) $detail->balance_due, 2) }})
+                @endif
+            </p>
+        @endif
+        <flux:field>
+            <flux:label>Amount ({{ $baseCurrency }}) <span class="text-danger">*</span></flux:label>
+            <flux:input type="number" wire:model="paymentForm.amount" step="0.01" min="0.01" placeholder="0.00" />
+            <flux:error name="paymentForm.amount" />
+        </flux:field>
+        <flux:field>
+            <flux:label>Date <span class="text-danger">*</span></flux:label>
+            <flux:input type="date" wire:model="paymentForm.date" />
+            <flux:error name="paymentForm.date" />
+        </flux:field>
+        <flux:field>
+            <flux:label>Reference</flux:label>
+            <flux:input wire:model="paymentForm.reference" placeholder="Bank reference, EFT number, etc." />
+            <flux:error name="paymentForm.reference" />
+        </flux:field>
+        @if($detail && $detail->is_foreign_currency && $detail->exchange_rate_provisional)
+            <flux:field variant="inline">
+                <flux:checkbox wire:model="paymentForm.finalise_rate" />
+                <flux:label>Finalise exchange rate from this payment (full settlement)</flux:label>
+            </flux:field>
+        @endif
+        <div class="flex justify-end gap-3">
+            <flux:button type="button" variant="ghost" wire:click="$set('showPaymentModal', false)">Cancel</flux:button>
+            <flux:button type="submit" variant="primary">Record Payment</flux:button>
         </div>
     </form>
 </flux:modal>

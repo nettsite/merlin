@@ -62,8 +62,13 @@ class InvoiceProcessingService
             $exchangeRateDate = now()->toDateString();
         }
 
-        // 6. Update document header fields
+        // 6. Update document header fields (clearing any failure flag from a
+        // previous attempt — this run succeeded in extracting)
+        $metadata = $document->metadata ?? [];
+        unset($metadata['extraction_failed']);
+
         $document->update([
+            'metadata' => $metadata ?: null,
             'reference' => $document->reference ?? $extracted->invoiceNumber,
             'issue_date' => $document->issue_date ?? $extracted->issueDate,
             'due_date' => $document->due_date ?? $extracted->dueDate,
@@ -182,7 +187,7 @@ class InvoiceProcessingService
         return Document::query()
             ->where('party_id', $supplier->id)
             ->where('document_type', 'purchase_invoice')
-            ->where('status', 'posted')
+            ->postedOnwards()
             ->orderByDesc('issue_date')
             ->limit(5)
             ->with('lines.account')

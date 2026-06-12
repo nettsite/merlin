@@ -168,7 +168,7 @@ class PostingRuleService
     {
         $previous = Document::where('party_id', $document->party_id)
             ->where('document_type', $document->document_type)
-            ->where('status', 'posted')
+            ->postedOnwards()
             ->where('id', '!=', $document->id)
             ->latest('updated_at')
             ->with('lines')
