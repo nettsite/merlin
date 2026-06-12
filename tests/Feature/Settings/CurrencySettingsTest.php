@@ -3,6 +3,7 @@
 namespace Tests\Feature\Settings;
 
 use App\Modules\Core\Models\User;
+use App\Modules\Core\Settings\CompanySettings;
 use App\Modules\Core\Settings\CurrencySettings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Volt\Volt;
@@ -25,6 +26,7 @@ class CurrencySettingsTest extends TestCase
         $this->actingAs($this->adminUser());
 
         Volt::test('pages.settings.general')
+            ->set('companyName', 'Test Company (Pty) Ltd')
             ->set('baseCurrency', 'USD')
             ->set('locale', 'en_US')
             ->call('save')
@@ -34,5 +36,8 @@ class CurrencySettingsTest extends TestCase
         $settings = app()->make(CurrencySettings::class);
         $this->assertEquals('USD', $settings->base_currency);
         $this->assertEquals('en_US', $settings->locale);
+
+        $company = app()->make(CompanySettings::class);
+        $this->assertEquals('Test Company (Pty) Ltd', $company->name);
     }
 }
