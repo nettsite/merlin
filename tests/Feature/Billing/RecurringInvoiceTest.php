@@ -8,8 +8,15 @@ use App\Modules\Core\Models\Party;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Services\PartyService;
 use App\Modules\Purchasing\Models\Document;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Mail;
 use Livewire\Volt\Volt;
+
+// Tests in this file use absolute 2026 dates; freeze the clock so "due"
+// comparisons against now() never rot as the real calendar advances.
+beforeEach(function (): void {
+    Carbon::setTestNow('2026-05-15 09:00:00');
+});
 
 function riUserWith(array $permissions): User
 {
@@ -252,6 +259,64 @@ it('does nothing if there is no end_date', function (): void {
     app(RecurringInvoiceService::class)->completeIfExpired($template);
 
     expect($template->fresh()->status)->toBe(RecurringInvoiceStatus::Active);
+});
+
+// --- Pause / activate ---
+
+it('pauses an active template and reactivates it', function (): void {
+    $this->actingAs(riUserWith(['recurring-invoices-view-any', 'recurring-invoices-update']));
+
+    $client = recurringClient();
+    $template = RecurringInvoice::create([
+        'client_id' => $client->id,
+        'frequency' => RecurringFrequency::Monthly,
+        'billing_period_day' => 1,
+        'start_date' => '2026-05-01',
+        'next_invoice_date' => '2026-06-01',
+        'status' => RecurringInvoiceStatus::Active,
+        'currency' => 'ZAR',
+    ]);
+
+    Volt::test('pages.recurring-invoices.index')
+        ->call('pause', $template->id)
+        ->assertOk();
+
+    expect($template->fresh()->status)->toBe(RecurringInvoiceStatus::Paused);
+
+    Volt::test('pages.recurring-invoices.index')
+        ->call('activate', $template->id)
+        ->assertOk();
+
+    expect($template->fresh()->status)->toBe(RecurringInvoiceStatus::Active);
+});
+
+it('forbids pause and activate without update permission', function (): void {
+    $this->actingAs(riUserWith(['recurring-invoices-view-any']));
+
+    $client = recurringClient();
+    $template = RecurringInvoice::create([
+        'client_id' => $client->id,
+        'frequency' => RecurringFrequency::Monthly,
+        'billing_period_day' => 1,
+        'start_date' => '2026-05-01',
+        'next_invoice_date' => '2026-06-01',
+        'status' => RecurringInvoiceStatus::Active,
+        'currency' => 'ZAR',
+    ]);
+
+    Volt::test('pages.recurring-invoices.index')
+        ->call('pause', $template->id)
+        ->assertForbidden();
+
+    expect($template->fresh()->status)->toBe(RecurringInvoiceStatus::Active);
+
+    $template->update(['status' => RecurringInvoiceStatus::Paused]);
+
+    Volt::test('pages.recurring-invoices.index')
+        ->call('activate', $template->id)
+        ->assertForbidden();
+
+    expect($template->fresh()->status)->toBe(RecurringInvoiceStatus::Paused);
 });
 
 // --- Artisan command ---

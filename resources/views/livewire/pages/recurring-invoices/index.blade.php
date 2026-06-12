@@ -135,6 +135,20 @@ new #[Layout('components.layout.app')] class extends Component
         }
     }
 
+    public function activate(string $id): void
+    {
+        $template = RecurringInvoice::findOrFail($id);
+        $this->authorize('update', $template);
+        $template->update(['status' => RecurringInvoiceStatus::Active]);
+    }
+
+    public function pause(string $id): void
+    {
+        $template = RecurringInvoice::findOrFail($id);
+        $this->authorize('update', $template);
+        $template->update(['status' => RecurringInvoiceStatus::Paused]);
+    }
+
     protected function performDelete(string $id): void
     {
         $template = RecurringInvoice::findOrFail($id);
@@ -178,7 +192,7 @@ new #[Layout('components.layout.app')] class extends Component
         }
 
         return [
-            'rows' => RecurringInvoice::with('client.business')
+            'rows' => RecurringInvoice::with(['client.business', 'lines'])
                 ->when($this->search, fn ($q) => $q->whereHas('client.business', fn ($b) => $b
                     ->where('trading_name', 'like', "%{$this->search}%")
                     ->orWhere('legal_name', 'like', "%{$this->search}%")
@@ -199,17 +213,6 @@ new #[Layout('components.layout.app')] class extends Component
 
 <div>
 
-{{-- Page header --}}
-<div class="flex items-start justify-between px-6 py-5 border-b border-line">
-    <div>
-        <h1 class="text-[17px] font-semibold tracking-tight text-ink">Recurring Invoices</h1>
-        <p class="mt-0.5 text-sm text-ink-muted">Automated invoice templates</p>
-    </div>
-    @can('create', \App\Modules\Billing\Models\RecurringInvoice::class)
-        <flux:button wire:click="create" variant="primary" icon="plus" size="sm">New Template</flux:button>
-    @endcan
-</div>
-
 {{-- Flash --}}
 @if(session('success'))
     <div class="mx-6 mt-4 px-4 py-3 rounded bg-green-50 border border-green-200 text-sm text-success">
@@ -219,6 +222,12 @@ new #[Layout('components.layout.app')] class extends Component
 
 {{-- Table --}}
 <x-crud.table title="Recurring Invoices" description="Automated billing templates that generate invoices on a schedule." :rows="$rows">
+    <x-slot name="actions">
+        @can('create', \App\Modules\Billing\Models\RecurringInvoice::class)
+            <flux:button wire:click="create" variant="primary" icon="plus" size="sm">New Template</flux:button>
+        @endcan
+    </x-slot>
+
     <x-slot name="search">
         <flux:input wire:model.live.debounce.300ms="search" placeholder="Search clients…" icon="magnifying-glass" size="sm" class="max-w-xs" />
     </x-slot>
@@ -228,12 +237,18 @@ new #[Layout('components.layout.app')] class extends Component
             <x-crud.th column="client" :sortBy="$sortBy" :sortDir="$sortDir">Client</x-crud.th>
             <x-crud.th column="frequency" :sortBy="$sortBy" :sortDir="$sortDir">Frequency</x-crud.th>
             <x-crud.th column="next_invoice_date" :sortBy="$sortBy" :sortDir="$sortDir">Next Date</x-crud.th>
+            <x-crud.th :right="true">Value (ex tax)</x-crud.th>
             <x-crud.th column="status" :sortBy="$sortBy" :sortDir="$sortDir">Status</x-crud.th>
             <th class="px-4 py-3 text-right text-xs font-semibold text-ink-muted uppercase tracking-wide"></th>
         </tr>
     </x-slot>
 
     @forelse($rows as $template)
+        @php
+            $templateValue = $template->lines->sum(
+                fn ($l) => $l->quantity * $l->unit_price * (1 - $l->discount_percent / 100)
+            );
+        @endphp
         <tr class="group hover:bg-surface-alt transition-colors">
             <td class="px-4 py-3 font-medium text-ink">
                 {{ $template->client?->business?->display_name ?? '—' }}
@@ -243,6 +258,9 @@ new #[Layout('components.layout.app')] class extends Component
             </td>
             <td class="px-4 py-3 tabular-nums text-ink-soft">
                 {{ $template->next_invoice_date->format('d M Y') }}
+            </td>
+            <td class="px-4 py-3 text-right tabular-nums text-ink-soft">
+                {{ $currencySymbol }}{{ number_format($templateValue, 2) }}
             </td>
             <td class="px-4 py-3">
                 <span @class([
@@ -255,8 +273,13 @@ new #[Layout('components.layout.app')] class extends Component
                 </span>
             </td>
             <td class="px-4 py-3 text-right">
-                <div class="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div class="flex items-center justify-end gap-2">
                     @can('update', $template)
+                        @if($template->status === \App\Modules\Billing\Enums\RecurringInvoiceStatus::Active)
+                            <flux:button wire:click="pause('{{ $template->id }}')" size="sm" variant="ghost">Pause</flux:button>
+                        @elseif($template->status === \App\Modules\Billing\Enums\RecurringInvoiceStatus::Paused)
+                            <flux:button wire:click="activate('{{ $template->id }}')" size="sm" variant="ghost">Activate</flux:button>
+                        @endif
                         <flux:button wire:click="edit('{{ $template->id }}')" size="sm" variant="ghost" icon="pencil" />
                     @endcan
                     @can('delete', $template)
@@ -272,7 +295,7 @@ new #[Layout('components.layout.app')] class extends Component
         </tr>
     @empty
         <tr>
-            <td colspan="5" class="px-4 py-12 text-center">
+            <td colspan="6" class="px-4 py-12 text-center">
                 <p class="font-medium text-ink">No recurring invoice templates yet.</p>
                 <p class="mt-1 text-sm text-ink-muted">Create a template to automate invoice generation.</p>
             </td>
