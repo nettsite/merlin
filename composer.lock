@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "d9996979de7487fb8e64d5311227db34",
+    "content-hash": "bd85ffb7ff32b660696a9aea5435b072",
     "packages": [
         {
             "name": "barryvdh/laravel-dompdf",
@@ -3237,16 +3237,16 @@
         },
         {
             "name": "nettsite/nettmail-laravel",
-            "version": "v0.2.2",
+            "version": "v0.2.3",
             "source": {
                 "type": "git",
                 "url": "https://github.com/nettsite/nettmail-laravel.git",
-                "reference": "bb94751dbf827fe4b361234093c13c2edfc6ad9f"
+                "reference": "3657a482cc50148889ed3940cc3524ff402900ba"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/nettsite/nettmail-laravel/zipball/bb94751dbf827fe4b361234093c13c2edfc6ad9f",
-                "reference": "bb94751dbf827fe4b361234093c13c2edfc6ad9f",
+                "url": "https://api.github.com/repos/nettsite/nettmail-laravel/zipball/3657a482cc50148889ed3940cc3524ff402900ba",
+                "reference": "3657a482cc50148889ed3940cc3524ff402900ba",
                 "shasum": ""
             },
             "require": {
@@ -3307,7 +3307,7 @@
             ],
             "support": {
                 "issues": "https://github.com/nettsite/nettmail-laravel/issues",
-                "source": "https://github.com/nettsite/nettmail-laravel/tree/v0.2.2"
+                "source": "https://github.com/nettsite/nettmail-laravel/tree/v0.2.3"
             },
             "funding": [
                 {
@@ -3315,7 +3315,7 @@
                     "type": "github"
                 }
             ],
-            "time": "2026-06-12T15:11:27+00:00"
+            "time": "2026-06-12T15:21:15+00:00"
         },
         {
             "name": "neuron-core/neuron-ai",
