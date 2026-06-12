@@ -19,8 +19,6 @@ class LlmService
         private readonly CurrencySettings $currencySettings,
     ) {}
 
-    private const MODEL = 'claude-sonnet-4-20250514';
-
     private const API_URL = 'https://api.anthropic.com/v1/messages';
 
     private const MAX_TOKENS = 4096;
@@ -106,7 +104,7 @@ class LlmService
     private function callApi(array $messages, ?Model $loggable, int $startNs): string
     {
         $body = [
-            'model' => self::MODEL,
+            'model' => config('services.anthropic.model'),
             'max_tokens' => self::MAX_TOKENS,
             'messages' => $messages,
         ];
@@ -199,7 +197,7 @@ class LlmService
             'loggable_id' => $loggable?->getKey(),
             'prompt_tokens' => $promptTokens,
             'completion_tokens' => $completionTokens,
-            'model' => self::MODEL,
+            'model' => $requestBody['model'] ?? config('services.anthropic.model'),
             'confidence' => null,
             'duration_ms' => $durationMs,
             'request_payload' => $this->withoutBase64Sources($requestBody),

@@ -100,9 +100,8 @@ Companion to `REVIEW.md` (2026-06-11). Phases ordered by risk reduction per unit
 ### 3.5 P7 — LLM model to config
 - `config/services.php`: `'anthropic' => ['key' => …, 'model' => env('ANTHROPIC_MODEL', '<current sonnet alias>')]`; `LlmService` reads config. Update `.env.example`. LlmServiceTest asserts request body uses configured model.
 
-### 3.6 Index audit (from P-section positives)
-- Check migrations for indexes on: `documents(document_type, status)`, `documents(party_id)`, `document_lines(document_id)`, `document_lines(account_id)`, `media(custom_properties->sha256)` (likely missing — JSON path; add a generated/virtual column + index in MariaDB if duplicate check is hot, else accept table scan on media which is small).
-- Add only what `EXPLAIN` on the real MariaDB dev DB justifies.
+### 3.6 Index audit — DONE (no migration needed)
+- Verified: `documents` has single-column indexes on `document_type`, `status`, `issue_date`, `due_date`; `party_id` and `document_lines.document_id` are FK-constrained (auto-indexed on MariaDB). Adequate at current volume. The `media.custom_properties->sha256` duplicate check scans the small media table — acceptable; revisit with a generated column + index if upload volume grows.
 
 ---
 

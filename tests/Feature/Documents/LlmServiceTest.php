@@ -182,6 +182,16 @@ it('records duration_ms on successful calls', function (): void {
     expect($log->duration_ms)->toBeGreaterThanOrEqual(0);
 });
 
+it('uses the configured model for api calls', function (): void {
+    config(['services.anthropic.model' => 'claude-test-model']);
+    Http::fake(['api.anthropic.com/*' => Http::response(anthropicResponse($this->fixtureJson))]);
+
+    $this->service->extractInvoice('text');
+
+    Http::assertSent(fn ($request) => $request['model'] === 'claude-test-model');
+    expect(LlmLog::first()->model)->toBe('claude-test-model');
+});
+
 it('wraps connection failures in LlmApiException and logs them', function (): void {
     Http::fake([
         'api.anthropic.com/*' => fn () => throw new ConnectionException(
