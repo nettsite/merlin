@@ -105,9 +105,9 @@ Companion to `REVIEW.md` (2026-06-11). Phases ordered by risk reduction per unit
 
 ---
 
-## Phase 4 — Functional completeness (G-series; needs Will's sign-off on scope)
+## Phase 4 — Functional completeness (G-series)
 
-Present these as options before building:
+**Status 2026-06-12:** 4.1 (G7), 4.2 (G2 — built with new statuses: posted → partially_paid → paid; `Document::POSTED_STATUSES` + `postedOnwards()` replace raw posted checks; overdue now means past-due-with-balance), 4.3 (G6), and 4.4 (G5) are DONE and pushed. 4.5 and 4.6 remain open.
 
 ### 4.1 G7 — Surface extraction failures (recommended, M)
 - Add `extraction_failed` boolean or reuse activity: list page badge when latest activity is a failed extraction and status is `received`; "Retry" button calls existing reprocess. Tests: failed job → badge visible; retry clears it.
