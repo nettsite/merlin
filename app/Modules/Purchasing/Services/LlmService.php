@@ -186,9 +186,36 @@ class LlmService
             'model' => self::MODEL,
             'confidence' => null,
             'duration_ms' => $durationMs,
-            'request_payload' => $requestBody,
+            'request_payload' => $this->withoutBase64Sources($requestBody),
             'response_payload' => $error ? null : ['text' => $rawResponse],
             'error' => $error,
         ]);
+    }
+
+    /**
+     * Replace base64 document/image sources with a size placeholder so vision
+     * calls don't persist multi-MB encoded files into llm_logs.
+     *
+     * @param  array<string, mixed>  $requestBody
+     * @return array<string, mixed>
+     */
+    private function withoutBase64Sources(array $requestBody): array
+    {
+        foreach ($requestBody['messages'] ?? [] as $i => $message) {
+            if (! is_array($message['content'] ?? null)) {
+                continue;
+            }
+
+            foreach ($message['content'] as $j => $block) {
+                $data = $block['source']['data'] ?? null;
+
+                if (is_string($data)) {
+                    $requestBody['messages'][$i]['content'][$j]['source']['data'] =
+                        '[base64 omitted: '.strlen($data).' bytes]';
+                }
+            }
+        }
+
+        return $requestBody;
     }
 }

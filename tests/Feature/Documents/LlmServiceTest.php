@@ -181,6 +181,25 @@ it('records duration_ms on successful calls', function (): void {
     expect($log->duration_ms)->toBeGreaterThanOrEqual(0);
 });
 
+it('omits base64 document data from the logged request payload', function (): void {
+    Http::fake(['api.anthropic.com/*' => Http::response(anthropicResponse('extracted text'))]);
+
+    $path = tempnam(sys_get_temp_dir(), 'pdf');
+    file_put_contents($path, '%PDF-1.4 fake pdf body');
+
+    try {
+        $this->service->extractRawTextFromPdf($path);
+    } finally {
+        unlink($path);
+    }
+
+    $payload = LlmLog::first()->request_payload;
+    $data = $payload['messages'][0]['content'][0]['source']['data'];
+
+    expect($data)->toStartWith('[base64 omitted:')
+        ->and(json_encode($payload))->not->toContain(base64_encode('%PDF-1.4 fake pdf body'));
+});
+
 it('parses null dates gracefully', function (): void {
     $json = json_encode(array_merge(
         json_decode($this->fixtureJson, true),
