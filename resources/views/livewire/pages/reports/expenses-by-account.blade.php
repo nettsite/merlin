@@ -37,9 +37,11 @@ new #[Layout('components.layout.app')] class extends Component
             ')
             ->where('documents.document_type', 'purchase_invoice')
             ->where('documents.status', 'posted')
+            // The manual join bypasses Document's SoftDeletes scope.
+            ->whereNull('documents.deleted_at')
             ->whereNotNull('document_lines.account_id')
-            ->when($this->dateFrom, fn ($q) => $q->where('documents.issue_date', '>=', $this->dateFrom))
-            ->when($this->dateTo, fn ($q) => $q->where('documents.issue_date', '<=', $this->dateTo))
+            ->when($this->dateFrom, fn ($q) => $q->whereDate('documents.issue_date', '>=', $this->dateFrom))
+            ->when($this->dateTo, fn ($q) => $q->whereDate('documents.issue_date', '<=', $this->dateTo))
             ->groupBy('document_lines.account_id', 'accounts.code', 'accounts.name')
             ->orderByDesc('total_excl')
             ->get();

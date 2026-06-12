@@ -36,8 +36,8 @@ new #[Layout('components.layout.app')] class extends Component
             ')
             ->where('documents.document_type', 'purchase_invoice')
             ->where('documents.status', 'posted')
-            ->when($this->dateFrom, fn ($q) => $q->where('documents.issue_date', '>=', $this->dateFrom))
-            ->when($this->dateTo, fn ($q) => $q->where('documents.issue_date', '<=', $this->dateTo))
+            ->when($this->dateFrom, fn ($q) => $q->whereDate('documents.issue_date', '>=', $this->dateFrom))
+            ->when($this->dateTo, fn ($q) => $q->whereDate('documents.issue_date', '<=', $this->dateTo))
             ->groupBy('documents.party_id', 'businesses.trading_name', 'businesses.legal_name')
             ->orderByDesc('total_excl')
             ->get();
