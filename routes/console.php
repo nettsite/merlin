@@ -9,4 +9,4 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
-Schedule::command(GenerateRecurringInvoices::class)->dailyAt('06:00');
+Schedule::command(GenerateRecurringInvoices::class)->dailyAt('06:00')->withoutOverlapping();

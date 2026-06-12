@@ -80,6 +80,19 @@ class ProRataCalculatorTest extends TestCase
         $this->assertEqualsWithDelta(1 / 28, $result['factor'], 0.000001);
     }
 
+    public function test_clamps_billing_day_to_month_length_in_february(): void
+    {
+        // Billing day 31 does not exist in February: the period containing
+        // Feb 10 anchors to Jan 31 and ends Feb 27 — it must not overflow
+        // into March.
+        $result = $this->calculator->calculate(Carbon::parse('2026-02-10'), 31);
+
+        $this->assertEquals('2026-01-31', $result['period_start']->toDateString());
+        $this->assertEquals('2026-02-27', $result['period_end']->toDateString());
+        $this->assertEquals(28, $result['days_in_period']);
+        $this->assertEquals(18, $result['days_active']);
+    }
+
     public function test_is_full_period_returns_true_when_matching(): void
     {
         $this->assertTrue($this->calculator->isFullPeriod(Carbon::parse('2026-05-01'), 1));

@@ -78,7 +78,10 @@ class RecurringInvoice extends Model
 
     public function scopeDue(Builder $query): Builder
     {
-        return $query->where('next_invoice_date', '<=', now()->toDateString());
+        // whereDate compares date-only on every driver; a raw string compare
+        // misses same-day templates on SQLite, where the date cast persists a
+        // full datetime string ('Y-m-d 00:00:00' > 'Y-m-d').
+        return $query->whereDate('next_invoice_date', '<=', now()->toDateString());
     }
 
     public function getActivitylogOptions(): LogOptions

@@ -11,6 +11,7 @@ use App\Modules\Core\Models\User;
 use App\Modules\Core\Settings\CurrencySettings;
 use App\Modules\Purchasing\Models\Document;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
 
@@ -78,10 +79,35 @@ class RecurringInvoiceService
 
     /**
      * Generate a sales invoice from the template.
+     *
+     * Invoice creation and next_invoice_date advancement commit atomically so
+     * a crash can never leave the template due again with an invoice already
+     * created (which would double-generate and double-email on the next run).
+     * The email is sent after commit; a send failure leaves the invoice
+     * created and the schedule advanced.
      */
     public function generateFromTemplate(RecurringInvoice $template, bool $isProRata = false, ?User $by = null): Document
     {
         $template->loadMissing(['client.business', 'lines.account', 'paymentTerm']);
+
+        // Idempotency guard: if an invoice for this template and period
+        // already exists, return it instead of generating a duplicate.
+        if (! $isProRata) {
+            $existing = Document::salesInvoices()
+                ->where('metadata->recurring_invoice_id', $template->id)
+                ->whereDate('issue_date', $template->next_invoice_date)
+                ->first();
+
+            if ($existing !== null) {
+                Log::warning("RecurringInvoice [{$template->id}] invoice for {$template->next_invoice_date->toDateString()} already exists ({$existing->document_number}); skipping generation.");
+
+                // Self-heal: advance past the already-generated period so the
+                // template doesn't stay due forever.
+                $this->advanceNextDate($template);
+
+                return $existing;
+            }
+        }
 
         $billingPeriodDay = $template->billing_period_day ?? $this->billingSettings->billing_period_day;
 
@@ -92,37 +118,45 @@ class RecurringInvoiceService
 
         $issueDate = $isProRata ? $template->start_date : $template->next_invoice_date;
 
-        $doc = $this->billingService->createDraft($template->client, [
-            'issue_date' => $issueDate->toDateString(),
-            'payment_term_id' => $template->payment_term_id,
-            'notes' => $template->notes,
-        ]);
-
-        // Link document back to this template via metadata
-        $doc->update(['metadata' => array_merge($doc->metadata ?? [], [
-            'recurring_invoice_id' => $template->id,
-        ])]);
-
-        foreach ($template->lines as $i => $line) {
-            $quantity = $isProRata
-                ? round((float) $line->quantity * $proRataData['factor'], 4)
-                : (float) $line->quantity;
-
-            $description = $isProRata
-                ? $line->description.' (pro rata '.round($proRataData['factor'] * 100, 1).'%)'
-                : $line->description;
-
-            $doc->lines()->create([
-                'line_number' => $i + 1,
-                'type' => 'service',
-                'description' => $description,
-                'account_id' => $line->account_id,
-                'quantity' => $quantity,
-                'unit_price' => (float) $line->unit_price,
-                'discount_percent' => (float) $line->discount_percent,
-                'tax_rate' => $line->tax_rate !== null ? (float) $line->tax_rate : null,
+        $doc = DB::transaction(function () use ($template, $isProRata, $proRataData, $issueDate): Document {
+            $doc = $this->billingService->createDraft($template->client, [
+                'issue_date' => $issueDate->toDateString(),
+                'payment_term_id' => $template->payment_term_id,
+                'notes' => $template->notes,
             ]);
-        }
+
+            // Link document back to this template via metadata
+            $doc->update(['metadata' => array_merge($doc->metadata ?? [], [
+                'recurring_invoice_id' => $template->id,
+            ])]);
+
+            foreach ($template->lines as $i => $line) {
+                $quantity = $isProRata
+                    ? round((float) $line->quantity * $proRataData['factor'], 4)
+                    : (float) $line->quantity;
+
+                $description = $isProRata
+                    ? $line->description.' (pro rata '.round($proRataData['factor'] * 100, 1).'%)'
+                    : $line->description;
+
+                $doc->lines()->create([
+                    'line_number' => $i + 1,
+                    'type' => 'service',
+                    'description' => $description,
+                    'account_id' => $line->account_id,
+                    'quantity' => $quantity,
+                    'unit_price' => (float) $line->unit_price,
+                    'discount_percent' => (float) $line->discount_percent,
+                    'tax_rate' => $line->tax_rate !== null ? (float) $line->tax_rate : null,
+                ]);
+            }
+
+            if (! $isProRata) {
+                $this->advanceNextDate($template);
+            }
+
+            return $doc;
+        });
 
         $recipientEmails = $this->resolveTemplateRecipientEmails($template);
 
@@ -168,11 +202,14 @@ class RecurringInvoiceService
             return $startDate->copy();
         }
 
-        // Next occurrence of billingPeriodDay after startDate
-        $candidate = $startDate->copy()->startOfMonth()->addDays($billingPeriodDay - 1);
+        // Next occurrence of billingPeriodDay after startDate, clamped to the
+        // month's length (day 31 in February must yield Feb 28, not Mar 2/3).
+        $candidate = $startDate->copy()->startOfMonth();
+        $candidate->day(min($billingPeriodDay, $candidate->daysInMonth));
 
         if ($candidate->lt($startDate)) {
-            $candidate->addMonthNoOverflow();
+            $candidate->startOfMonth()->addMonthNoOverflow();
+            $candidate->day(min($billingPeriodDay, $candidate->daysInMonth));
         }
 
         return $candidate;

@@ -41,8 +41,9 @@ class GenerateRecurringInvoices extends Command
             }
 
             try {
+                // generateFromTemplate advances next_invoice_date in the same
+                // transaction as invoice creation — do not advance again here.
                 $doc = $service->generateFromTemplate($template);
-                $service->advanceNextDate($template);
                 $service->completeIfExpired($template->fresh());
 
                 $this->info("    Generated: {$doc->document_number}");

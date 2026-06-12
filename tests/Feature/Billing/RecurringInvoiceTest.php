@@ -200,6 +200,71 @@ it('pro rata generation adjusts the quantity below 1', function (): void {
         ->and($line->description)->toContain('pro rata');
 });
 
+it('advances next_invoice_date in the same transaction as generation', function (): void {
+    Mail::fake();
+
+    $client = recurringClient();
+    $template = RecurringInvoice::create([
+        'client_id' => $client->id,
+        'frequency' => RecurringFrequency::Monthly,
+        'billing_period_day' => 1,
+        'start_date' => '2026-05-01',
+        'next_invoice_date' => '2026-05-01',
+        'status' => RecurringInvoiceStatus::Active,
+        'currency' => 'ZAR',
+    ]);
+
+    app(RecurringInvoiceService::class)->generateFromTemplate($template);
+
+    expect($template->fresh()->next_invoice_date->toDateString())->toBe('2026-06-01');
+});
+
+it('returns the existing invoice instead of generating a duplicate for the same period', function (): void {
+    Mail::fake();
+
+    $client = recurringClient();
+    $template = RecurringInvoice::create([
+        'client_id' => $client->id,
+        'frequency' => RecurringFrequency::Monthly,
+        'billing_period_day' => 1,
+        'start_date' => '2026-05-01',
+        'next_invoice_date' => '2026-05-01',
+        'status' => RecurringInvoiceStatus::Active,
+        'currency' => 'ZAR',
+    ]);
+
+    $existing = Document::create([
+        'document_type' => 'sales_invoice',
+        'direction' => 'outbound',
+        'status' => 'draft',
+        'party_id' => $client->id,
+        'issue_date' => '2026-05-01',
+        'currency' => 'ZAR',
+        'exchange_rate' => 1.0,
+        'source' => 'manual',
+        'metadata' => ['recurring_invoice_id' => $template->id],
+    ]);
+
+    $doc = app(RecurringInvoiceService::class)->generateFromTemplate($template);
+
+    expect($doc->id)->toBe($existing->id)
+        ->and(Document::salesInvoices()->count())->toBe(1)
+        // Self-heal: the period is covered, so the schedule advances anyway.
+        ->and($template->fresh()->next_invoice_date->toDateString())->toBe('2026-06-01');
+});
+
+it('clamps next_invoice_date to the month length for billing day 31', function (): void {
+    Mail::fake();
+
+    $client = recurringClient();
+
+    $template = app(RecurringInvoiceService::class)->createTemplate(
+        array_merge(baseTemplateData($client, '2026-02-10'), ['billing_period_day' => 31])
+    );
+
+    expect($template->next_invoice_date->toDateString())->toBe('2026-02-28');
+});
+
 // --- advanceNextDate ---
 
 it('advances monthly next_invoice_date by one month', function (): void {
@@ -395,6 +460,37 @@ it('command generates due invoices and advances next_invoice_date', function ():
 
     expect(Document::salesInvoices()->count())->toBe(1)
         ->and($template->fresh()->next_invoice_date->toDateString())->toBe('2026-05-01');
+});
+
+it('command run twice on the same day generates only one invoice', function (): void {
+    Mail::fake();
+
+    // Due exactly on the frozen "today" (2026-05-15): the first run generates
+    // and advances to 2026-06-15; the second run must find nothing due.
+    $client = recurringClient();
+    $template = RecurringInvoice::create([
+        'client_id' => $client->id,
+        'frequency' => RecurringFrequency::Monthly,
+        'billing_period_day' => 15,
+        'start_date' => '2026-04-15',
+        'next_invoice_date' => '2026-05-15',
+        'status' => RecurringInvoiceStatus::Active,
+        'currency' => 'ZAR',
+    ]);
+    $template->lines()->create([
+        'line_number' => 1,
+        'description' => 'Service',
+        'quantity' => 1,
+        'unit_price' => 500,
+        'discount_percent' => 0,
+        'tax_rate' => 15,
+    ]);
+
+    $this->artisan('billing:generate-recurring')->assertExitCode(0);
+    $this->artisan('billing:generate-recurring')->assertExitCode(0);
+
+    expect(Document::salesInvoices()->count())->toBe(1)
+        ->and($template->fresh()->next_invoice_date->toDateString())->toBe('2026-06-15');
 });
 
 it('command skips non-due templates', function (): void {

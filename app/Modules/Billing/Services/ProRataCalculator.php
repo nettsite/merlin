@@ -32,10 +32,14 @@ class ProRataCalculator
         // Find the start of the billing period that contains startDate.
         // Period starts on billingPeriodDay; if that day hasn't arrived yet this
         // month relative to startDate, the period started the previous month.
-        $periodStart = $startDate->copy()->startOfMonth()->addDays($billingPeriodDay - 1);
+        // The day is clamped to the month's length so day 31 in February
+        // anchors to Feb 28 instead of overflowing into March.
+        $periodStart = $startDate->copy()->startOfMonth();
+        $periodStart->day(min($billingPeriodDay, $periodStart->daysInMonth));
 
         if ($periodStart->gt($startDate)) {
             $periodStart->subMonthNoOverflow();
+            $periodStart->day(min($billingPeriodDay, $periodStart->daysInMonth));
         }
 
         $periodEnd = $periodStart->copy()->addMonthNoOverflow()->subDay();
