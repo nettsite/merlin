@@ -19,6 +19,9 @@ new #[Layout('components.layout.app')] class extends Component
     #[Validate('required|numeric|min:0|max:1')]
     public float|string $autopostConfidence = 0.90;
 
+    #[Validate('required|numeric|min:0|max:1')]
+    public float|string $fallbackConfidence = 0.80;
+
     #[Validate('required|numeric|min:0')]
     public float|string $amountTolerance = 10.0;
 
@@ -36,6 +39,7 @@ new #[Layout('components.layout.app')] class extends Component
         $this->taxDefaultRate = $settings->tax_default_rate;
         $this->taxLabel = $settings->tax_label;
         $this->autopostConfidence = $settings->autopost_confidence;
+        $this->fallbackConfidence = $settings->fallback_confidence;
         $this->amountTolerance = $settings->amount_tolerance;
         $this->descriptionSimilarity = $settings->description_similarity;
     }
@@ -49,6 +53,7 @@ new #[Layout('components.layout.app')] class extends Component
         $settings->tax_default_rate = (float) $this->taxDefaultRate;
         $settings->tax_label = $this->taxLabel;
         $settings->autopost_confidence = (float) $this->autopostConfidence;
+        $settings->fallback_confidence = (float) $this->fallbackConfidence;
         $settings->amount_tolerance = (float) $this->amountTolerance;
         $settings->description_similarity = (float) $this->descriptionSimilarity;
         $settings->save();
@@ -98,6 +103,13 @@ new #[Layout('components.layout.app')] class extends Component
                 <flux:input wire:model="autopostConfidence" type="number" step="0.01" min="0" max="1" class="max-w-xs" />
                 <flux:description>0–1 scale. Invoices below this confidence score are not auto-posted.</flux:description>
                 <flux:error name="autopostConfidence" />
+            </flux:field>
+
+            <flux:field>
+                <flux:label>Min. Fast-Model Confidence (fallback) <span class="text-danger">*</span></flux:label>
+                <flux:input wire:model="fallbackConfidence" type="number" step="0.01" min="0" max="1" class="max-w-xs" />
+                <flux:description>0–1 scale. Fast-model extractions below this confidence are re-run on the stronger model.</flux:description>
+                <flux:error name="fallbackConfidence" />
             </flux:field>
 
             <flux:field>

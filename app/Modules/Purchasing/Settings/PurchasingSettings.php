@@ -18,6 +18,9 @@ class PurchasingSettings extends Settings
     /** Minimum LLM confidence score required to consider autonomous posting. */
     public float $autopost_confidence = 0.90;
 
+    /** Minimum fast-model confidence required to accept its extraction without falling back to the stronger model. */
+    public float $fallback_confidence = 0.80;
+
     /** Maximum amount difference (in base currency) allowed for pattern-based auto-posting. */
     public float $amount_tolerance = 10.0;
 

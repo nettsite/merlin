@@ -38,6 +38,7 @@ return [
     'anthropic' => [
         'key' => env('ANTHROPIC_API_KEY'),
         'model' => env('ANTHROPIC_MODEL', 'claude-sonnet-4-20250514'),
+        'model_fast' => env('ANTHROPIC_MODEL_FAST', 'claude-haiku-4-5-20251001'),
     ],
 
 ];

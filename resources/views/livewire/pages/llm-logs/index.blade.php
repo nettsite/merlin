@@ -105,6 +105,14 @@ new #[Layout('components.layout.app')] class extends Component
                     @if($selectedId === $log->id)
                         <tr class="border-t border-line bg-surface-alt">
                             <td colspan="7" class="px-4 py-4">
+                                @php
+                                    $resp = $selectedLog?->response_payload;
+                                    $respText = $resp['text'] ?? null;
+                                    $respDecoded = is_string($respText) ? json_decode($respText, true) : null;
+                                    $responseDisplay = is_array($respDecoded)
+                                        ? json_encode($respDecoded, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)
+                                        : ($respText ?? json_encode($resp, JSON_PRETTY_PRINT));
+                                @endphp
                                 @if($selectedLog?->error)
                                     <div class="mb-3">
                                         <p class="text-xs font-medium text-danger mb-1">Error</p>
@@ -118,7 +126,7 @@ new #[Layout('components.layout.app')] class extends Component
                                     </div>
                                     <div>
                                         <p class="text-xs font-medium text-ink-muted mb-1">Response Payload</p>
-                                        <pre class="text-xs text-ink bg-white border border-line rounded p-3 overflow-x-auto max-h-48">{{ json_encode($selectedLog?->response_payload, JSON_PRETTY_PRINT) }}</pre>
+                                        <pre class="text-xs text-ink bg-white border border-line rounded p-3 overflow-x-auto max-h-48">{{ $responseDisplay }}</pre>
                                     </div>
                                 </div>
                             </td>

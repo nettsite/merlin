@@ -7,6 +7,7 @@ use App\Modules\Accounting\Models\Account;
 use App\Modules\Core\Settings\CurrencySettings;
 use App\Modules\Purchasing\DTO\ExtractedInvoice;
 use App\Modules\Purchasing\Models\LlmLog;
+use App\Modules\Purchasing\Settings\PurchasingSettings;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
@@ -17,6 +18,7 @@ class LlmService
 {
     public function __construct(
         private readonly CurrencySettings $currencySettings,
+        private readonly PurchasingSettings $purchasingSettings,
     ) {}
 
     private const API_URL = 'https://api.anthropic.com/v1/messages';
@@ -26,20 +28,81 @@ class LlmService
     /**
      * Extract structured invoice data from raw PDF text.
      *
+     * Tries the fast model first; if its result is invalid JSON, its totals
+     * don't reconcile, or its confidence is below the configured threshold,
+     * retries the whole extraction on the configured (stronger) model.
+     *
      * @param  array<int, array<string, mixed>>  $supplierHistory
      */
     public function extractInvoice(string $invoiceText, array $supplierHistory = [], ?Model $loggable = null): ExtractedInvoice
     {
         $prompt = $this->buildExtractionPrompt($invoiceText, $supplierHistory);
-        $start = hrtime(true);
 
-        $raw = $this->callApi(
+        try {
+            $fast = $this->extractWith($prompt, config('services.anthropic.model_fast'), $loggable);
+
+            if ($this->isReconciled($fast) && $this->meetsConfidenceThreshold($fast)) {
+                return $fast;
+            }
+        } catch (LlmApiException|\RuntimeException) {
+            // Fall through to the stronger model.
+        }
+
+        return $this->extractWith($prompt, config('services.anthropic.model'), $loggable);
+    }
+
+    /**
+     * Call the given model, parse the structured result, and record the parsed
+     * confidence on the just-created log row. Throws on API or JSON errors.
+     */
+    private function extractWith(string $prompt, string $model, ?Model $loggable): ExtractedInvoice
+    {
+        $log = $this->callApi(
             messages: [['role' => 'user', 'content' => $prompt]],
             loggable: $loggable,
-            startNs: $start,
+            startNs: hrtime(true),
+            model: $model,
         );
 
-        return ExtractedInvoice::fromArray($this->parseJsonResponse($raw));
+        $extracted = ExtractedInvoice::fromArray($this->parseJsonResponse($log->response_payload['text']));
+
+        $log->update(['confidence' => $extracted->confidence]);
+
+        return $extracted;
+    }
+
+    private function meetsConfidenceThreshold(ExtractedInvoice $extracted): bool
+    {
+        return $extracted->confidence >= $this->purchasingSettings->fallback_confidence;
+    }
+
+    /**
+     * Check the extracted totals are internally consistent before accepting the
+     * fast model's result. Requires at least one line, the header arithmetic to
+     * hold (subtotal + tax = total), and the line totals to sum to either the
+     * subtotal (ex-VAT) or the total (VAT-inclusive). The VAT-inclusive shape is
+     * the one InvoiceProcessingService back-calculates downstream, so accepting
+     * it here avoids a needless fallback on correctly-extracted gross prices.
+     */
+    private function isReconciled(ExtractedInvoice $extracted): bool
+    {
+        if ($extracted->lines === []) {
+            return false;
+        }
+
+        if (! $this->withinTolerance($extracted->subtotal + $extracted->taxTotal, $extracted->total)) {
+            return false;
+        }
+
+        $lineSum = array_sum(array_map(fn ($line) => $line->lineTotal, $extracted->lines));
+
+        return $this->withinTolerance($lineSum, $extracted->subtotal)
+            || $this->withinTolerance($lineSum, $extracted->total);
+    }
+
+    private function withinTolerance(float $actual, float $expected): bool
+    {
+        return abs($actual - $expected) <= max(abs($expected) * 0.02, 0.05);
     }
 
     /**
@@ -70,7 +133,8 @@ class LlmService
             ],
         ]];
 
-        return $this->callApi(messages: $messages, loggable: $loggable, startNs: $start);
+        return $this->callApi(messages: $messages, loggable: $loggable, startNs: $start, model: config('services.anthropic.model'))
+            ->response_payload['text'];
     }
 
     private function buildExtractionPrompt(string $text, array $history): string
@@ -96,15 +160,16 @@ class LlmService
     }
 
     /**
-     * Send messages to the Anthropic API and return the text content of the response.
-     * Logs every call — success or failure — to the llm_logs table.
+     * Send messages to the Anthropic API and return the created log row (whose
+     * response_payload holds the response text). Logs every call — success or
+     * failure — to the llm_logs table.
      *
      * @param  array<int, array<string, mixed>>  $messages
      */
-    private function callApi(array $messages, ?Model $loggable, int $startNs): string
+    private function callApi(array $messages, ?Model $loggable, int $startNs, string $model): LlmLog
     {
         $body = [
-            'model' => config('services.anthropic.model'),
+            'model' => $model,
             'max_tokens' => self::MAX_TOKENS,
             'messages' => $messages,
         ];
@@ -147,7 +212,7 @@ class LlmService
         $text = $data['content'][0]['text'];
         $usage = $data['usage'] ?? [];
 
-        $this->log(
+        return $this->log(
             loggable: $loggable,
             requestBody: $body,
             rawResponse: $text,
@@ -155,8 +220,6 @@ class LlmService
             promptTokens: $usage['input_tokens'] ?? 0,
             completionTokens: $usage['output_tokens'] ?? 0,
         );
-
-        return $text;
     }
 
     /**
@@ -189,10 +252,10 @@ class LlmService
         int $promptTokens = 0,
         int $completionTokens = 0,
         ?string $error = null,
-    ): void {
+    ): LlmLog {
         $durationMs = (int) round((hrtime(true) - $startNs) / 1_000_000);
 
-        LlmLog::create([
+        return LlmLog::create([
             'loggable_type' => $loggable?->getMorphClass(),
             'loggable_id' => $loggable?->getKey(),
             'prompt_tokens' => $promptTokens,

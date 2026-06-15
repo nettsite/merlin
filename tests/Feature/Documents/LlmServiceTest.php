@@ -7,6 +7,7 @@ use App\Modules\Purchasing\DTO\ExtractedInvoiceLine;
 use App\Modules\Purchasing\Models\Document;
 use App\Modules\Purchasing\Models\LlmLog;
 use App\Modules\Purchasing\Services\LlmService;
+use App\Modules\Purchasing\Settings\PurchasingSettings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
@@ -84,10 +85,57 @@ it('logs every api call to llm_logs', function (): void {
     expect(LlmLog::count())->toBe(1);
 
     $log = LlmLog::first();
-    expect($log->model)->toBe('claude-sonnet-4-20250514')
+    expect($log->model)->toBe(config('services.anthropic.model_fast'))
         ->and($log->prompt_tokens)->toBe(500)
         ->and($log->completion_tokens)->toBe(200)
+        ->and($log->confidence)->toBe(0.95)
         ->and($log->error)->toBeNull();
+});
+
+it('persists the extracted confidence to the log', function (): void {
+    Http::fake(['api.anthropic.com/*' => Http::response(anthropicResponse($this->fixtureJson))]);
+
+    $this->service->extractInvoice('sample invoice text');
+
+    expect(LlmLog::first()->confidence)->toBe(0.95);
+});
+
+it('falls back when the fast model confidence is below the threshold', function (): void {
+    $lowConfidence = json_decode($this->fixtureJson, true);
+    $lowConfidence['confidence'] = 0.50;
+
+    Http::fake([
+        'api.anthropic.com/*' => Http::sequence()
+            ->push(anthropicResponse((string) json_encode($lowConfidence)))
+            ->push(anthropicResponse($this->fixtureJson)),
+    ]);
+
+    $result = $this->service->extractInvoice('text');
+
+    expect($result->confidence)->toBe(0.95)
+        ->and(LlmLog::count())->toBe(2)
+        ->and(LlmLog::query()->orderBy('id')->pluck('model')->all())->toBe([
+            config('services.anthropic.model_fast'),
+            config('services.anthropic.model'),
+        ])
+        // The rejected fast attempt still records its (low) confidence, making
+        // the fallback reason visible in the logs.
+        ->and(LlmLog::query()->orderBy('id')->first()->confidence)->toBe(0.50);
+});
+
+it('respects the configurable fallback confidence threshold', function (): void {
+    // Fixture confidence is 0.95; raising the threshold above it forces a fallback.
+    app(PurchasingSettings::class)->fill(['fallback_confidence' => 0.99])->save();
+
+    Http::fake([
+        'api.anthropic.com/*' => Http::sequence()
+            ->push(anthropicResponse($this->fixtureJson))
+            ->push(anthropicResponse($this->fixtureJson)),
+    ]);
+
+    $this->service->extractInvoice('text');
+
+    expect(LlmLog::count())->toBe(2);
 });
 
 it('throws LlmApiException when the api returns an error', function (): void {
@@ -182,8 +230,8 @@ it('records duration_ms on successful calls', function (): void {
     expect($log->duration_ms)->toBeGreaterThanOrEqual(0);
 });
 
-it('uses the configured model for api calls', function (): void {
-    config(['services.anthropic.model' => 'claude-test-model']);
+it('uses the configured fast model for the first api call', function (): void {
+    config(['services.anthropic.model_fast' => 'claude-test-model']);
     Http::fake(['api.anthropic.com/*' => Http::response(anthropicResponse($this->fixtureJson))]);
 
     $this->service->extractInvoice('text');
@@ -238,4 +286,102 @@ it('parses null dates gracefully', function (): void {
 
     expect($result->issueDate)->toBeNull()
         ->and($result->dueDate)->toBeNull();
+});
+
+it('does not fall back when the fast model extraction reconciles', function (): void {
+    Http::fake(['api.anthropic.com/*' => Http::response(anthropicResponse($this->fixtureJson))]);
+
+    $this->service->extractInvoice('text');
+
+    expect(LlmLog::count())->toBe(1)
+        ->and(LlmLog::first()->model)->toBe(config('services.anthropic.model_fast'));
+});
+
+it('falls back to the configured model when the fast model returns invalid json', function (): void {
+    Http::fake([
+        'api.anthropic.com/*' => Http::sequence()
+            ->push(anthropicResponse('not json at all'))
+            ->push(anthropicResponse($this->fixtureJson)),
+    ]);
+
+    $result = $this->service->extractInvoice('text');
+
+    expect($result->supplierName)->toBe('Acme Hosting (Pty) Ltd')
+        ->and(LlmLog::count())->toBe(2)
+        ->and(LlmLog::query()->orderBy('id')->pluck('model')->all())->toBe([
+            config('services.anthropic.model_fast'),
+            config('services.anthropic.model'),
+        ]);
+});
+
+it('falls back to the configured model when line totals do not reconcile', function (): void {
+    $unreconciled = json_decode($this->fixtureJson, true);
+    $unreconciled['lines'][0]['line_total'] = 500.00;
+
+    Http::fake([
+        'api.anthropic.com/*' => Http::sequence()
+            ->push(anthropicResponse((string) json_encode($unreconciled)))
+            ->push(anthropicResponse($this->fixtureJson)),
+    ]);
+
+    $result = $this->service->extractInvoice('text');
+
+    expect($result->subtotal)->toBe(1000.00)
+        ->and($result->lines[0]->lineTotal)->toBe(1000.00)
+        ->and(LlmLog::count())->toBe(2)
+        ->and(LlmLog::query()->orderBy('id')->pluck('model')->all())->toBe([
+            config('services.anthropic.model_fast'),
+            config('services.anthropic.model'),
+        ]);
+});
+
+it('falls back when the header arithmetic does not hold', function (): void {
+    // Lines sum to subtotal, but subtotal + tax != total — a self-inconsistent
+    // header the fast model must not be trusted on.
+    $brokenHeader = json_decode($this->fixtureJson, true);
+    $brokenHeader['total'] = 9999.00;
+
+    Http::fake([
+        'api.anthropic.com/*' => Http::sequence()
+            ->push(anthropicResponse((string) json_encode($brokenHeader)))
+            ->push(anthropicResponse($this->fixtureJson)),
+    ]);
+
+    $result = $this->service->extractInvoice('text');
+
+    expect($result->total)->toBe(1150.00)
+        ->and(LlmLog::count())->toBe(2);
+});
+
+it('falls back when the fast model returns no line items', function (): void {
+    $noLines = json_decode($this->fixtureJson, true);
+    $noLines['lines'] = [];
+
+    Http::fake([
+        'api.anthropic.com/*' => Http::sequence()
+            ->push(anthropicResponse((string) json_encode($noLines)))
+            ->push(anthropicResponse($this->fixtureJson)),
+    ]);
+
+    $result = $this->service->extractInvoice('text');
+
+    expect($result->lines)->toHaveCount(1)
+        ->and(LlmLog::count())->toBe(2);
+});
+
+it('accepts the fast model result when line prices are VAT-inclusive', function (): void {
+    // Genuine VAT-inclusive extraction: line totals sum to the gross total, not
+    // the ex-VAT subtotal. InvoiceProcessingService back-calculates this shape,
+    // so it must NOT trigger a fallback.
+    $vatInclusive = json_decode($this->fixtureJson, true);
+    $vatInclusive['lines'][0]['unit_price'] = 1150.00;
+    $vatInclusive['lines'][0]['line_total'] = 1150.00;
+
+    Http::fake(['api.anthropic.com/*' => Http::response(anthropicResponse((string) json_encode($vatInclusive)))]);
+
+    $result = $this->service->extractInvoice('text');
+
+    expect($result->lines[0]->lineTotal)->toBe(1150.00)
+        ->and(LlmLog::count())->toBe(1)
+        ->and(LlmLog::first()->model)->toBe(config('services.anthropic.model_fast'));
 });

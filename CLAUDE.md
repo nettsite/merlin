@@ -106,7 +106,7 @@ Flux UI components (`<flux:input>`, `<flux:select>`, etc.) used directly — no 
 
 1. **DocumentTextExtractor** — multi-format text extraction (PDF via PdfExtractor, DOCX/XLSX/CSV via `paperdoc-dev/paperdoc-lib`)
 2. **MagikaService** — Rust CLI (`magika`) detects actual file type; rejects unsupported formats
-3. **LlmService** — calls Claude API with `resources/views/prompts/invoice-extraction.blade.php`; returns `ExtractedInvoice` DTO; logs tokens to `LlmLog`
+3. **LlmService** — calls Claude API with `resources/views/prompts/invoice-extraction.blade.php`; returns `ExtractedInvoice` DTO; logs tokens to `LlmLog`. Tries `ANTHROPIC_MODEL_FAST` (Haiku) first; falls back to a full retry on `ANTHROPIC_MODEL` (Sonnet) if the response is invalid JSON, the totals don't reconcile (line totals vs subtotal, subtotal+tax vs total), or the extraction confidence is below `PurchasingSettings::fallback_confidence` (Settings > Purchasing). The parsed confidence is persisted to the `LlmLog` row
 4. **SupplierResolver** — tax number match → name similarity → create pending supplier via `PartyService`
 5. **AccountResolver** — history match → LLM suggestion → manual allocation fallback
 6. **ExchangeRateService** — fetches rate from ExchangeRate-API (24h cache); env `EXCHANGERATE_API_KEY`
