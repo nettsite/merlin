@@ -335,15 +335,15 @@ it('falls back to the configured model when line totals do not reconcile', funct
         ]);
 });
 
-it('falls back when the header arithmetic does not hold', function (): void {
-    // Lines sum to subtotal, but subtotal + tax != total — a self-inconsistent
-    // header the fast model must not be trusted on.
-    $brokenHeader = json_decode($this->fixtureJson, true);
-    $brokenHeader['total'] = 9999.00;
+it('falls back when the lines cannot reconstruct the total', function (): void {
+    // Lines gross up to 1150 but the header total is 9999 — the lines can't
+    // account for the stated total, so the fast result must not be trusted.
+    $brokenTotal = json_decode($this->fixtureJson, true);
+    $brokenTotal['total'] = 9999.00;
 
     Http::fake([
         'api.anthropic.com/*' => Http::sequence()
-            ->push(anthropicResponse((string) json_encode($brokenHeader)))
+            ->push(anthropicResponse((string) json_encode($brokenTotal)))
             ->push(anthropicResponse($this->fixtureJson)),
     ]);
 
@@ -384,4 +384,62 @@ it('accepts the fast model result when line prices are VAT-inclusive', function 
     expect($result->lines[0]->lineTotal)->toBe(1150.00)
         ->and(LlmLog::count())->toBe(1)
         ->and(LlmLog::first()->model)->toBe(config('services.anthropic.model_fast'));
+});
+
+it('accepts ex-VAT lines (incl. shipping) that gross up to the total on a VAT-inclusive invoice', function (): void {
+    // Regression for invoice #12255 (ITAD): VAT-inclusive invoice where the
+    // header subtotal (700) excludes shipping (129). The fast model correctly
+    // returns ex-VAT lines — monitor, kettle, and a shipping line — that gross
+    // up at 15% to the 829 total. This must reconcile (no fallback), so a
+    // shipping line the stronger model tends to drop is not lost.
+    $itad = [
+        'supplier_name' => 'ITAD AFRICA (PTY) LTD',
+        'supplier_tax_number' => '4830301166',
+        'invoice_number' => '#12255',
+        'issue_date' => '2026-08-06',
+        'due_date' => null,
+        'currency' => 'ZAR',
+        'subtotal' => 700.00,
+        'tax_total' => 108.13,
+        'total' => 829.00,
+        'confidence' => 0.85,
+        'warnings' => [],
+        'lines' => [
+            ['description' => 'Used 22 Inch Wide Lcd Monitor', 'quantity' => 1, 'unit_price' => 608.70, 'line_total' => 608.70, 'tax_rate' => 15.0, 'suggested_account_code' => '5999', 'account_confidence' => 0.6, 'account_reason' => 'IT equipment'],
+            ['description' => 'Kettle Power Cord - Single', 'quantity' => 1, 'unit_price' => 0.0, 'line_total' => 0.0, 'tax_rate' => 15.0, 'suggested_account_code' => '5300', 'account_confidence' => 0.7, 'account_reason' => 'Accessory'],
+            ['description' => 'Shipping (Economy Door to Door)', 'quantity' => 1, 'unit_price' => 112.17, 'line_total' => 112.17, 'tax_rate' => 15.0, 'suggested_account_code' => '5999', 'account_confidence' => 0.6, 'account_reason' => 'Delivery'],
+        ],
+    ];
+
+    Http::fake(['api.anthropic.com/*' => Http::response(anthropicResponse((string) json_encode($itad)))]);
+
+    $result = $this->service->extractInvoice('text');
+
+    expect($result->lines)->toHaveCount(3)
+        ->and($result->lines[2]->description)->toContain('Shipping')
+        ->and(LlmLog::count())->toBe(1)
+        ->and(LlmLog::first()->model)->toBe(config('services.anthropic.model_fast'));
+});
+
+it('keeps a reconciling fast result when the strong model result does not reconcile', function (): void {
+    // Fast result reconciles but is below the confidence threshold, so we try the
+    // strong model — which drops a line and fails to reconstruct the total. The
+    // reconciling fast result must win over the broken strong one.
+    $fast = json_decode($this->fixtureJson, true);
+    $fast['confidence'] = 0.50;
+
+    $strongBroken = json_decode($this->fixtureJson, true);
+    $strongBroken['lines'][0]['line_total'] = 200.00; // grosses to 230, not 1150
+
+    Http::fake([
+        'api.anthropic.com/*' => Http::sequence()
+            ->push(anthropicResponse((string) json_encode($fast)))
+            ->push(anthropicResponse((string) json_encode($strongBroken))),
+    ]);
+
+    $result = $this->service->extractInvoice('text');
+
+    expect($result->lines[0]->lineTotal)->toBe(1000.00)
+        ->and($result->confidence)->toBe(0.50)
+        ->and(LlmLog::count())->toBe(2);
 });

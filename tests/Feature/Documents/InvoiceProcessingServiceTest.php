@@ -295,6 +295,51 @@ it('does not double-count VAT when LLM extracts VAT-inclusive line prices with a
     expect((float) $doc->total)->toBe(4085.00);
 });
 
+it('keeps the authoritative invoice amount on VAT-inclusive lines (no cent drift)', function (): void {
+    // Regression for invoice #12255 (ITAD): VAT-inclusive monitor line shown as
+    // R700.00 gross. Recomputing VAT as 15% of the rounded ex-VAT (608.70) yields
+    // 91.31 → gross 700.01. Deriving VAT by subtraction (700 − 608.70 = 91.30)
+    // must keep the line gross at exactly R700.00.
+    $document = Document::factory()->purchaseInvoice()->create();
+    attachFakeMedia($document);
+
+    // Amounts as shown on the invoice (VAT-inclusive), summing to the 829 total.
+    $lines = [
+        new ExtractedInvoiceLine('Used 22 Inch Wide Lcd Monitor', 1, 700.00, 700.00, 15.0, '5210', 0.9, ''),
+        new ExtractedInvoiceLine('Kettle Power Cord - Single', 1, 0.00, 0.00, 15.0, '5210', 0.9, ''),
+        new ExtractedInvoiceLine('Shipping (Economy Door to Door)', 1, 129.00, 129.00, 15.0, '5210', 0.9, ''),
+    ];
+
+    $extracted = new ExtractedInvoice(
+        supplierName: 'ITAD AFRICA (PTY) LTD',
+        supplierTaxNumber: '4830301166',
+        supplierEmail: null,
+        supplierPhone: null,
+        invoiceNumber: '#12255',
+        issueDate: Carbon::parse('2026-08-06'),
+        dueDate: null,
+        currency: config('currency.base', 'ZAR'),
+        subtotal: 700.00,
+        taxTotal: 108.13,
+        total: 829.00,
+        lines: $lines,
+        confidence: 0.85,
+        warnings: [],
+    );
+
+    $this->llmMock->allows('extractInvoice')->andReturn($extracted);
+    $this->service->process($document);
+
+    $monitor = DocumentLine::where('document_id', $document->id)
+        ->where('description', 'Used 22 Inch Wide Lcd Monitor')
+        ->first();
+
+    expect((float) $monitor->line_total + (float) $monitor->tax_amount)->toBe(700.00)
+        ->and((float) $monitor->tax_amount)->toBe(91.30)
+        ->and((float) $document->fresh()->total)->toBe(829.00)
+        ->and((float) $document->fresh()->tax_total)->toBe(108.13);
+});
+
 it('sets exchange rate and foreign amounts when invoice is in USD', function (): void {
     // USD rate: 1 ZAR = 0.054674 USD  →  1 USD = 18.29 ZAR (approx)
     Http::fake(['*' => Http::response([

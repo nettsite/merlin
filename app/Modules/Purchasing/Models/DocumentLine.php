@@ -60,6 +60,15 @@ class DocumentLine extends Model
      */
     public static bool $recalculatesDocumentTotals = true;
 
+    /**
+     * Authoritative line VAT set by the extraction pipeline for VAT-inclusive
+     * invoice lines. When non-null, calculateTotals() uses it directly (VAT
+     * derived as gross − net) instead of recomputing rate × net, so the stored
+     * gross matches the printed invoice amount to the cent. Transient — never
+     * persisted.
+     */
+    public ?float $taxAmountOverride = null;
+
     protected static function booted(): void
     {
         static::saving(function (DocumentLine $line) {
@@ -111,8 +120,10 @@ class DocumentLine extends Model
 
         $this->line_total = round($subtotal - $discount, 2);
 
-        $this->tax_amount = $this->tax_rate !== null
-            ? round($this->line_total * ((float) $this->tax_rate / 100), 2)
-            : 0;
+        $this->tax_amount = match (true) {
+            $this->taxAmountOverride !== null => round($this->taxAmountOverride, 2),
+            $this->tax_rate !== null => round($this->line_total * ((float) $this->tax_rate / 100), 2),
+            default => 0,
+        };
     }
 }

@@ -38,17 +38,39 @@ class LlmService
     {
         $prompt = $this->buildExtractionPrompt($invoiceText, $supplierHistory);
 
+        $fast = null;
+        $fastReconciled = false;
+
         try {
             $fast = $this->extractWith($prompt, config('services.anthropic.model_fast'), $loggable);
+            $fastReconciled = $this->isReconciled($fast);
 
-            if ($this->isReconciled($fast) && $this->meetsConfidenceThreshold($fast)) {
+            if ($fastReconciled && $this->meetsConfidenceThreshold($fast)) {
                 return $fast;
             }
         } catch (LlmApiException|\RuntimeException) {
             // Fall through to the stronger model.
         }
 
-        return $this->extractWith($prompt, config('services.anthropic.model'), $loggable);
+        try {
+            $strong = $this->extractWith($prompt, config('services.anthropic.model'), $loggable);
+        } catch (LlmApiException|\RuntimeException $e) {
+            // The strong model failed outright; keep a usable fast result if we have one.
+            if ($fast !== null) {
+                return $fast;
+            }
+
+            throw $e;
+        }
+
+        // A reconciling fast result (rejected only for low confidence) beats a
+        // strong result that doesn't reconcile — e.g. when the fast model captured
+        // a shipping line the strong model dropped.
+        if ($fastReconciled && ! $this->isReconciled($strong)) {
+            return $fast;
+        }
+
+        return $strong;
     }
 
     /**
@@ -77,12 +99,17 @@ class LlmService
     }
 
     /**
-     * Check the extracted totals are internally consistent before accepting the
-     * fast model's result. Requires at least one line, the header arithmetic to
-     * hold (subtotal + tax = total), and the line totals to sum to either the
-     * subtotal (ex-VAT) or the total (VAT-inclusive). The VAT-inclusive shape is
-     * the one InvoiceProcessingService back-calculates downstream, so accepting
-     * it here avoids a needless fallback on correctly-extracted gross prices.
+     * Check the extracted lines reconstruct the invoice total before accepting
+     * the fast model's result. The total (amount payable) is the one unambiguous
+     * figure on an invoice — header subtotal/tax fields vary by presentation
+     * (ex-VAT vs VAT-inclusive, shipping in or out of the subtotal), so we
+     * reconcile against the total rather than the header arithmetic.
+     *
+     * Lines may arrive in either shape, so we accept whichever reconstructs the
+     * total: ex-VAT line totals grossed up by their effective tax rate (per-line
+     * rate, or the purchasing default when the header shows tax — mirroring how
+     * InvoiceProcessingService taxes them), or VAT-inclusive line totals that
+     * already sum to it.
      */
     private function isReconciled(ExtractedInvoice $extracted): bool
     {
@@ -90,14 +117,20 @@ class LlmService
             return false;
         }
 
-        if (! $this->withinTolerance($extracted->subtotal + $extracted->taxTotal, $extracted->total)) {
-            return false;
+        $headerHasTax = $extracted->taxTotal > 0;
+        $defaultRate = $this->purchasingSettings->tax_default_rate;
+
+        $netSum = 0.0;
+        $grossSum = 0.0;
+
+        foreach ($extracted->lines as $line) {
+            $rate = $line->taxRate ?? ($headerHasTax ? $defaultRate : 0.0);
+            $netSum += $line->lineTotal;
+            $grossSum += $line->lineTotal * (1 + $rate / 100);
         }
 
-        $lineSum = array_sum(array_map(fn ($line) => $line->lineTotal, $extracted->lines));
-
-        return $this->withinTolerance($lineSum, $extracted->subtotal)
-            || $this->withinTolerance($lineSum, $extracted->total);
+        return $this->withinTolerance($grossSum, $extracted->total)
+            || $this->withinTolerance($netSum, $extracted->total);
     }
 
     private function withinTolerance(float $actual, float $expected): bool

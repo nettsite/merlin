@@ -117,14 +117,20 @@ class InvoiceProcessingService
                 // When prices are VAT-inclusive, back-calculate to the ex-VAT amount so
                 // DocumentLine::calculateTotals() doesn't add tax on top of a price that
                 // already includes it.
-                $divisor = ($vatInclusivePrices && $taxRate !== null && $taxRate > 0)
-                    ? (1 + $taxRate / 100)
-                    : 1;
+                $pricesIncludeTax = $vatInclusivePrices && $taxRate !== null && $taxRate > 0;
+                $divisor = $pricesIncludeTax ? (1 + $taxRate / 100) : 1.0;
 
                 $exVatUnitPrice = round($extractedLine->unitPrice / $divisor, 4);
-                $exVatForeignLineTotal = $extractedLine->lineTotal > 0
-                    ? round($extractedLine->lineTotal / $divisor, 2)
-                    : round($extractedLine->lineTotal / $divisor, 2); // preserve negative discounts
+                // Net line total as DocumentLine::calculateTotals() will compute it,
+                // so VAT-by-subtraction below reconstructs the gross exactly.
+                $netLineTotal = round((float) $extractedLine->quantity * $exVatUnitPrice, 2);
+
+                // For VAT-inclusive lines, derive VAT by subtraction (gross − net) so the
+                // stored gross equals the authoritative invoice amount, rather than
+                // recomputing rate × net (which drifts a cent on rounding).
+                $statedTax = $pricesIncludeTax
+                    ? round($extractedLine->lineTotal - $netLineTotal, 2)
+                    : null;
 
                 $line = $document->lines()->make(array_merge([
                     'line_number' => $i + 1,
@@ -135,14 +141,22 @@ class InvoiceProcessingService
                         ? round($exVatUnitPrice * $exchangeRate, 4)
                         : $exVatUnitPrice,
                     'foreign_unit_price' => $isForeign ? $exVatUnitPrice : null,
-                    'foreign_line_total' => $isForeign ? $exVatForeignLineTotal : null,
+                    'foreign_line_total' => $isForeign ? $netLineTotal : null,
                     'tax_rate' => $taxRate,
                 ], $accountData));
 
+                if ($statedTax !== null) {
+                    $line->taxAmountOverride = $isForeign
+                        ? round($statedTax * $exchangeRate, 2)
+                        : $statedTax;
+                }
+
                 if ($isForeign && $line->foreign_line_total !== null) {
-                    $line->foreign_tax_amount = $line->tax_rate !== null
-                        ? round((float) $line->foreign_line_total * ((float) $line->tax_rate / 100), 2)
-                        : 0;
+                    $line->foreign_tax_amount = match (true) {
+                        $statedTax !== null => $statedTax,
+                        $line->tax_rate !== null => round((float) $line->foreign_line_total * ((float) $line->tax_rate / 100), 2),
+                        default => 0,
+                    };
                 }
 
                 $line->save();
