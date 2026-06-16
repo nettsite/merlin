@@ -1,5 +1,6 @@
 <?php
 
+use App\Console\Commands\CheckModelHealthCommand;
 use App\Modules\Billing\Console\GenerateRecurringInvoices;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -10,3 +11,5 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 Schedule::command(GenerateRecurringInvoices::class)->dailyAt('06:00')->withoutOverlapping();
+
+Schedule::command(CheckModelHealthCommand::class)->dailyAt('05:30')->withoutOverlapping();

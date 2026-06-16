@@ -19,6 +19,7 @@ class LlmService
     public function __construct(
         private readonly CurrencySettings $currencySettings,
         private readonly PurchasingSettings $purchasingSettings,
+        private readonly ModelHealthService $modelHealth,
     ) {}
 
     private const API_URL = 'https://api.anthropic.com/v1/messages';
@@ -201,37 +202,67 @@ class LlmService
      */
     private function callApi(array $messages, ?Model $loggable, int $startNs, string $model): LlmLog
     {
-        $body = [
-            'model' => $model,
-            'max_tokens' => self::MAX_TOKENS,
-            'messages' => $messages,
-        ];
+        // Resolve the requested tier to its live escalation chain: the model
+        // itself plus the fallback rungs below it, with any retired rung skipped.
+        $candidates = $this->modelHealth->escalationFrom($model);
+        $lastError = "model `{$model}` is unavailable and has no live fallback";
 
-        try {
-            // 110s keeps the HTTP client inside the queue job's 120s budget;
-            // vision extraction of large PDFs can far exceed the 30s default.
-            $response = Http::connectTimeout(10)
-                ->timeout(110)
-                ->withHeaders([
-                    'x-api-key' => config('services.anthropic.key'),
-                    'anthropic-version' => '2023-06-01',
-                    'anthropic-beta' => 'pdfs-2024-09-25',
-                ])->post(self::API_URL, $body);
-        } catch (ConnectionException $e) {
-            $this->log(
-                loggable: $loggable,
-                requestBody: $body,
-                rawResponse: '',
-                startNs: $startNs,
-                error: $e->getMessage(),
-            );
-            throw new LlmApiException("Anthropic API connection error: {$e->getMessage()}", previous: $e);
-        }
+        foreach ($candidates as $candidate) {
+            $body = [
+                'model' => $candidate,
+                'max_tokens' => self::MAX_TOKENS,
+                'messages' => $messages,
+            ];
 
-        $data = $response->json();
+            try {
+                // 110s keeps the HTTP client inside the queue job's 120s budget;
+                // vision extraction of large PDFs can far exceed the 30s default.
+                $response = Http::connectTimeout(10)
+                    ->timeout(110)
+                    ->withHeaders([
+                        'x-api-key' => config('services.anthropic.key'),
+                        'anthropic-version' => '2023-06-01',
+                        'anthropic-beta' => 'pdfs-2024-09-25',
+                    ])->post(self::API_URL, $body);
+            } catch (ConnectionException $e) {
+                // Transient — do not escalate the ladder for a network blip.
+                $this->log(
+                    loggable: $loggable,
+                    requestBody: $body,
+                    rawResponse: '',
+                    startNs: $startNs,
+                    error: $e->getMessage(),
+                );
+                throw new LlmApiException("Anthropic API connection error: {$e->getMessage()}", previous: $e);
+            }
 
-        if (! $response->successful() || ! isset($data['content'][0]['text'])) {
+            $data = $response->json();
+
+            if ($response->successful() && isset($data['content'][0]['text'])) {
+                $usage = $data['usage'] ?? [];
+
+                return $this->log(
+                    loggable: $loggable,
+                    requestBody: $body,
+                    rawResponse: $data['content'][0]['text'],
+                    startNs: $startNs,
+                    promptTokens: $usage['input_tokens'] ?? 0,
+                    completionTokens: $usage['output_tokens'] ?? 0,
+                );
+            }
+
             $error = $data['error']['message'] ?? "HTTP {$response->status()}";
+
+            // Retired/mistyped model: mark it down, alert once, escalate a rung.
+            if ($response->status() === 404 && ($data['error']['type'] ?? null) === 'not_found_error') {
+                $this->modelHealth->recordUnavailable($candidate, $error);
+                $lastError = $error;
+
+                continue;
+            }
+
+            // Any other error (rate limit, server, bad request) is not a
+            // retirement — fail fast rather than burning the fallback ladder.
             $this->log(
                 loggable: $loggable,
                 requestBody: $body,
@@ -242,17 +273,14 @@ class LlmService
             throw new LlmApiException("Anthropic API error: {$error}");
         }
 
-        $text = $data['content'][0]['text'];
-        $usage = $data['usage'] ?? [];
-
-        return $this->log(
+        $this->log(
             loggable: $loggable,
-            requestBody: $body,
-            rawResponse: $text,
+            requestBody: ['model' => $model, 'max_tokens' => self::MAX_TOKENS, 'messages' => $messages],
+            rawResponse: '',
             startNs: $startNs,
-            promptTokens: $usage['input_tokens'] ?? 0,
-            completionTokens: $usage['output_tokens'] ?? 0,
+            error: $lastError,
         );
+        throw new LlmApiException("Anthropic API error: {$lastError}");
     }
 
     /**
