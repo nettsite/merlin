@@ -2,6 +2,10 @@
   <img src="public/logo.svg" alt="Merlin" width="196" height="56">
 </p>
 
+<p align="center">
+  <a href="https://github.com/nettsite/merlin/actions/workflows/tests.yml"><img src="https://github.com/nettsite/merlin/actions/workflows/tests.yml/badge.svg" alt="Tests"></a>
+</p>
+
 <br>
 
 Merlin reads supplier invoices and posts them to your ledger — automatically. It uses an LLM pipeline to extract line items from PDFs, DOCX, XLSX, and CSV files, suggest GL account codes, and apply confidence-based auto-posting rules so that routine invoices never need human review.
