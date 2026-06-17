@@ -23,5 +23,10 @@ jobs:
       - name: Install dependencies
         run: composer install --prefer-dist --no-progress --no-interaction
 
+      - name: Set up environment
+        run: |
+          cp .env.example .env
+          php artisan key:generate
+
       - name: Run tests
         run: ./vendor/bin/pest --no-coverage
