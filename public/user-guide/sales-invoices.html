@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Sales Invoices — Merlin User Guide</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/docs.css">
+</head>
+<body>
+    <div id="docs-shell">
+        <aside id="docs-sidebar"></aside>
+
+        <main id="docs-content">
+            <article>
+                <h1>Sales Invoices</h1>
+                <p>Sales invoices are the invoices you send to your clients to request payment. Merlin assigns each one a unique number in the format SINV-2026-00001, handles the VAT calculations, emails the invoice to the client, and tracks payments against it.</p>
+
+                <h2 id="creating-an-invoice">Creating an invoice</h2>
+                <ol>
+                    <li>Go to <strong>Sales Invoices</strong>.</li>
+                    <li>Click <strong>New Invoice</strong>.</li>
+                    <li>Select the client. Their payment term and receivable account are filled in automatically from their client settings.</li>
+                    <li>Set the invoice date. The due date is calculated automatically from the payment term.</li>
+                    <li>Add line items — each with a description, quantity, unit price, and VAT rate.</li>
+                    <li>The subtotal, VAT, and total update as you add lines.</li>
+                    <li>Add any notes or payment terms text you want to appear on the invoice.</li>
+                    <li>Save.</li>
+                </ol>
+
+                <h2 id="sending-an-invoice">Sending an invoice</h2>
+                <p>Once the invoice is saved, click <strong>Send</strong> to email it to the client. Merlin generates a PDF of the invoice and sends it using the email template you have set up in <a href="settings.html">Billing Settings</a>.</p>
+                <p>The invoice status changes to <strong>Sent</strong> once the email has been dispatched.</p>
+
+                <h2 id="recording-a-payment">Recording a payment</h2>
+                <p>When a client pays, click <strong>Record Payment</strong> on the invoice. Enter the amount paid and the date. Merlin records the payment and updates the balance due on the invoice. If the full amount has been received, the invoice status changes to <strong>Paid</strong>. Partial payments leave the status as <strong>Partially paid</strong>.</p>
+
+                <h2 id="invoice-statuses">Invoice statuses</h2>
+                <table>
+                    <thead><tr><th>Status</th><th>What it means</th></tr></thead>
+                    <tbody>
+                        <tr><td>Draft</td><td>Created but not yet sent.</td></tr>
+                        <tr><td>Sent</td><td>Emailed to the client.</td></tr>
+                        <tr><td>Partially paid</td><td>Some payment received, balance outstanding.</td></tr>
+                        <tr><td>Paid</td><td>Fully paid.</td></tr>
+                        <tr><td>Voided</td><td>Cancelled. Cannot be edited or sent.</td></tr>
+                    </tbody>
+                </table>
+
+                <h2 id="voiding-an-invoice">Voiding an invoice</h2>
+                <p>If an invoice was created by mistake or needs to be cancelled, use <strong>Void</strong>. A voided invoice is kept on record but cannot be edited, sent, or paid against. This is a permanent action — use it only when the invoice should not exist.</p>
+
+                <h2 id="pdf-invoices">PDF invoices</h2>
+                <p>Merlin generates a PDF version of the invoice automatically when you send it. The PDF includes your company name, address, tax number, and logo from your company settings, along with the client's billing address, all line items, VAT breakdown, and total. See <a href="settings.html">Settings</a> to set up your company details and logo.</p>
+
+                <h2 id="invoice-email-template">Invoice email template</h2>
+                <p>The email that accompanies the invoice is based on a template you design. To set this up, go to <strong>Emails &rsaquo; Templates</strong> and create a template, then go to <a href="settings.html">Billing Settings</a> and select it as the invoice email template. If no template is selected, sending an invoice will fail.</p>
+            </article>
+        </main>
+
+        <nav id="docs-toc"></nav>
+    </div>
+
+    <script src="assets/nav.js"></script>
+</body>
+</html>

@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<!--
+  ===========================================================================
+  Merlin docs — PAGE TEMPLATE / SHELL REFERENCE
+  ===========================================================================
+  This file documents the structure every page in docs/ follows. It is NOT
+  served as a real page (it is not in the NAV tree in assets/nav.js).
+
+  How a page works:
+    - assets/docs.css    provides the three-column shell + light/dark themes.
+    - assets/nav.js      injects the header, sidebar, "On this page" TOC,
+                         prev/next links, and footer at runtime. The page file
+                         itself contains ONLY the <article> content.
+
+  The content pass should:
+    - ONLY edit text inside <article> (replace .stub paragraphs with prose).
+    - Keep the <h1>, <h2 id>, <h3 id> heading structure intact — the TOC and
+      anchors are generated from these headings and their ids.
+    - NOT touch <head>, the #docs-shell wrapper, #docs-sidebar, #docs-toc, the
+      script tag, or anything outside <article>.
+
+  Empty containers below (#docs-sidebar, #docs-toc) are filled by nav.js.
+  ===========================================================================
+-->
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>PAGE TITLE — Merlin Docs</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/docs.css">
+</head>
+<body>
+    <!-- #docs-header is injected here by nav.js -->
+
+    <div id="docs-shell">
+        <aside id="docs-sidebar"><!-- sidebar injected by nav.js --></aside>
+
+        <main id="docs-content">
+            <article>
+                <!-- ============ CONTENT START — content pass edits below ============ -->
+
+                <h1>Page Title</h1>
+                <p class="stub">One-paragraph intro. What this page covers and who needs it.</p>
+
+                <h2 id="example-section">Example Section</h2>
+                <p class="stub">Prose for this section goes here.</p>
+
+                <h3 id="example-subsection">Example Subsection</h3>
+                <p class="stub">Prose for this subsection goes here.</p>
+
+                <!-- ============ CONTENT END ============ -->
+                <!-- prev/next nav appended here by nav.js -->
+            </article>
+        </main>
+
+        <nav id="docs-toc"><!-- "On this page" injected by nav.js --></nav>
+        <!-- #docs-footer is injected here by nav.js -->
+    </div>
+
+    <script src="assets/nav.js"></script>
+</body>
+</html>

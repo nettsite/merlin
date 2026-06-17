@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Settings — Merlin User Guide</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/docs.css">
+</head>
+<body>
+    <div id="docs-shell">
+        <aside id="docs-sidebar"></aside>
+
+        <main id="docs-content">
+            <article>
+                <h1>Settings</h1>
+                <p>Settings are split across three pages: General, Purchasing, and Billing. You'll find them all under <strong>Settings</strong> in the navigation.</p>
+
+                <h2 id="general-settings">General settings</h2>
+                <p>The General settings page covers your company details, currency, and financial year.</p>
+
+                <h3 id="company-details">Company details</h3>
+                <p>These appear on PDF invoices you send to clients. Fill in your company name, address, phone, email, and VAT/tax registration number. You can also upload your company logo — it will appear at the top of generated invoices.</p>
+
+                <h3 id="currency">Currency and number format</h3>
+                <p>Set your home currency (for example, ZAR for South African Rand, USD for US dollars) and your number format locale. Merlin uses this to format all money amounts throughout the application. Foreign-currency invoices are converted to your home currency using daily exchange rates.</p>
+
+                <h3 id="financial-year">Financial year</h3>
+                <p>Set the month your financial year starts. This is used as the default date range for all reports. For example, if your financial year runs from March to February, set this to March.</p>
+
+                <h2 id="purchasing-settings">Purchasing settings</h2>
+                <p>The Purchasing settings page controls how supplier invoices are processed.</p>
+
+                <h3 id="tax-label-and-rate">Tax label and rate</h3>
+                <p>Set the name for your tax (VAT, GST, etc.) and the default rate as a percentage. This is applied to new invoice lines automatically. For South African VAT, use "VAT" and 15. For Australian GST, use "GST" and 10.</p>
+
+                <h3 id="default-payable-account">Default payable account</h3>
+                <p>The accounts payable account that purchase invoices are posted to by default. This is overridden if the supplier has their own default payable account set.</p>
+
+                <h3 id="confidence-thresholds">Confidence thresholds</h3>
+                <p>These control how cautious Merlin is about posting invoices automatically:</p>
+                <ul>
+                    <li><strong>Auto-post confidence</strong> (default: 90%) — if the AI's confidence is at or above this, invoices can be posted automatically (if a posting rule is set up). Lower this to post more invoices automatically; raise it to send more to the review queue.</li>
+                    <li><strong>Fallback confidence</strong> (default: 80%) — if the AI's confidence falls below this, Merlin tries again using a more capable (but slower) AI model. Leave this at the default unless you're troubleshooting.</li>
+                </ul>
+
+                <h3 id="matching-tolerances">Matching tolerances</h3>
+                <p>When comparing a new invoice against the supplier's most recent posted invoice, Merlin allows some variation:</p>
+                <ul>
+                    <li><strong>Amount tolerance</strong> (default: 10%) — how much a line amount can differ from the previous invoice before Merlin treats it as a mismatch.</li>
+                    <li><strong>Description similarity</strong> (default: 60%) — how closely the line descriptions need to match. Higher means stricter matching.</li>
+                </ul>
+
+                <h2 id="billing-settings">Billing settings</h2>
+                <p>The Billing settings page controls defaults for sales invoices.</p>
+
+                <h3 id="default-accounts">Default accounts</h3>
+                <ul>
+                    <li><strong>Default receivable account</strong> — the accounts receivable account used on new sales invoices when the client doesn't have their own default set.</li>
+                    <li><strong>Default bank account</strong> — pre-filled in the payment recording form when a client pays.</li>
+                    <li><strong>Tax liability account</strong> — the account where VAT/GST collected on sales is recorded.</li>
+                </ul>
+
+                <h3 id="billing-period-day">Billing period day</h3>
+                <p>The day of the month when billing periods start. Used by the "Beginning of next billing period" payment term and by recurring invoices. The default is the 1st of the month.</p>
+
+                <h3 id="default-payment-term">Default payment term</h3>
+                <p>Applied to new sales invoices when neither the client nor the invoice has a specific payment term set.</p>
+
+                <h3 id="invoice-email-template">Invoice email template</h3>
+                <p>The email template used when sending sales invoices to clients. Create templates under <strong>Emails &rsaquo; Templates</strong>, then return here to select which one to use. If this isn't set, the Send Invoice action will not work.</p>
+            </article>
+        </main>
+
+        <nav id="docs-toc"></nav>
+    </div>
+
+    <script src="assets/nav.js"></script>
+</body>
+</html>

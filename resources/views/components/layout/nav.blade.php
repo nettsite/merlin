@@ -119,6 +119,14 @@
         >LLM Logs</flux:sidebar.item>
     </flux:sidebar.group>
 
+    <flux:sidebar.group heading="Help">
+        <flux:sidebar.item
+            icon="book-open"
+            href="/user-guide/"
+            target="_blank"
+        >User Guide</flux:sidebar.item>
+    </flux:sidebar.group>
+
     <flux:sidebar.group heading="Emails">
         <flux:sidebar.item
             icon="chart-bar"

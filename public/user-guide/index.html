@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Welcome to Merlin — User Guide</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/docs.css">
+</head>
+<body>
+    <div id="docs-shell">
+        <aside id="docs-sidebar"></aside>
+
+        <main id="docs-content">
+            <article>
+                <h1>Welcome to Merlin</h1>
+                <p>Merlin is a business management tool for small businesses. It handles the two money flows every business has: money going out (supplier invoices you receive) and money coming in (invoices you send to clients).</p>
+
+                <h2 id="what-merlin-does">What Merlin does</h2>
+                <p>On the expenses side, you upload the invoices you receive from suppliers — electricity bills, phone bills, office supplies, professional services — and Merlin reads them, pulls out the line items and amounts, works out which accounts to post the amounts to, and creates the bookkeeping entry for you. When it's confident it has the details right, it can do all of this automatically. When it's less certain, it flags the invoice for your review.</p>
+                <p>On the billing side, you create invoices for your clients, send them by email, and track what's been paid and what's outstanding.</p>
+                <p>Everything feeds into a chart of accounts so you can run expense and income reports at any time.</p>
+
+                <h2 id="the-main-areas">The main areas</h2>
+                <table>
+                    <thead><tr><th>Area</th><th>What it covers</th></tr></thead>
+                    <tbody>
+                        <tr><td><a href="suppliers.html">Suppliers</a></td><td>The businesses and people you buy from</td></tr>
+                        <tr><td><a href="purchase-invoices.html">Purchase Invoices</a></td><td>Invoices you receive — upload, review, and post</td></tr>
+                        <tr><td><a href="posting-rules.html">Automatic Posting</a></td><td>Rules that let Merlin post routine invoices without any intervention</td></tr>
+                        <tr><td><a href="clients.html">Clients</a></td><td>The businesses and people you invoice</td></tr>
+                        <tr><td><a href="sales-invoices.html">Sales Invoices</a></td><td>Invoices you send to clients</td></tr>
+                        <tr><td><a href="recurring-invoices.html">Recurring Invoices</a></td><td>Invoice templates that generate on a schedule</td></tr>
+                        <tr><td><a href="payment-terms.html">Payment Terms</a></td><td>Rules for when payment is due</td></tr>
+                        <tr><td><a href="accounts.html">Accounts</a></td><td>Your chart of accounts — where transactions are recorded</td></tr>
+                        <tr><td><a href="reports.html">Reports</a></td><td>Expense and billing reports</td></tr>
+                        <tr><td><a href="users.html">Users &amp; Access</a></td><td>Who can log in and what they can do</td></tr>
+                        <tr><td><a href="settings.html">Settings</a></td><td>Company details, tax, currency, and billing defaults</td></tr>
+                    </tbody>
+                </table>
+
+                <h2 id="how-invoice-reading-works">How invoice reading works</h2>
+                <p>When you upload a supplier invoice, Merlin runs through a series of steps:</p>
+                <ol>
+                    <li>It reads the text from the file (whether it's a PDF, Word document, spreadsheet, or CSV).</li>
+                    <li>It checks the file type to make sure it's a supported format.</li>
+                    <li>It sends the text to an AI (Claude, by Anthropic) which extracts the supplier name, invoice number, date, line items, VAT amounts, and total.</li>
+                    <li>It looks up the supplier in your supplier list. If it's a new supplier, it creates one with a "Pending" status for you to confirm.</li>
+                    <li>It suggests which account to use for each line item, based on what similar invoices have been posted to in the past.</li>
+                    <li>If the invoice is in a foreign currency, it looks up the exchange rate for the day.</li>
+                    <li>If you have a posting rule set up for this supplier, and the AI is confident enough in the extraction, it posts the invoice automatically.</li>
+                </ol>
+                <p>If anything in this process falls short of the confidence threshold you set, the invoice goes to the review queue so you can check it before it's posted.</p>
+
+                <h2 id="a-note-on-confidence">A note on confidence</h2>
+                <p>The AI returns a confidence score for each extraction — a number between 0 and 1. You set the threshold at which invoices are posted automatically (the default is 0.90, meaning the AI needs to be 90% confident). Invoices below the threshold wait in the queue. You can adjust this in <a href="settings.html">Settings</a>.</p>
+            </article>
+        </main>
+
+        <nav id="docs-toc"></nav>
+    </div>
+
+    <script src="assets/nav.js"></script>
+</body>
+</html>

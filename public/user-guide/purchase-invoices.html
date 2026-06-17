@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Purchase Invoices — Merlin User Guide</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/docs.css">
+</head>
+<body>
+    <div id="docs-shell">
+        <aside id="docs-sidebar"></aside>
+
+        <main id="docs-content">
+            <article>
+                <h1>Purchase Invoices</h1>
+                <p>Purchase invoices are the invoices you receive from suppliers — electricity, phone, office supplies, professional services, and so on. This is where you upload them, check what Merlin extracted, and post them to your accounts.</p>
+
+                <h2 id="uploading-invoices">Uploading invoices</h2>
+                <p>Merlin accepts PDF files, Word documents (.docx), Excel spreadsheets (.xlsx), and CSV files.</p>
+                <ol>
+                    <li>Go to <strong>Purchase Invoices</strong>.</li>
+                    <li>Drag one or more files onto the upload area, or click it to open a file picker.</li>
+                    <li>Merlin reads the files and processes them in the background. Each invoice appears in the list once processing is complete.</li>
+                </ol>
+                <p>You can also set up a watch folder — a folder on the server that Merlin monitors — and drop files into it to have them picked up automatically. Ask whoever manages your Merlin installation to set this up.</p>
+
+                <h2 id="what-merlin-extracts">What Merlin extracts</h2>
+                <p>For each invoice, Merlin tries to find:</p>
+                <ul>
+                    <li>The supplier name and tax number</li>
+                    <li>The invoice number and date</li>
+                    <li>Each line item: description, quantity, unit price, and VAT amount</li>
+                    <li>The invoice total</li>
+                </ul>
+                <p>It also suggests which account each line should be posted to, based on how similar invoices have been posted in the past.</p>
+
+                <h2 id="invoice-statuses">Invoice statuses</h2>
+                <table>
+                    <thead><tr><th>Status</th><th>What it means</th></tr></thead>
+                    <tbody>
+                        <tr><td>Received</td><td>Just uploaded and processed. Waiting for review.</td></tr>
+                        <tr><td>Reviewed</td><td>Someone has checked it and marked it as reviewed, but it hasn't been approved yet.</td></tr>
+                        <tr><td>Approved</td><td>Approved and ready to post.</td></tr>
+                        <tr><td>Posted</td><td>Posted to your accounts. This is a final state — it cannot be changed.</td></tr>
+                        <tr><td>Disputed</td><td>Flagged as disputed. You can still approve or post it once the dispute is resolved.</td></tr>
+                        <tr><td>Rejected</td><td>Rejected and not posted. This is a final state.</td></tr>
+                    </tbody>
+                </table>
+
+                <h2 id="reviewing-an-invoice">Reviewing an invoice</h2>
+                <p>Click an invoice in the list to open the review panel.</p>
+                <p>Check the following:</p>
+                <ul>
+                    <li><strong>Supplier</strong> — is Merlin's match correct?</li>
+                    <li><strong>Invoice number and date</strong> — do they match the document?</li>
+                    <li><strong>Line items</strong> — are the descriptions, amounts, and VAT correct?</li>
+                    <li><strong>Account allocation</strong> — is each line posted to the right account? Click the account on any line to change it.</li>
+                </ul>
+                <p>You can edit any line item directly in the panel. Click a field to change it and save your changes.</p>
+
+                <h2 id="actions">Actions</h2>
+                <p>Once you've reviewed an invoice, use the action buttons to move it forward:</p>
+                <ul>
+                    <li><strong>Mark as Reviewed</strong> — records that the invoice has been checked. It stays in the queue for approval.</li>
+                    <li><strong>Approve</strong> — approves the invoice for posting.</li>
+                    <li><strong>Post</strong> — posts the invoice to your accounts. This is the final step.</li>
+                    <li><strong>Dispute</strong> — flags the invoice as disputed if there's a problem with it (e.g. wrong amount, duplicate). You can still post it later once resolved.</li>
+                    <li><strong>Reject</strong> — rejects the invoice. Use this if the invoice should not be posted at all.</li>
+                </ul>
+
+                <div class="callout">
+                    <span class="callout-title">Which actions you can take</span>
+                    Your access level determines which actions are available to you. If a button is missing, you may not have the required permission. Ask your administrator to check your role settings.
+                </div>
+
+                <h2 id="automatic-posting">Automatic posting</h2>
+                <p>If you have <a href="posting-rules.html">posting rules</a> set up for a supplier, and Merlin is confident enough in the extraction, it will post the invoice automatically without any review. You'll see these invoices arrive in the list with a <strong>Posted</strong> status.</p>
+                <p>The confidence threshold for automatic posting is set in <a href="settings.html">Settings</a>.</p>
+
+                <h2 id="reprocessing">If the extraction went wrong</h2>
+                <p>If Merlin misread an invoice — wrong supplier, garbled line items, missing amounts — use the <strong>Reprocess</strong> button. This deletes the extracted details and sends the invoice through the reading process again from scratch. Reprocessing is useful if the file was initially unreadable and has since been replaced, or if a settings change should change how it's extracted.</p>
+
+                <h2 id="viewing-the-original">Viewing the original file</h2>
+                <p>You can view the original uploaded file from the review panel at any time to compare against what Merlin extracted.</p>
+            </article>
+        </main>
+
+        <nav id="docs-toc"></nav>
+    </div>
+
+    <script src="assets/nav.js"></script>
+</body>
+</html>

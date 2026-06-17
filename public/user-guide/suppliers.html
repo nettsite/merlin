@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Suppliers — Merlin User Guide</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/docs.css">
+</head>
+<body>
+    <div id="docs-shell">
+        <aside id="docs-sidebar"></aside>
+
+        <main id="docs-content">
+            <article>
+                <h1>Suppliers</h1>
+                <p>Suppliers are the businesses and people you buy from. Every purchase invoice you upload needs to be linked to a supplier. You can add suppliers manually, or Merlin can create them automatically when it spots a name on an uploaded invoice that it doesn't recognise.</p>
+
+                <h2 id="adding-a-supplier">Adding a supplier</h2>
+                <ol>
+                    <li>Go to <strong>Suppliers</strong> in the navigation.</li>
+                    <li>Click <strong>Add Supplier</strong>.</li>
+                    <li>Fill in the supplier's details and click <strong>Save</strong>.</li>
+                </ol>
+
+                <h2 id="supplier-details">Supplier details</h2>
+                <table>
+                    <thead><tr><th>Field</th><th>Notes</th></tr></thead>
+                    <tbody>
+                        <tr><td>Legal name</td><td>Required. The registered name of the business.</td></tr>
+                        <tr><td>Trading name</td><td>Optional. The name they trade under if different from their legal name.</td></tr>
+                        <tr><td>Email</td><td>Optional. Mainly for reference.</td></tr>
+                        <tr><td>Phone</td><td>Optional.</td></tr>
+                        <tr><td>Notes</td><td>Optional. Any notes you want to keep about this supplier.</td></tr>
+                        <tr><td>Status</td><td>Active, Pending, or Inactive. Only Active suppliers are matched when processing invoices.</td></tr>
+                        <tr><td>Default payable account</td><td>Optional. The account invoices from this supplier are usually posted to. Merlin will suggest this account when reviewing their invoices.</td></tr>
+                        <tr><td>Default payment term</td><td>Optional. Used to calculate due dates on their invoices.</td></tr>
+                    </tbody>
+                </table>
+
+                <h2 id="new-suppliers-from-invoices">New suppliers found on invoices</h2>
+                <p>When you upload an invoice and Merlin can't match the supplier name to anyone in your list, it creates a new supplier automatically with a <strong>Pending</strong> status. You'll see pending suppliers in the Suppliers list.</p>
+                <p>To confirm a pending supplier:</p>
+                <ol>
+                    <li>Open the supplier from the list.</li>
+                    <li>Check that the name, tax number, and other details are correct — Merlin fills in what it found on the invoice.</li>
+                    <li>Change the status to <strong>Active</strong>.</li>
+                    <li>Set a default payable account and payment term if you have standard arrangements with them.</li>
+                    <li>Save.</li>
+                </ol>
+                <p>Future invoices from this supplier will be matched automatically.</p>
+
+                <h2 id="editing-a-supplier">Editing a supplier</h2>
+                <p>Click any supplier in the list to open their details. Make your changes and save. You can also set a supplier to <strong>Inactive</strong> if you no longer use them — their past invoices stay on record.</p>
+
+                <h2 id="the-supplier-detail-page">The supplier page</h2>
+                <p>Clicking a supplier's name opens their full profile, which shows their contact details and a list of recent invoices from them. Use this to check their history or look up a specific past invoice.</p>
+            </article>
+        </main>
+
+        <nav id="docs-toc"></nav>
+    </div>
+
+    <script src="assets/nav.js"></script>
+</body>
+</html>

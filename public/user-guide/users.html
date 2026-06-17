@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Users &amp; Access — Merlin User Guide</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/docs.css">
+</head>
+<body>
+    <div id="docs-shell">
+        <aside id="docs-sidebar"></aside>
+
+        <main id="docs-content">
+            <article>
+                <h1>Users &amp; Access</h1>
+                <p>Merlin uses a role-based access system. Each user is assigned a role, and roles determine what that person can see and do in the application. This lets you give staff only the access they need.</p>
+
+                <h2 id="adding-a-user">Adding a user</h2>
+                <ol>
+                    <li>Go to <strong>Settings &rsaquo; Users</strong>.</li>
+                    <li>Click <strong>Add User</strong>.</li>
+                    <li>Enter their full name, email address, and a temporary password. Ask them to change their password after their first login.</li>
+                    <li>Assign them a role.</li>
+                    <li>Save.</li>
+                </ol>
+                <p>A user without a role cannot log in to Merlin.</p>
+
+                <h2 id="roles">Roles</h2>
+                <p>Roles are named sets of permissions. You manage roles at <strong>Settings &rsaquo; Roles</strong>. Merlin comes with a built-in <strong>Administrator</strong> role that has full access to everything.</p>
+                <p>You can create additional roles for your team. For example:</p>
+                <ul>
+                    <li>A <strong>Bookkeeper</strong> role that can upload and review invoices but cannot post them</li>
+                    <li>A <strong>Manager</strong> role that can approve and post invoices</li>
+                    <li>An <strong>Accounts admin</strong> role with full access to billing and accounts</li>
+                </ul>
+                <p>To create a role, go to Settings &rsaquo; Roles, click Add Role, give it a name, and tick the permissions you want it to include.</p>
+
+                <h2 id="key-permissions">Key permissions</h2>
+                <p>The most commonly configured permissions are:</p>
+                <table>
+                    <thead><tr><th>Permission</th><th>What it allows</th></tr></thead>
+                    <tbody>
+                        <tr><td>View purchase invoices</td><td>See the purchase invoice list and open individual invoices</td></tr>
+                        <tr><td>Review invoices</td><td>Mark an invoice as reviewed</td></tr>
+                        <tr><td>Authorise invoices</td><td>Approve an invoice for posting</td></tr>
+                        <tr><td>Post invoices</td><td>Post an invoice to your accounts (the final step)</td></tr>
+                        <tr><td>Reprocess invoices</td><td>Delete and redo the AI extraction on an invoice</td></tr>
+                        <tr><td>Send sales invoices</td><td>Email a sales invoice to a client</td></tr>
+                        <tr><td>Record payments</td><td>Record a client payment against a sales invoice</td></tr>
+                        <tr><td>Void sales invoices</td><td>Cancel a sales invoice permanently</td></tr>
+                    </tbody>
+                </table>
+                <p>There are also permissions for viewing, creating, editing, and deleting records in each area of the application (suppliers, clients, accounts, and so on). These are all set per role.</p>
+
+                <h2 id="admin-access">Administrator access</h2>
+                <p>The <strong>Administrator</strong> role has full access to everything, including settings and user management. Only give this role to people who need to manage the application itself.</p>
+
+                <h2 id="changing-a-users-role">Changing a user's role</h2>
+                <p>Open the user record in Settings &rsaquo; Users and change their role. The change takes effect immediately — the user's access changes on their next page load.</p>
+
+                <h2 id="deactivating-a-user">Deactivating a user</h2>
+                <p>If someone leaves, you can remove their role to prevent them from logging in, or delete their account entirely. Their past activity (invoices they reviewed, approved, etc.) remains on record.</p>
+            </article>
+        </main>
+
+        <nav id="docs-toc"></nav>
+    </div>
+
+    <script src="assets/nav.js"></script>
+</body>
+</html>

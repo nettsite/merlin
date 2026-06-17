@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Accounts — Merlin User Guide</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/docs.css">
+</head>
+<body>
+    <div id="docs-shell">
+        <aside id="docs-sidebar"></aside>
+
+        <main id="docs-content">
+            <article>
+                <h1>Accounts</h1>
+                <p>The chart of accounts is where all your financial transactions are recorded. Every line on every invoice — whether you're posting a purchase or recording a sale — ends up in an account. The accounts then feed into your reports.</p>
+
+                <h2 id="how-accounts-are-organised">How accounts are organised</h2>
+                <p>Accounts sit in a three-level structure:</p>
+                <ul>
+                    <li><strong>Account type</strong> — the broadest category: Assets, Liabilities, Equity, Income, or Expenses.</li>
+                    <li><strong>Account group</strong> — a subcategory within a type. For example, "Current Assets" under Assets, or "Operating Expenses" under Expenses.</li>
+                    <li><strong>Account</strong> — the individual account, such as "Telephone &amp; Internet" under Operating Expenses.</li>
+                </ul>
+                <p>When you allocate a line on an invoice, you're picking an individual account.</p>
+
+                <h2 id="the-default-chart">The default chart of accounts</h2>
+                <p>Merlin comes with a default chart of accounts as a starting point. It covers the most common account types for a small business:</p>
+                <table>
+                    <thead><tr><th>Code range</th><th>What it covers</th></tr></thead>
+                    <tbody>
+                        <tr><td>1000s</td><td>Assets — bank accounts, accounts receivable, prepayments</td></tr>
+                        <tr><td>2000s</td><td>Liabilities — accounts payable, VAT/GST owed, loans</td></tr>
+                        <tr><td>3000s</td><td>Equity — owner's capital and retained earnings</td></tr>
+                        <tr><td>4000s</td><td>Income — revenue from sales and services</td></tr>
+                        <tr><td>5000s</td><td>Expenses — operating costs such as telephone, professional services, cloud hosting</td></tr>
+                    </tbody>
+                </table>
+                <p>You can rename accounts, add new ones, or deactivate ones you don't use.</p>
+
+                <h2 id="adding-an-account">Adding an account</h2>
+                <ol>
+                    <li>Go to <strong>Accounts</strong>.</li>
+                    <li>Click <strong>Add Account</strong>.</li>
+                    <li>Choose the account group it belongs to.</li>
+                    <li>Give it a code (e.g. 5150) and a name (e.g. "Software Subscriptions").</li>
+                    <li>Leave <strong>Allow direct posting</strong> ticked — this lets you post invoice lines to it. Turn it off only for summary or parent accounts that you don't post to directly.</li>
+                    <li>Save.</li>
+                </ol>
+
+                <h2 id="account-groups">Account groups</h2>
+                <p>Account groups are managed under <strong>Accounting &rsaquo; Account Groups</strong>. A group belongs to one of the five account types (Assets, Liabilities, Equity, Income, Expenses). You can add new groups if your chart of accounts needs more categories than the defaults provide.</p>
+
+                <h2 id="inactive-accounts">Deactivating an account</h2>
+                <p>If you no longer use an account, set it to inactive rather than deleting it. Inactive accounts won't appear in the account picker when reviewing invoices, but all past transactions posted to them remain on record.</p>
+            </article>
+        </main>
+
+        <nav id="docs-toc"></nav>
+    </div>
+
+    <script src="assets/nav.js"></script>
+</body>
+</html>

@@ -53,6 +53,8 @@
         </flux:navmenu>
     </flux:dropdown>
 
+    <flux:navbar.item href="/user-guide/" target="_blank">User Guide</flux:navbar.item>
+
     <flux:dropdown>
         <flux:navbar.item
             icon:trailing="chevron-down"

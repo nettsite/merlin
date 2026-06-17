@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Automatic Posting — Merlin User Guide</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/docs.css">
+</head>
+<body>
+    <div id="docs-shell">
+        <aside id="docs-sidebar"></aside>
+
+        <main id="docs-content">
+            <article>
+                <h1>Automatic Posting</h1>
+                <p>Posting rules let you tell Merlin to process certain invoices automatically — no review needed. Once a rule is set up, invoices that match it are read, extracted, and posted to your accounts without anyone needing to touch them.</p>
+                <p>This is most useful for regular, predictable invoices: monthly subscriptions, recurring utility bills, or any supplier whose invoices always follow the same pattern.</p>
+
+                <h2 id="how-rules-work">How rules work</h2>
+                <p>When Merlin finishes reading an invoice, it checks whether any active posting rules match. A rule matches when:</p>
+                <ul>
+                    <li>The supplier matches (if the rule is set to a specific supplier), and</li>
+                    <li>All the conditions you set are met (total amount, confidence level, line item keywords), and</li>
+                    <li>Merlin's confidence in the extraction is above the threshold in <a href="settings.html">Purchasing Settings</a>.</li>
+                </ul>
+                <p>When a rule matches, Merlin carries out the actions you configured — which can include automatically approving the invoice and posting it.</p>
+
+                <h2 id="setting-up-a-rule">Setting up a rule</h2>
+                <ol>
+                    <li>Go to <strong>Posting Rules</strong> in the navigation.</li>
+                    <li>Click <strong>Add Rule</strong>.</li>
+                    <li>Give the rule a clear name, such as "Acme Plumbing — Monthly Retainer".</li>
+                    <li>Optionally, choose a specific supplier. If you leave this blank, the rule applies to any supplier.</li>
+                    <li>Set conditions to control when the rule fires (see below).</li>
+                    <li>Set actions — tick <strong>Auto-approve</strong> and/or <strong>Auto-post</strong>.</li>
+                    <li>Set the rule to <strong>Active</strong> and save.</li>
+                </ol>
+
+                <h2 id="conditions">Conditions</h2>
+                <p>Conditions limit which invoices a rule applies to:</p>
+                <table>
+                    <thead><tr><th>Condition</th><th>What it does</th></tr></thead>
+                    <tbody>
+                        <tr><td>Minimum confidence</td><td>The rule only fires if Merlin's confidence score for the extraction is at or above this number. Set higher to be more cautious; lower to be more permissive.</td></tr>
+                        <tr><td>Total range (minimum)</td><td>The invoice total must be at least this amount.</td></tr>
+                        <tr><td>Total range (maximum)</td><td>The invoice total must be no more than this amount.</td></tr>
+                        <tr><td>Line description contains</td><td>At least one line item description must contain this text. Useful for matching invoices by what they're for.</td></tr>
+                    </tbody>
+                </table>
+                <p>You can leave any condition blank — it simply won't be checked. An invoice needs to satisfy every condition you set for the rule to fire.</p>
+
+                <h2 id="actions">Actions</h2>
+                <table>
+                    <thead><tr><th>Action</th><th>What it does</th></tr></thead>
+                    <tbody>
+                        <tr><td>Auto-approve</td><td>Merlin approves the invoice automatically without anyone clicking Approve.</td></tr>
+                        <tr><td>Auto-post</td><td>Merlin posts the invoice to your accounts automatically. Most rules will have this turned on.</td></tr>
+                    </tbody>
+                </table>
+
+                <h2 id="checking-rules-are-working">Checking that rules are working</h2>
+                <p>The rule list shows a <strong>Match count</strong> and <strong>Last matched</strong> date for each rule. If a rule has a zero match count for recent invoices that should have triggered it, check:</p>
+                <ul>
+                    <li>Is the rule set to Active?</li>
+                    <li>Does the supplier on recent invoices match the supplier set on the rule?</li>
+                    <li>Is the total within any range conditions you set?</li>
+                    <li>Is Merlin's confidence on recent invoices above the minimum confidence on the rule? (You can check this in <a href="purchase-invoices.html">Purchase Invoices</a> by looking at the confidence shown on each invoice.)</li>
+                </ul>
+
+                <h2 id="pattern-matching">Pattern matching for repeat invoices</h2>
+                <p>Beyond rule conditions, Merlin also checks whether a new invoice from a supplier closely matches their most recently posted invoice — similar amounts and similar line descriptions. If it matches well enough, Merlin treats that as additional confidence to post automatically, even without a posting rule.</p>
+                <p>The tolerance for "close enough" is set in <a href="settings.html">Purchasing Settings</a>.</p>
+            </article>
+        </main>
+
+        <nav id="docs-toc"></nav>
+    </div>
+
+    <script src="assets/nav.js"></script>
+</body>
+</html>

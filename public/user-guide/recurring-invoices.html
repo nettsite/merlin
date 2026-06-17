@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Recurring Invoices — Merlin User Guide</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/docs.css">
+</head>
+<body>
+    <div id="docs-shell">
+        <aside id="docs-sidebar"></aside>
+
+        <main id="docs-content">
+            <article>
+                <h1>Recurring Invoices</h1>
+                <p>Recurring invoices are templates that generate a real invoice automatically on a schedule. Use them for monthly retainers, subscription fees, rent, or any invoice that repeats on the same pattern.</p>
+
+                <h2 id="how-it-works">How it works</h2>
+                <p>You set up a recurring invoice template with the client, line items, and schedule. Every morning, Merlin checks whether any templates are due. When the next invoice date arrives, Merlin creates a full sales invoice from the template and advances the schedule to the next date. If auto-send is on, it emails the invoice to the client at the same time.</p>
+
+                <h2 id="setting-up">Setting up a recurring invoice</h2>
+                <ol>
+                    <li>Go to <strong>Recurring Invoices</strong>.</li>
+                    <li>Click <strong>New</strong>.</li>
+                    <li>Select the client and fill in the details.</li>
+                    <li>Add the line items that will appear on each generated invoice.</li>
+                    <li>Set the frequency and start date.</li>
+                    <li>Turn on <strong>Auto-send</strong> if you want the invoice emailed automatically when it's generated.</li>
+                    <li>Save and set the status to <strong>Active</strong>.</li>
+                </ol>
+
+                <h2 id="fields">Fields</h2>
+                <table>
+                    <thead><tr><th>Field</th><th>Notes</th></tr></thead>
+                    <tbody>
+                        <tr><td>Client</td><td>Required. The client this invoice is for.</td></tr>
+                        <tr><td>Payment term</td><td>Used to calculate the due date on each generated invoice.</td></tr>
+                        <tr><td>Receivable account</td><td>The account used to track what the client owes.</td></tr>
+                        <tr><td>Frequency</td><td>Monthly, quarterly, or annually.</td></tr>
+                        <tr><td>Billing day</td><td>The day of the month the invoice is generated. For example, set to 1 to generate on the 1st of each month.</td></tr>
+                        <tr><td>Start date</td><td>The date of the first invoice.</td></tr>
+                        <tr><td>End date</td><td>Optional. If set, no invoices are generated after this date.</td></tr>
+                        <tr><td>Currency</td><td>The currency for generated invoices.</td></tr>
+                        <tr><td>Auto-send</td><td>If on, the generated invoice is emailed to the client automatically.</td></tr>
+                        <tr><td>Notes</td><td>Internal notes — not shown on the invoice.</td></tr>
+                        <tr><td>Terms</td><td>Payment terms text shown on the invoice.</td></tr>
+                        <tr><td>Footer</td><td>Footer text shown on the invoice.</td></tr>
+                    </tbody>
+                </table>
+
+                <h2 id="statuses">Statuses</h2>
+                <table>
+                    <thead><tr><th>Status</th><th>What it means</th></tr></thead>
+                    <tbody>
+                        <tr><td>Active</td><td>Invoices will be generated on schedule.</td></tr>
+                        <tr><td>Paused</td><td>Generation is temporarily stopped. Change back to Active to resume.</td></tr>
+                        <tr><td>Completed</td><td>The schedule has ended (either the end date has passed, or you set it manually). No more invoices will be generated.</td></tr>
+                    </tbody>
+                </table>
+
+                <h2 id="generated-invoices">Finding the generated invoices</h2>
+                <p>Each invoice Merlin generates from a recurring template appears in the <a href="sales-invoices.html">Sales Invoices</a> list as a normal invoice. You can view, send, and record payment against it just like any other sales invoice.</p>
+            </article>
+        </main>
+
+        <nav id="docs-toc"></nav>
+    </div>
+
+    <script src="assets/nav.js"></script>
+</body>
+</html>

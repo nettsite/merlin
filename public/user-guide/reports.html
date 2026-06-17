@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Reports — Merlin User Guide</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/docs.css">
+</head>
+<body>
+    <div id="docs-shell">
+        <aside id="docs-sidebar"></aside>
+
+        <main id="docs-content">
+            <article>
+                <h1>Reports</h1>
+                <p>Merlin's reports are based on transactions that have been posted to your accounts. They give you a picture of where your money is going and how well the invoice processing is performing.</p>
+                <p>All reports are under <strong>Reports</strong> in the navigation.</p>
+
+                <h2 id="expenses-by-account">Expenses by Account</h2>
+                <p>Shows your total spend in each expense account over a period. Use this to see where your money goes — how much on telephone, professional services, cloud hosting, and so on.</p>
+                <p>The figures come from posted purchase invoices only. Invoices that haven't been posted yet don't appear.</p>
+
+                <h2 id="expenses-by-supplier">Expenses by Supplier</h2>
+                <p>Shows your total spend per supplier over a period. Use this to review your largest suppliers, spot unusual spending from a particular supplier, or prepare for supplier negotiations.</p>
+                <p>Like Expenses by Account, only posted purchase invoices are included.</p>
+
+                <h2 id="ai-performance">AI Performance</h2>
+                <p>Shows how the invoice reading has been performing. Useful if you want to understand how often invoices are going to manual review, how confident the AI has been on average, or how much it's costing in API usage.</p>
+                <p>The report shows:</p>
+                <ul>
+                    <li>How many invoices were processed in the period</li>
+                    <li>The average confidence score across all extractions</li>
+                    <li>How many needed a second attempt (the AI tried once, wasn't confident enough, and tried again with a more capable model)</li>
+                    <li>The total number of tokens used (which relates to API cost)</li>
+                </ul>
+
+                <h2 id="date-ranges">Date ranges</h2>
+                <p>Reports default to the current financial year. You can change the date range using the filter at the top of each report. The financial year start month is set in <a href="settings.html">Settings</a> — if you haven't set it, check with your administrator.</p>
+            </article>
+        </main>
+
+        <nav id="docs-toc"></nav>
+    </div>
+
+    <script src="assets/nav.js"></script>
+</body>
+</html>

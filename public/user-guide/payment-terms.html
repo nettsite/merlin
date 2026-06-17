@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Payment Terms — Merlin User Guide</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/docs.css">
+</head>
+<body>
+    <div id="docs-shell">
+        <aside id="docs-sidebar"></aside>
+
+        <main id="docs-content">
+            <article>
+                <h1>Payment Terms</h1>
+                <p>Payment terms define when an invoice is due for payment. You attach them to suppliers, clients, and individual invoices. When you create an invoice, Merlin uses the payment term to calculate the due date automatically.</p>
+
+                <h2 id="available-term-types">Available term types</h2>
+                <table>
+                    <thead><tr><th>Term type</th><th>Example</th></tr></thead>
+                    <tbody>
+                        <tr><td>Number of days after invoice</td><td>"30 Days" — due 30 days after the invoice date</td></tr>
+                        <tr><td>Nth of the following month</td><td>"15th of next month" — due on the 15th of the month after the invoice date</td></tr>
+                        <tr><td>First business day of the following month</td><td>Due on the first Monday (or whichever weekday falls first) of next month</td></tr>
+                        <tr><td>Same as invoice date</td><td>Due immediately — on the same day the invoice is issued</td></tr>
+                        <tr><td>Beginning of next billing period</td><td>Due at the start of the next billing period (the billing period day is set in <a href="settings.html">Billing Settings</a>)</td></tr>
+                        <tr><td>N working days before month end</td><td>"5 working days before month end" — due 5 working days before the last day of the month</td></tr>
+                    </tbody>
+                </table>
+
+                <h2 id="adding-payment-terms">Adding payment terms</h2>
+                <ol>
+                    <li>Go to <strong>Payment Terms</strong>.</li>
+                    <li>Click <strong>Add</strong>.</li>
+                    <li>Give the term a clear name, such as "30 Days" or "15th of Month".</li>
+                    <li>Choose the term type from the list above.</li>
+                    <li>If the term type requires a number (days or day of month), enter it.</li>
+                    <li>Save.</li>
+                </ol>
+
+                <h2 id="default-terms">Using payment terms</h2>
+                <p>Once a payment term is set up, you can assign it to:</p>
+                <ul>
+                    <li><strong>A client</strong> — their invoices will default to this term</li>
+                    <li><strong>A supplier</strong> — their purchase invoices will default to this term</li>
+                    <li><strong>An individual invoice</strong> — overrides the client or supplier default for that invoice</li>
+                </ul>
+                <p>A system-wide default payment term for sales invoices can be set in <a href="settings.html">Billing Settings</a>. This is used when neither the client nor the invoice has a specific term set.</p>
+
+                <h2 id="seeded-terms">Default terms</h2>
+                <p>Merlin comes with a set of common payment terms already set up. You can edit or add to these at any time.</p>
+            </article>
+        </main>
+
+        <nav id="docs-toc"></nav>
+    </div>
+
+    <script src="assets/nav.js"></script>
+</body>
+</html>
