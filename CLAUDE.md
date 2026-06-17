@@ -15,6 +15,7 @@ composer run dev          # starts server + queue + pail + vite concurrently
 composer run test         # clears config cache, then runs full PHPUnit suite
 php artisan test --compact --filter=TestName   # single test
 vendor/bin/pint --dirty   # format changed PHP files
+npm run build             # build Vite assets (required before any view test will pass)
 
 # Seeders
 php artisan db:seed --class=RolesAndPermissionsSeeder
@@ -63,8 +64,12 @@ app/Exceptions/     — InvalidDocumentStateException, InvalidFileTypeException,
 
 All pages are Volt single-file components. CRUD pages use `HasCrudTable` + `HasCrudForm` concerns.
 
+Routes use `Volt::route()` unless marked *view*. Any test that renders a view requires a built Vite manifest (`npm run build`).
+
 | Route | File | Notes |
 |---|---|---|
+| `/dashboard` | `resources/views/dashboard.blade.php` | `Route::view`, requires auth+verified |
+| `/profile` | `resources/views/profile.blade.php` | `Route::view`, requires auth |
 | `/suppliers` | `suppliers/index.blade.php` | CRUD |
 | `/suppliers/{id}` | `suppliers/show.blade.php` | Read-only detail |
 | `/purchase-invoices` | `purchase-invoices/index.blade.php` | **Fully custom** — file upload, LLM pipeline, inline line editing, status machine |
@@ -78,6 +83,7 @@ All pages are Volt single-file components. CRUD pages use `HasCrudTable` + `HasC
 | `/roles` | `roles/index.blade.php` | CRUD |
 | `/users` | `users/index.blade.php` | CRUD |
 | `/llm-logs` | `llm-logs/index.blade.php` | Read-only |
+| `/reports` | — | Redirects to `/reports/expenses-by-account` |
 | `/reports/expenses-by-account` | `reports/expenses-by-account.blade.php` | Read-only |
 | `/reports/expenses-by-supplier` | `reports/expenses-by-supplier.blade.php` | Read-only |
 | `/reports/llm-performance` | `reports/llm-performance.blade.php` | Read-only |

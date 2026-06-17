@@ -21,6 +21,7 @@ Merlin reads supplier invoices and posts them to your ledger — automatically. 
 | Audit log | spatie/laravel-activitylog |
 | File storage | spatie/laravel-medialibrary |
 | Settings | spatie/laravel-settings |
+| Email | nettsite/nettmail-laravel (transactional + campaigns) |
 | Testing | Pest + PHPUnit 12 |
 
 ## Local setup
@@ -39,7 +40,12 @@ DB_DATABASE=merlin
 DB_USERNAME=...
 DB_PASSWORD=...
 
-ANTHROPIC_API_KEY=...   # Claude API key for invoice extraction
+ANTHROPIC_API_KEY=...          # Claude API key for invoice extraction
+ANTHROPIC_MODEL=claude-sonnet-4-6
+ANTHROPIC_MODEL_FAST=claude-haiku-4-5-20251001
+ANTHROPIC_MODEL_BACKUP=claude-opus-4-8
+ANTHROPIC_ALERT_RECIPIENTS=...  # email(s) alerted when a model is retired/unreachable
+ANTHROPIC_MODEL_DOWN_TTL=3600   # seconds to circuit-break a down model
 
 EXCHANGERATE_API_KEY=...  # exchangerate-api.com — for foreign currency invoices
 ```
@@ -50,6 +56,7 @@ Seed reference data after migrating:
 php artisan db:seed --class=RolesAndPermissionsSeeder
 php artisan db:seed --class=ChartOfAccountsSeeder
 php artisan db:seed --class=DefaultAdminUserSeeder
+php artisan db:seed --class=DebtorAccountGroupSeeder
 php artisan db:seed --class=PaymentTermSeeder
 ```
 
@@ -85,7 +92,7 @@ All models use UUID primary keys. Polymorphic relationships are registered in `A
 
 1. A PDF, DOCX, XLSX, or CSV is dropped into the watched folder or uploaded manually
 2. Magika detects the actual file type; unsupported formats are rejected
-3. Claude extracts supplier, dates, line items, and amounts — all amounts are stored ex-VAT
+3. Claude extracts supplier, dates, line items, and amounts — all amounts are stored ex-VAT. Extraction tries `ANTHROPIC_MODEL_FAST` (Haiku) first; falls back to `ANTHROPIC_MODEL` (Sonnet) on bad output, then `ANTHROPIC_MODEL_BACKUP` (Opus) if a model returns a 404 (retired)
 4. Each line gets a suggested GL account code with a confidence score drawn from posting history and the current chart of accounts
 5. Posting rules evaluate the document; invoices above the confidence threshold are auto-posted
 6. Every extraction is logged — tokens used, confidence score, warnings, supplier match method
@@ -109,6 +116,7 @@ Thresholds are configurable per business via `PurchasingSettings`.
 | Accounting | Accounts, Account Groups |
 | Reports | Expenses by Account, Expenses by Supplier, LLM Performance |
 | Settings | General, Purchasing, Billing, Roles, Users, LLM Logs |
+| Emails | NettMail templates, contacts, lists, segments, campaigns |
 
 ## Design
 
