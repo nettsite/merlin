@@ -27,13 +27,15 @@ new #[Layout('components.layout.app')] class extends Component
     // Upload modal
     public bool $showUpload = false;
 
-    public mixed $uploadFile = null;
+    /** @var array<int, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile> */
+    public array $uploadFiles = [];
+
+    /** @var array<int, array{name: string, status: string, document_number: string|null, error: string|null}> */
+    public array $uploadResults = [];
 
     public string $uploadPartyId = '';
 
     public string $uploadCurrency = '';
-
-    public string $uploadError = '';
 
     // Detail flyout
     public bool $showDetail = false;
@@ -103,39 +105,95 @@ new #[Layout('components.layout.app')] class extends Component
     public function openUpload(): void
     {
         $this->authorize('create', Document::class);
-        $this->reset(['uploadFile', 'uploadPartyId', 'uploadError']);
+        $this->reset(['uploadFiles', 'uploadResults', 'uploadPartyId']);
         $this->uploadCurrency = app(CurrencySettings::class)->base_currency;
         $this->showUpload = true;
+    }
+
+    public function resetForMore(): void
+    {
+        $this->authorize('create', Document::class);
+        $this->reset(['uploadFiles', 'uploadResults', 'uploadPartyId']);
+        $this->uploadCurrency = app(CurrencySettings::class)->base_currency;
     }
 
     public function processUpload(): void
     {
         $this->authorize('create', Document::class);
-        $this->uploadError = '';
 
+        // Size only — MIME is not validated here because folder uploads include
+        // unsupported files (.DS_Store etc.) that we silently skip in the loop.
         $this->validate([
-            'uploadFile' => 'required|file|mimes:pdf,docx,xlsx,csv|max:20480',
+            'uploadFiles'   => 'required|array|min:1',
+            'uploadFiles.*' => 'file|max:51200',
         ]);
 
-        $path = $this->uploadFile->getRealPath();
+        $svc = app(DocumentService::class);
+        $currency = $this->uploadCurrency ?: null;
 
-        try {
-            $result = app(DocumentService::class)->createFromFile($path, [
-                'party_id' => $this->uploadPartyId ?: null,
-                'currency' => $this->uploadCurrency,
-            ]);
+        // Expand ZIPs and collect all file paths to process.
+        $paths = [];
+        $extractDirs = [];
 
-            $this->showUpload = false;
-            $this->reset(['uploadFile', 'uploadPartyId']);
+        foreach ($this->uploadFiles as $file) {
+            $ext = strtolower($file->getClientOriginalExtension());
 
-            if ($result['duplicate']) {
-                session()->flash('warning', 'This invoice has already been uploaded (document '.$result['document']->document_number.').');
-            } else {
-                session()->flash('success', 'Invoice uploaded and queued for processing.');
+            if ($ext === 'zip') {
+                $zip = new \ZipArchive();
+
+                if ($zip->open($file->getRealPath()) === true) {
+                    $dir = sys_get_temp_dir().'/merlin-zip-'.uniqid();
+                    mkdir($dir, 0700, true);
+                    $zip->extractTo($dir);
+                    $zip->close();
+                    $extractDirs[] = $dir;
+
+                    foreach (new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($dir, \RecursiveDirectoryIterator::SKIP_DOTS)) as $entry) {
+                        if ($entry->isFile() && in_array(strtolower($entry->getExtension()), ['pdf', 'docx', 'xlsx', 'csv'])) {
+                            $paths[] = ['name' => $entry->getFilename(), 'path' => $entry->getPathname()];
+                        }
+                    }
+                }
+            } elseif (in_array($ext, ['pdf', 'docx', 'xlsx', 'csv'])) {
+                $paths[] = ['name' => $file->getClientOriginalName(), 'path' => $file->getRealPath()];
             }
-        } catch (\Throwable $e) {
-            $this->uploadError = $e->getMessage();
+            // Unsupported types (e.g. .DS_Store from folder upload) are silently skipped.
         }
+
+        if (count($paths) > 50) {
+            $this->addError('uploadFiles', 'Maximum 50 files per batch. This batch contains '.count($paths).' files.');
+
+            return;
+        }
+
+        foreach ($paths as $entry) {
+            try {
+                $result = $svc->createFromFile($entry['path'], [
+                    'party_id' => $this->uploadPartyId ?: null,
+                    'currency' => $currency,
+                ]);
+
+                $this->uploadResults[] = [
+                    'name'            => $entry['name'],
+                    'status'          => $result['duplicate'] ? 'duplicate' : 'queued',
+                    'document_number' => $result['document']->document_number,
+                    'error'           => null,
+                ];
+            } catch (\Throwable $e) {
+                $this->uploadResults[] = [
+                    'name'            => $entry['name'],
+                    'status'          => 'error',
+                    'document_number' => null,
+                    'error'           => $e->getMessage(),
+                ];
+            }
+        }
+
+        foreach ($extractDirs as $dir) {
+            app(\Illuminate\Filesystem\Filesystem::class)->deleteDirectory($dir);
+        }
+
+        $this->reset(['uploadFiles', 'uploadPartyId']);
     }
 
     // -------------------------------------------------------------------------
@@ -764,45 +822,179 @@ new #[Layout('components.layout.app')] class extends Component
 </div>
 
 {{-- ===== Upload Modal ===== --}}
-<flux:modal name="upload-modal" wire:model.self="showUpload" class="w-[440px]">
-    <form wire:submit="processUpload" class="flex flex-col">
+<flux:modal name="upload-modal" wire:model.self="showUpload" class="w-[600px]">
+    @if(count($uploadResults) > 0)
+        {{-- ===== Results view ===== --}}
+        @php
+            $queued = collect($uploadResults)->where('status', 'queued')->count();
+            $dupes  = collect($uploadResults)->where('status', 'duplicate')->count();
+            $errors = collect($uploadResults)->where('status', 'error')->count();
+        @endphp
         <div class="p-6 border-b border-line">
-            <flux:heading size="lg" class="font-semibold">Upload Invoice</flux:heading>
+            <flux:heading size="lg" class="font-semibold">Upload Results</flux:heading>
         </div>
         <div class="p-6 space-y-4">
-            @if($uploadError)
-                <div class="px-4 py-3 rounded bg-red-50 border border-red-200 text-sm text-danger">{{ $uploadError }}</div>
+            @if($errors > 0)
+                <div class="px-4 py-3 rounded bg-red-50 border border-red-200 text-sm text-danger">
+                    {{ $errors }} file{{ $errors > 1 ? 's' : '' }} failed.
+                    @if($queued > 0) {{ $queued }} queued for processing. @endif
+                    @if($dupes > 0) {{ $dupes }} duplicate{{ $dupes > 1 ? 's' : '' }} skipped. @endif
+                </div>
+            @else
+                <div class="px-4 py-3 rounded bg-green-50 border border-green-200 text-sm text-success">
+                    {{ $queued }} file{{ $queued !== 1 ? 's' : '' }} queued for processing.
+                    @if($dupes > 0) {{ $dupes }} duplicate{{ $dupes > 1 ? 's' : '' }} skipped. @endif
+                </div>
             @endif
 
-            <flux:field>
-                <flux:label>Invoice File <span class="text-danger">*</span></flux:label>
-                <flux:input wire:model="uploadFile" type="file" accept=".pdf,.docx,.xlsx,.csv" />
-                <flux:error name="uploadFile" />
-            </flux:field>
-
-            <flux:field>
-                <flux:label>Supplier (optional)</flux:label>
-                <flux:select wire:model="uploadPartyId">
-                    <option value="">Auto-detect from invoice</option>
-                    @foreach($suppliers as $supplier)
-                        <option value="{{ $supplier->id }}">{{ $supplier->business?->display_name }}</option>
-                    @endforeach
-                </flux:select>
-            </flux:field>
-
-            <flux:field>
-                <flux:label>Currency</flux:label>
-                <flux:input wire:model="uploadCurrency" class="uppercase max-w-[120px]" maxlength="3" />
-            </flux:field>
+            <div class="max-h-[320px] overflow-y-auto border border-line rounded">
+                <table class="w-full text-xs">
+                    <thead class="bg-surface-alt sticky top-0">
+                        <tr>
+                            <th class="px-3 py-2 text-left font-medium text-ink-muted">File</th>
+                            <th class="px-3 py-2 text-left font-medium text-ink-muted">Status</th>
+                            <th class="px-3 py-2 text-left font-medium text-ink-muted">Document</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($uploadResults as $result)
+                            <tr class="border-t border-line">
+                                <td class="px-3 py-2 max-w-[240px] truncate text-ink" title="{{ $result['name'] }}">{{ $result['name'] }}</td>
+                                <td class="px-3 py-2">
+                                    @if($result['status'] === 'queued')
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-700">Queued</span>
+                                    @elseif($result['status'] === 'duplicate')
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-50 text-yellow-700">Duplicate</span>
+                                    @else
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-50 text-danger">Error</span>
+                                    @endif
+                                </td>
+                                <td class="px-3 py-2 text-ink-soft">{{ $result['document_number'] ?? $result['error'] ?? '—' }}</td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
         </div>
         <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-line bg-surface-alt">
-            <flux:button type="button" variant="ghost" wire:click="$set('showUpload', false)">Cancel</flux:button>
-            <flux:button type="submit" variant="primary" wire:loading.attr="disabled">
-                <span wire:loading.remove>Upload & Process</span>
-                <span wire:loading>Uploading…</span>
-            </flux:button>
+            <flux:button type="button" variant="ghost" wire:click="resetForMore">Upload More</flux:button>
+            <flux:button type="button" variant="primary" wire:click="$set('showUpload', false)">Done</flux:button>
         </div>
-    </form>
+    @else
+        {{-- ===== Upload form ===== --}}
+        <form wire:submit="processUpload" class="flex flex-col">
+            <div class="p-6 border-b border-line">
+                <flux:heading size="lg" class="font-semibold">Upload Invoices</flux:heading>
+            </div>
+            <div class="p-6 space-y-4">
+                <flux:error name="uploadFiles" />
+
+                {{-- Drop zone --}}
+                <div
+                    x-data="{ names: [], dragging: false, progress: 0 }"
+                    x-on:dragover.prevent="dragging = true"
+                    x-on:dragleave.prevent="dragging = false"
+                    x-on:drop.prevent="
+                        dragging = false;
+                        const files = $event.dataTransfer.files;
+                        names = Array.from(files).map(f => f.name);
+                        $wire.uploadMultiple('uploadFiles', files);
+                    "
+                    x-on:livewire-upload-start.window="progress = 1"
+                    x-on:livewire-upload-progress.window="progress = $event.detail.progress"
+                    x-on:livewire-upload-finish.window="progress = 0"
+                    x-on:livewire-upload-error.window="progress = 0"
+                    :class="dragging ? 'border-primary bg-primary/5' : 'border-line bg-surface-alt hover:border-ink-muted'"
+                    class="rounded-lg border-2 border-dashed p-8 text-center transition-colors"
+                >
+                    <flux:icon.arrow-up-tray class="size-8 mx-auto text-ink-muted mb-3" />
+                    <p class="text-sm font-medium text-ink">Drop invoices here</p>
+                    <p class="text-xs text-ink-muted mt-1 mb-4">PDF, DOCX, XLSX, CSV or ZIP · up to 50 files</p>
+
+                    <div class="flex items-center justify-center gap-3 flex-wrap">
+                        <label class="cursor-pointer">
+                            <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded border border-line bg-white text-xs font-medium text-ink hover:bg-surface-alt transition-colors">
+                                <flux:icon.document-text class="size-3.5" />
+                                Browse files
+                            </span>
+                            <input
+                                wire:model="uploadFiles"
+                                type="file"
+                                accept=".pdf,.docx,.xlsx,.csv,.zip"
+                                multiple
+                                class="sr-only"
+                                x-on:change="names = Array.from($event.target.files).map(f => f.name)"
+                            />
+                        </label>
+                        <label class="cursor-pointer">
+                            <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded border border-line bg-white text-xs font-medium text-ink hover:bg-surface-alt transition-colors">
+                                <flux:icon.folder-open class="size-3.5" />
+                                Browse folder
+                            </span>
+                            <input
+                                wire:model="uploadFiles"
+                                type="file"
+                                webkitdirectory
+                                multiple
+                                class="sr-only"
+                                x-on:change="names = Array.from($event.target.files).map(f => f.name)"
+                            />
+                        </label>
+                    </div>
+
+                    {{-- Upload XHR progress --}}
+                    <div x-show="progress > 0" x-cloak class="mt-4 text-xs text-ink-muted">
+                        Uploading… <span x-text="progress"></span>%
+                    </div>
+
+                    {{-- Selected file list --}}
+                    <template x-if="names.length > 0">
+                        <div class="mt-4 text-left text-xs text-ink-muted space-y-1 max-h-[96px] overflow-y-auto">
+                            <template x-for="(n, i) in names.slice(0, 5)" :key="i">
+                                <div x-text="n" class="truncate"></div>
+                            </template>
+                            <template x-if="names.length > 5">
+                                <div>+ <span x-text="names.length - 5"></span> more</div>
+                            </template>
+                        </div>
+                    </template>
+                </div>
+
+                <flux:field>
+                    <flux:label>Supplier (optional)</flux:label>
+                    <flux:select wire:model="uploadPartyId">
+                        <option value="">Auto-detect from invoice</option>
+                        @foreach($suppliers as $supplier)
+                            <option value="{{ $supplier->id }}">{{ $supplier->business?->display_name }}</option>
+                        @endforeach
+                    </flux:select>
+                </flux:field>
+
+                <flux:field>
+                    <flux:label>Currency</flux:label>
+                    <flux:input
+                        wire:model="uploadCurrency"
+                        class="uppercase max-w-[120px]"
+                        maxlength="3"
+                        placeholder="{{ app(\App\Modules\Core\Settings\CurrencySettings::class)->base_currency }}"
+                    />
+                    <flux:description>Leave blank to use the base currency. Fill in to override for foreign-currency batches.</flux:description>
+                </flux:field>
+            </div>
+            <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-line bg-surface-alt">
+                <flux:button type="button" variant="ghost" wire:click="$set('showUpload', false)">Cancel</flux:button>
+                <flux:button
+                    type="submit"
+                    variant="primary"
+                    wire:loading.attr="disabled"
+                    wire:target="uploadFiles,processUpload"
+                >
+                    <span wire:loading.remove wire:target="processUpload">Upload & Process</span>
+                    <span wire:loading wire:target="processUpload">Processing…</span>
+                </flux:button>
+            </div>
+        </form>
+    @endif
 </flux:modal>
 
 {{-- ===== Detail Flyout ===== --}}
