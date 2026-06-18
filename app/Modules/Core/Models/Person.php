@@ -2,12 +2,19 @@
 
 namespace App\Modules\Core\Models;
 
+use Illuminate\Auth\Authenticatable;
+use Illuminate\Auth\Passwords\CanResetPassword;
+use Illuminate\Contracts\Auth\Access\Authorizable as AuthorizableContract;
+use Illuminate\Contracts\Auth\Authenticatable as AuthenticatableContract;
+use Illuminate\Contracts\Auth\CanResetPassword as CanResetPasswordContract;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
-use Spatie\Activitylog\Models\Concerns\LogsActivity;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Foundation\Auth\Access\Authorizable;
+use Illuminate\Notifications\Notifiable;
+use Spatie\Activitylog\Models\Concerns\LogsActivity;
 
 /**
  * @property string $id
@@ -17,12 +24,13 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string|null $email
  * @property string|null $mobile
  * @property string|null $direct_line
+ * @property string|null $password
  * @property-read string $full_name
  * @property-read string $display_name
  */
-class Person extends Model
+class Person extends Model implements AuthenticatableContract, AuthorizableContract, CanResetPasswordContract
 {
-    use LogsActivity, HasUuids;
+    use Authenticatable, Authorizable, CanResetPassword, HasUuids, LogsActivity, Notifiable;
 
     protected $table = 'persons';
 
@@ -36,6 +44,11 @@ class Person extends Model
         'email',
         'mobile',
         'direct_line',
+    ];
+
+    protected $hidden = [
+        'password',
+        'remember_token',
     ];
 
     // Relations
@@ -71,4 +84,7 @@ class Person extends Model
             get: fn (): string => trim("{$this->first_name} {$this->last_name}"),
         );
     }
+
+    // Portal invite URL is built by PortalInviteService; no notification needed.
+    public function sendPasswordResetNotification($token): void {}
 }

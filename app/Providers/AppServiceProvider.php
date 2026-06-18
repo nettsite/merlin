@@ -104,6 +104,14 @@ class AppServiceProvider extends ServiceProvider
 
             return $user->hasRole('Administrator') ? true : null;
         });
+
+        Gate::define('portal.view-invoice', function (Person $person, Document $invoice): bool {
+            return ContactAssignment::where('person_id', $person->id)
+                ->where('party_id', $invoice->party_id)
+                ->where('is_active', true)
+                ->where('receives_invoices', true)
+                ->exists();
+        });
     }
 
     protected function configureDefaults(): void
