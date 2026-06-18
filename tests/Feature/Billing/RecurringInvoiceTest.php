@@ -263,7 +263,8 @@ it('clamps next_invoice_date to the month length for billing day 31', function (
         array_merge(baseTemplateData($client, '2026-02-10'), ['billing_period_day' => 31])
     );
 
-    expect($template->next_invoice_date->toDateString())->toBe('2026-02-28');
+    // Feb 28 is a Saturday → working-day adjusted to Feb 27 (Friday)
+    expect($template->next_invoice_date->toDateString())->toBe('2026-02-27');
 });
 
 // --- advanceNextDate ---
@@ -316,7 +317,152 @@ it('advances annually next_invoice_date by one year', function (): void {
 
     app(RecurringInvoiceService::class)->advanceNextDate($template);
 
-    expect($template->fresh()->next_invoice_date->toDateString())->toBe('2027-01-01');
+    // 2027-01-01 is New Year's Day → working-day adjusted to Dec 31 2026
+    expect($template->fresh()->next_invoice_date->toDateString())->toBe('2026-12-31');
+});
+
+// --- Phase B: working-day-adjusted schedule ---
+
+it('monthly template anchored on sunday fires on preceding friday', function (): void {
+    $client = recurringClient();
+    // 2026-01-25 is a Sunday; latestWorkingDayOnOrBefore → 2026-01-23 (Friday)
+    $template = RecurringInvoice::create([
+        'client_id' => $client->id,
+        'frequency' => RecurringFrequency::Monthly,
+        'billing_period_day' => 25,
+        'start_date' => '2026-01-25',
+        'next_invoice_date' => '2026-01-23',
+        'next_period_anchor' => '2026-01-25',
+        'status' => RecurringInvoiceStatus::Active,
+        'currency' => 'ZAR',
+    ]);
+
+    app(RecurringInvoiceService::class)->advanceNextDate($template);
+
+    $fresh = $template->fresh();
+    // Anchor advances to Feb 25 (Wednesday) — no drift
+    expect($fresh->next_period_anchor->toDateString())->toBe('2026-02-25')
+        // Run date is Feb 25 itself (working day)
+        ->and($fresh->next_invoice_date->toDateString())->toBe('2026-02-25');
+});
+
+it('monthly anchor does not drift when run date differs from anchor', function (): void {
+    // Two advances from a Sunday anchor must keep landing on the 25th, not walk backward.
+    $client = recurringClient();
+    $template = RecurringInvoice::create([
+        'client_id' => $client->id,
+        'frequency' => RecurringFrequency::Monthly,
+        'billing_period_day' => 25,
+        'start_date' => '2026-01-25',
+        'next_invoice_date' => '2026-01-23',
+        'next_period_anchor' => '2026-01-25',
+        'status' => RecurringInvoiceStatus::Active,
+        'currency' => 'ZAR',
+    ]);
+
+    $service = app(RecurringInvoiceService::class);
+    $service->advanceNextDate($template);
+    $service->advanceNextDate($template->fresh());
+
+    // Two months from Jan 25 = Mar 25 (Wednesday)
+    expect($template->fresh()->next_period_anchor->toDateString())->toBe('2026-03-25');
+});
+
+it('quarterly anchor on public holiday rolls back run date but next quarter is unaffected', function (): void {
+    $client = recurringClient();
+    // 2026-09-24 is Heritage Day (Thursday) → run date rolls back to Sep 23 (Wednesday)
+    $template = RecurringInvoice::create([
+        'client_id' => $client->id,
+        'frequency' => RecurringFrequency::Quarterly,
+        'billing_period_day' => 24,
+        'start_date' => '2026-09-24',
+        'next_invoice_date' => '2026-09-23',
+        'next_period_anchor' => '2026-09-24',
+        'status' => RecurringInvoiceStatus::Active,
+        'currency' => 'ZAR',
+    ]);
+
+    app(RecurringInvoiceService::class)->advanceNextDate($template);
+
+    $fresh = $template->fresh();
+    // Next anchor = Dec 24 (Thursday, not a holiday) → run date = Dec 24
+    expect($fresh->next_period_anchor->toDateString())->toBe('2026-12-24')
+        ->and($fresh->next_invoice_date->toDateString())->toBe('2026-12-24');
+});
+
+it('weekly template advances by one week and skips public holiday', function (): void {
+    $client = recurringClient();
+    // Anchor 2026-04-27 = Freedom Day (Monday) → run date = 2026-04-24 (Friday)
+    $template = RecurringInvoice::create([
+        'client_id' => $client->id,
+        'frequency' => RecurringFrequency::Weekly,
+        'billing_period_day' => null,
+        'start_date' => '2026-04-27',
+        'next_invoice_date' => '2026-04-24',
+        'next_period_anchor' => '2026-04-27',
+        'status' => RecurringInvoiceStatus::Active,
+        'currency' => 'ZAR',
+    ]);
+
+    app(RecurringInvoiceService::class)->advanceNextDate($template);
+
+    $fresh = $template->fresh();
+    // Anchor advances to May 4 (Monday, not a holiday) → run date = May 4
+    expect($fresh->next_period_anchor->toDateString())->toBe('2026-05-04')
+        ->and($fresh->next_invoice_date->toDateString())->toBe('2026-05-04');
+});
+
+it('fortnightly template advances by two weeks', function (): void {
+    $client = recurringClient();
+    // Anchor 2026-04-27 = Freedom Day (Monday) → run date = 2026-04-24 (Friday)
+    $template = RecurringInvoice::create([
+        'client_id' => $client->id,
+        'frequency' => RecurringFrequency::Fortnightly,
+        'billing_period_day' => null,
+        'start_date' => '2026-04-27',
+        'next_invoice_date' => '2026-04-24',
+        'next_period_anchor' => '2026-04-27',
+        'status' => RecurringInvoiceStatus::Active,
+        'currency' => 'ZAR',
+    ]);
+
+    app(RecurringInvoiceService::class)->advanceNextDate($template);
+
+    $fresh = $template->fresh();
+    // Anchor advances to May 11 (Monday, not a holiday) → run date = May 11
+    expect($fresh->next_period_anchor->toDateString())->toBe('2026-05-11')
+        ->and($fresh->next_invoice_date->toDateString())->toBe('2026-05-11');
+});
+
+it('createTemplate sets next_period_anchor alongside next_invoice_date', function (): void {
+    Mail::fake();
+
+    $client = recurringClient();
+    // billing_period_day=25, start_date on the 25th itself (full period, no pro-rata)
+    $template = app(RecurringInvoiceService::class)->createTemplate(
+        array_merge(baseTemplateData($client, '2026-01-25'), ['billing_period_day' => 25])
+    );
+
+    // 2026-01-25 is a Sunday → run date Jan 23, anchor Jan 25
+    expect($template->next_period_anchor->toDateString())->toBe('2026-01-25')
+        ->and($template->next_invoice_date->toDateString())->toBe('2026-01-23');
+});
+
+it('weekly template created via createTemplate skips pro-rata', function (): void {
+    Mail::fake();
+
+    $client = recurringClient();
+    $template = app(RecurringInvoiceService::class)->createTemplate([
+        'client_id' => $client->id,
+        'frequency' => RecurringFrequency::Weekly->value,
+        'start_date' => '2026-05-15',
+        'lines' => [
+            ['description' => 'Weekly service', 'account_id' => '', 'quantity' => '1', 'unit_price' => '200', 'discount_percent' => '0', 'tax_rate' => '15'],
+        ],
+    ]);
+
+    // No pro-rata invoice generated for weekly templates
+    expect(Document::where('metadata->recurring_invoice_id', $template->id)->count())->toBe(0);
 });
 
 // --- completeIfExpired ---
@@ -532,8 +678,9 @@ it('command generates due invoices and advances next_invoice_date', function ():
 
     $this->artisan('billing:generate-recurring')->assertExitCode(0);
 
+    // 2026-05-01 is Workers' Day → working-day adjusted to Apr 30 (Thursday)
     expect(Document::salesInvoices()->count())->toBe(1)
-        ->and($template->fresh()->next_invoice_date->toDateString())->toBe('2026-05-01');
+        ->and($template->fresh()->next_invoice_date->toDateString())->toBe('2026-04-30');
 });
 
 it('command run twice on the same day generates only one invoice', function (): void {

@@ -29,6 +29,7 @@ class RecurringInvoice extends Model
         'start_date',
         'end_date',
         'next_invoice_date',
+        'next_period_anchor',
         'status',
         'currency',
         'auto_send',
@@ -48,6 +49,7 @@ class RecurringInvoice extends Model
             'start_date' => 'date',
             'end_date' => 'date',
             'next_invoice_date' => 'date',
+            'next_period_anchor' => 'date',
         ];
     }
 

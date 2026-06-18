@@ -22,12 +22,23 @@ class RecurringInvoiceFactory extends Factory
         return [
             'client_id' => Party::factory(),
             'frequency' => RecurringFrequency::Monthly,
-            'billing_period_day' => 1,
+            'billing_period_day' => 25,
             'start_date' => $startDate->toDateString(),
             'next_invoice_date' => $startDate->toDateString(),
+            'next_period_anchor' => $startDate->toDateString(),
             'status' => RecurringInvoiceStatus::Active,
             'currency' => 'ZAR',
         ];
+    }
+
+    public function weekly(): static
+    {
+        return $this->state(['frequency' => RecurringFrequency::Weekly]);
+    }
+
+    public function fortnightly(): static
+    {
+        return $this->state(['frequency' => RecurringFrequency::Fortnightly]);
     }
 
     public function monthly(): static

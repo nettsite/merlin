@@ -20,6 +20,7 @@ class RecurringInvoiceService
     public function __construct(
         private readonly BillingService $billingService,
         private readonly ProRataCalculator $proRataCalculator,
+        private readonly WorkingDayCalculator $workingDays,
         private readonly BillingSettings $billingSettings,
         private readonly CurrencySettings $currencySettings,
     ) {}
@@ -36,8 +37,17 @@ class RecurringInvoiceService
         $billingPeriodDay = (int) ($data['billing_period_day'] ?? $this->billingSettings->billing_period_day);
         $startDate = Carbon::parse($data['start_date']);
 
-        // next_invoice_date is the first full billing period date on or after start
-        $nextInvoiceDate = $this->resolveFirstFullPeriodDate($startDate, $billingPeriodDay);
+        $frequency = RecurringFrequency::from($data['frequency']);
+
+        // Derive anchor (nominal period date) and run date (working-day adjusted).
+        if ($frequency->isDayOfMonthBased()) {
+            $anchor = $this->resolveFirstFullPeriodDate($startDate, $billingPeriodDay);
+        } else {
+            // Weekly/fortnightly: anchor is the start date; no day-of-month concept.
+            $anchor = $startDate->copy();
+        }
+
+        $nextInvoiceDate = $this->workingDays->latestWorkingDayOnOrBefore($anchor);
 
         $template = RecurringInvoice::create([
             'client_id' => $data['client_id'],
@@ -49,6 +59,7 @@ class RecurringInvoiceService
             'start_date' => $startDate->toDateString(),
             'end_date' => isset($data['end_date']) ? Carbon::parse($data['end_date'])->toDateString() : null,
             'next_invoice_date' => $nextInvoiceDate->toDateString(),
+            'next_period_anchor' => $anchor->toDateString(),
             'status' => RecurringInvoiceStatus::Active,
             'currency' => strtoupper($data['currency'] ?? $this->currencySettings->base_currency),
             'auto_send' => $data['auto_send'] ?? true,
@@ -70,8 +81,9 @@ class RecurringInvoiceService
             ]);
         }
 
-        // Generate pro-rated first invoice if start is mid-period
-        if (! $this->proRataCalculator->isFullPeriod($startDate, $billingPeriodDay)) {
+        // Generate pro-rated first invoice if start is mid-period.
+        // Weekly/fortnightly have no day-of-month concept so pro-rata never applies.
+        if ($frequency->isDayOfMonthBased() && ! $this->proRataCalculator->isFullPeriod($startDate, $billingPeriodDay)) {
             $this->generateFromTemplate($template->fresh('lines'), true, $by);
         }
 
@@ -175,17 +187,27 @@ class RecurringInvoiceService
     }
 
     /**
-     * Advance the template's next_invoice_date by one frequency period.
+     * Advance the template's next_period_anchor by one frequency period, then
+     * derive the working-day-adjusted run date. Advancing from the anchor (not
+     * the run date) prevents the schedule from drifting backward over time.
      */
     public function advanceNextDate(RecurringInvoice $template): void
     {
-        $next = match ($template->frequency) {
-            RecurringFrequency::Monthly => $template->next_invoice_date->addMonthNoOverflow(),
-            RecurringFrequency::Quarterly => $template->next_invoice_date->addMonthsNoOverflow(3),
-            RecurringFrequency::Annually => $template->next_invoice_date->addYearNoOverflow(),
+        // Fall back to next_invoice_date for rows backfilled before Phase B.
+        $currentAnchor = $template->next_period_anchor ?? $template->next_invoice_date;
+
+        $nextAnchor = match ($template->frequency) {
+            RecurringFrequency::Weekly => $currentAnchor->addWeek(),
+            RecurringFrequency::Fortnightly => $currentAnchor->addWeeks(2),
+            RecurringFrequency::Monthly => $currentAnchor->addMonthNoOverflow(),
+            RecurringFrequency::Quarterly => $currentAnchor->addMonthsNoOverflow(3),
+            RecurringFrequency::Annually => $currentAnchor->addYearNoOverflow(),
         };
 
-        $template->update(['next_invoice_date' => $next->toDateString()]);
+        $template->update([
+            'next_period_anchor' => $nextAnchor->toDateString(),
+            'next_invoice_date' => $this->workingDays->latestWorkingDayOnOrBefore($nextAnchor)->toDateString(),
+        ]);
     }
 
     /**

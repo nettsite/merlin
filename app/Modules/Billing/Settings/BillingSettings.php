@@ -7,7 +7,7 @@ use Spatie\LaravelSettings\Settings;
 class BillingSettings extends Settings
 {
     /** Day of month on which billing periods begin (1–28). */
-    public int $billing_period_day = 1;
+    public int $billing_period_day = 25;
 
     /** Default AR control account ID (UUID of an asset account). Null until configured. */
     public ?string $default_receivable_account_id = null;
