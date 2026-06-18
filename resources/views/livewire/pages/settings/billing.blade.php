@@ -30,6 +30,9 @@ new #[Layout('components.layout.app')] class extends Component
     #[Validate('nullable|uuid|exists:nettmail_templates,id')]
     public ?string $invoiceEmailTemplateId = null;
 
+    #[Validate('nullable|string|max:200')]
+    public string $reminderOffsetsInput = '';
+
     public bool $saved = false;
 
     public function mount(): void
@@ -43,11 +46,17 @@ new #[Layout('components.layout.app')] class extends Component
         $this->taxLiabilityAccountId = $settings->tax_liability_account_id;
         $this->billingPeriodDay = $settings->billing_period_day;
         $this->invoiceEmailTemplateId = $settings->invoice_email_template_id;
+        $this->reminderOffsetsInput = implode(', ', $settings->reminder_offsets);
     }
 
     public function save(): void
     {
         $this->validate();
+
+        $offsets = array_values(array_filter(
+            array_map('intval', array_map('trim', explode(',', $this->reminderOffsetsInput))),
+            fn ($v) => $v !== 0 || str_contains($this->reminderOffsetsInput, '0'),
+        ));
 
         $settings = app(BillingSettings::class);
         $settings->default_receivable_account_id = $this->defaultReceivableAccountId ?: null;
@@ -56,6 +65,7 @@ new #[Layout('components.layout.app')] class extends Component
         $settings->tax_liability_account_id = $this->taxLiabilityAccountId ?: null;
         $settings->billing_period_day = $this->billingPeriodDay;
         $settings->invoice_email_template_id = $this->invoiceEmailTemplateId ?: null;
+        $settings->reminder_offsets = $offsets;
         $settings->save();
 
         $this->saved = true;
@@ -165,6 +175,16 @@ new #[Layout('components.layout.app')] class extends Component
                 </flux:select>
                 <flux:description>Template used for the sales invoice email sent to clients</flux:description>
                 <flux:error name="invoiceEmailTemplateId" />
+            </flux:field>
+
+            <flux:field>
+                <flux:label>Reminder Offsets</flux:label>
+                <flux:input wire:model="reminderOffsetsInput" placeholder="-3, 1, 7, 14" class="max-w-xs" />
+                <flux:description>
+                    Comma-separated business-day offsets from due date. Negative = before due, positive = overdue.
+                    e.g. <code>-3, 1, 7, 14</code>
+                </flux:description>
+                <flux:error name="reminderOffsetsInput" />
             </flux:field>
 
             <div class="mt-4 rounded-md border border-line bg-surface-alt p-4 text-sm">

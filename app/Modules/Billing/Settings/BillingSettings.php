@@ -24,6 +24,14 @@ class BillingSettings extends Settings
     /** NettMail template ID used for the sales invoice transactional email. */
     public ?string $invoice_email_template_id = null;
 
+    /**
+     * Business-day offsets from due_date that trigger a reminder email.
+     * Negative = before due (e.g. -3 fires 3 business days early), positive = overdue.
+     *
+     * @var array<int, int>
+     */
+    public array $reminder_offsets = [-3, 1, 7, 14];
+
     public static function group(): string
     {
         return 'billing';

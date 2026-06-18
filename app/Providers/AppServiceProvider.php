@@ -6,6 +6,7 @@ use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\AccountGroup;
 use App\Modules\Accounting\Models\AccountType;
 use App\Modules\Billing\Console\GenerateRecurringInvoices;
+use App\Modules\Billing\Console\SendReminders;
 use App\Modules\Billing\Models\PaymentTerm;
 use App\Modules\Billing\Models\RecurringInvoice;
 use App\Modules\Billing\Models\RecurringInvoiceLine;
@@ -44,7 +45,7 @@ class AppServiceProvider extends ServiceProvider
 
         $this->app->bind(ModulePolicy::class, AllModulesPolicy::class);
 
-        $this->commands([GenerateRecurringInvoices::class]);
+        $this->commands([GenerateRecurringInvoices::class, SendReminders::class]);
 
         $this->app->singleton(ExchangeRateService::class, function ($app): ExchangeRateService {
             return new ExchangeRateService($app->make(CurrencySettings::class)->base_currency);
