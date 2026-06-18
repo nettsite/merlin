@@ -15,6 +15,7 @@
         "livewire/volt": "^1",
         "nettsite/nettmail-laravel": "^0.2.3",
         "paperdoc-dev/paperdoc-lib": "^0.6.0",
+        "spatie/holidays": "^2.3",
         "spatie/laravel-activitylog": "^5.0",
         "spatie/laravel-medialibrary": "^11",
         "spatie/laravel-permission": "^7",
