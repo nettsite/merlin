@@ -24,6 +24,8 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
     Volt::route('clients', 'pages.clients.index')->name('clients.index');
     Volt::route('payment-terms', 'pages.payment-terms.index')->name('payment-terms.index');
     Volt::route('sales-invoices', 'pages.sales-invoices.index')->name('sales-invoices.index');
+    Volt::route('quotes', 'pages.quotes.index')->name('quotes.index');
+    Volt::route('credit-notes', 'pages.credit-notes.index')->name('credit-notes.index');
     Volt::route('recurring-invoices', 'pages.recurring-invoices.index')->name('recurring-invoices.index');
 
     // Accounting

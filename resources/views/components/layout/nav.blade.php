@@ -38,6 +38,20 @@
         >Sales Invoices</flux:sidebar.item>
 
         <flux:sidebar.item
+            icon="document-check"
+            href="{{ route('quotes.index') }}"
+            :current="request()->routeIs('quotes.*')"
+            wire:navigate
+        >Quotes</flux:sidebar.item>
+
+        <flux:sidebar.item
+            icon="document-minus"
+            href="{{ route('credit-notes.index') }}"
+            :current="request()->routeIs('credit-notes.*')"
+            wire:navigate
+        >Credit Notes</flux:sidebar.item>
+
+        <flux:sidebar.item
             icon="arrow-path"
             href="{{ route('recurring-invoices.index') }}"
             :current="request()->routeIs('recurring-invoices.*')"

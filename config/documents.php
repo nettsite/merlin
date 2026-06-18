@@ -76,7 +76,7 @@ return [
         'credit_note' => [
             'label' => 'Credit Note',
             'direction' => 'outbound',
-            'prefix' => 'CN',
+            'prefix' => 'CRN',
             'default_status' => 'draft',
             'requires_due_date' => false,
         ],
@@ -90,7 +90,7 @@ return [
         'quote' => [
             'label' => 'Quote',
             'direction' => 'outbound',
-            'prefix' => 'QT',
+            'prefix' => 'QUO',
             'default_status' => 'draft',
             'requires_due_date' => false,
         ],

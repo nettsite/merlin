@@ -45,6 +45,80 @@ class DocumentService
         $this->transition($doc, 'voided', $by, 'Invoice voided.');
     }
 
+    public function sendQuote(Document $quote, ?User $by): void
+    {
+        $this->transition($quote, 'sent', $by, 'Quote sent to client.');
+    }
+
+    public function acceptQuote(Document $quote, ?User $by): void
+    {
+        $this->transition($quote, 'accepted', $by, 'Quote accepted by client.');
+    }
+
+    public function declineQuote(Document $quote, ?User $by): void
+    {
+        $this->transition($quote, 'declined', $by, 'Quote declined.');
+    }
+
+    public function expireQuote(Document $quote, ?User $by): void
+    {
+        $this->transition($quote, 'expired', $by, 'Quote expired.');
+    }
+
+    public function convertQuoteToInvoice(Document $quote, ?User $by): Document
+    {
+        return DB::transaction(function () use ($quote, $by) {
+            $invoice = Document::create([
+                'document_type' => 'sales_invoice',
+                'direction' => 'outbound',
+                'status' => 'draft',
+                'party_id' => $quote->party_id,
+                'reference' => $quote->reference,
+                'issue_date' => now()->toDateString(),
+                'currency' => $quote->currency,
+                'exchange_rate' => $quote->exchange_rate ?? 1.0,
+                'subtotal' => $quote->subtotal,
+                'tax_total' => $quote->tax_total,
+                'total' => $quote->total,
+                'balance_due' => $quote->total,
+                'payment_term_id' => $quote->payment_term_id,
+                'notes' => $quote->notes,
+                'source' => 'manual',
+            ]);
+
+            foreach ($quote->lines as $line) {
+                $newLine = $line->replicate(['llm_account_suggestion', 'llm_confidence']);
+                $newLine->document_id = $invoice->id;
+                $newLine->save();
+            }
+
+            $this->linkDocuments($quote, $invoice, 'converted_from');
+            $this->transition($quote, 'converted', $by, "Converted to invoice {$invoice->document_number}.");
+
+            return $invoice;
+        });
+    }
+
+    public function issueCreditNote(Document $creditNote, ?User $by): void
+    {
+        $this->transition($creditNote, 'issued', $by, 'Credit note issued.');
+    }
+
+    public function applyCreditNote(Document $creditNote, Document $invoice, ?User $by): void
+    {
+        DB::transaction(function () use ($creditNote, $invoice, $by) {
+            $amount = (float) $creditNote->total;
+            $newBalance = max(0, (float) $invoice->balance_due - $amount);
+
+            $invoice->balance_due = $newBalance;
+            $invoice->saveQuietly();
+
+            $this->linkDocuments($invoice, $creditNote, 'credited_by');
+            $this->transition($creditNote, 'applied', $by, "Applied to invoice {$invoice->document_number}.");
+            $this->recordActivity($invoice, $by, 'credit_applied', "Credit note {$creditNote->document_number} applied; balance reduced by {$creditNote->currency} {$amount}.");
+        });
+    }
+
     public function markAsReviewed(Document $doc, User $by): void
     {
         $this->transition($doc, 'reviewed', $by, 'Marked as reviewed.');
@@ -423,6 +497,20 @@ class DocumentService
                 'sent' => ['partially_paid', 'paid', 'voided'],
                 'partially_paid' => ['paid', 'voided'],
                 'paid' => [],
+                'voided' => [],
+            ],
+            'quote' => [
+                'draft' => ['sent', 'declined', 'expired'],
+                'sent' => ['accepted', 'declined', 'expired'],
+                'accepted' => ['converted'],
+                'converted' => [],
+                'declined' => [],
+                'expired' => [],
+            ],
+            'credit_note' => [
+                'draft' => ['issued', 'voided'],
+                'issued' => ['applied', 'voided'],
+                'applied' => [],
                 'voided' => [],
             ],
         ];

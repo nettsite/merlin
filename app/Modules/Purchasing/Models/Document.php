@@ -187,6 +187,16 @@ class Document extends Model implements HasMedia
         return $query->where('document_type', 'sales_invoice');
     }
 
+    public function scopeQuotes(Builder $query): Builder
+    {
+        return $query->where('document_type', 'quote');
+    }
+
+    public function scopeCreditNotes(Builder $query): Builder
+    {
+        return $query->where('document_type', 'credit_note');
+    }
+
     public function scopeInbound(Builder $query): Builder
     {
         return $query->where('direction', 'inbound');
