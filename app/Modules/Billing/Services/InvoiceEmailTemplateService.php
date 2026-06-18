@@ -37,6 +37,24 @@ class InvoiceEmailTemplateService
     }
 
     /**
+     * Available shortcodes for use in invoice email templates.
+     *
+     * @return array<string, string>
+     */
+    public static function availableShortcodes(): array
+    {
+        return [
+            '{{invoice_number}}' => 'Invoice number (e.g. INV-2026-00042)',
+            '{{amount}}' => 'Invoice total (currency + amount)',
+            '{{due_date}}' => 'Payment due date (e.g. 30 Jun 2026)',
+            '{{amount_outstanding}}' => 'Balance still owed (partial-payment aware)',
+            '{{invoice_url}}' => 'Link to view the invoice in the client portal',
+            '{{client_name}}' => 'Client display name',
+            '{{company_name}}' => 'Your company name',
+        ];
+    }
+
+    /**
      * @return array<string, string>
      */
     private function mergeTagValues(Document $invoice): array
@@ -44,7 +62,11 @@ class InvoiceEmailTemplateService
         return [
             'client_name' => $invoice->party?->displayName ?? '',
             'invoice_number' => $invoice->document_number ?? '',
+            'amount' => $invoice->currency.' '.number_format((float) $invoice->total, 2),
             'amount_due' => $invoice->currency.' '.number_format((float) $invoice->total, 2),
+            'due_date' => $invoice->due_date ? $invoice->due_date->format('d M Y') : '',
+            'amount_outstanding' => $invoice->currency.' '.number_format((float) $invoice->balance_due, 2),
+            'invoice_url' => url('/portal/invoices/'.$invoice->id),
             'invoice_details_html' => $this->invoiceDetailsHtml($invoice),
             'company_name' => config('app.name'),
         ];

@@ -2,6 +2,7 @@
 
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Billing\Models\PaymentTerm;
+use App\Modules\Billing\Services\InvoiceEmailTemplateService;
 use App\Modules\Billing\Settings\BillingSettings;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Validate;
@@ -165,6 +166,18 @@ new #[Layout('components.layout.app')] class extends Component
                 <flux:description>Template used for the sales invoice email sent to clients</flux:description>
                 <flux:error name="invoiceEmailTemplateId" />
             </flux:field>
+
+            <div class="mt-4 rounded-md border border-line bg-surface-alt p-4 text-sm">
+                <p class="font-medium text-ink mb-2">Available shortcodes</p>
+                <dl class="space-y-1">
+                    @foreach (InvoiceEmailTemplateService::availableShortcodes() as $tag => $description)
+                        <div class="flex gap-3">
+                            <dt class="font-mono text-xs text-ink-soft shrink-0 pt-0.5 select-all">{{ $tag }}</dt>
+                            <dd class="text-ink-muted">{{ $description }}</dd>
+                        </div>
+                    @endforeach
+                </dl>
+            </div>
         </div>
 
         <div class="flex items-center gap-4 pt-2">

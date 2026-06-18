@@ -96,6 +96,79 @@ it('invoice_details_html is empty when no optional fields are set', function ():
     expect($rendered['html'])->toBe('<div></div>');
 });
 
+// --- Phase D shortcodes ---
+
+function shortcodeTemplate(string $html): void
+{
+    $template = Template::create([
+        'name' => 'Shortcode Test',
+        'type' => TemplateType::Transactional,
+        'subject' => 'Test',
+        'html' => $html,
+    ]);
+
+    $settings = app(BillingSettings::class);
+    $settings->invoice_email_template_id = $template->id;
+    $settings->save();
+}
+
+it('renders {{invoice_number}} shortcode', function (): void {
+    shortcodeTemplate('Ref: {{invoice_number}}');
+    $doc = templateDraft();
+
+    $rendered = app(InvoiceEmailTemplateService::class)->render($doc);
+
+    expect($rendered['html'])->toBe("Ref: {$doc->document_number}");
+});
+
+it('renders {{amount}} shortcode as formatted total', function (): void {
+    shortcodeTemplate('Total: {{amount}}');
+    $doc = templateDraft();
+    $doc->update(['total' => 1150.00, 'currency' => 'ZAR']);
+
+    $rendered = app(InvoiceEmailTemplateService::class)->render($doc);
+
+    expect($rendered['html'])->toBe('Total: ZAR 1,150.00');
+});
+
+it('renders {{due_date}} shortcode', function (): void {
+    shortcodeTemplate('Due: {{due_date}}');
+    $doc = templateDraft();
+    $doc->update(['due_date' => '2026-06-30']);
+
+    $rendered = app(InvoiceEmailTemplateService::class)->render($doc);
+
+    expect($rendered['html'])->toBe('Due: 30 Jun 2026');
+});
+
+it('renders {{amount_outstanding}} reflecting partial payment', function (): void {
+    shortcodeTemplate('Outstanding: {{amount_outstanding}}');
+    $doc = templateDraft();
+    $doc->update(['total' => 1000.00, 'balance_due' => 400.00, 'currency' => 'ZAR']);
+
+    $rendered = app(InvoiceEmailTemplateService::class)->render($doc);
+
+    expect($rendered['html'])->toBe('Outstanding: ZAR 400.00');
+});
+
+it('renders {{invoice_url}} as a portal link', function (): void {
+    shortcodeTemplate('View: {{invoice_url}}');
+    $doc = templateDraft();
+
+    $rendered = app(InvoiceEmailTemplateService::class)->render($doc);
+
+    expect($rendered['html'])->toContain('/portal/invoices/'.$doc->id);
+});
+
+it('leaves unknown shortcodes untouched', function (): void {
+    shortcodeTemplate('Hello {{unknown_tag}}');
+    $doc = templateDraft();
+
+    $rendered = app(InvoiceEmailTemplateService::class)->render($doc);
+
+    expect($rendered['html'])->toBe('Hello {{unknown_tag}}');
+});
+
 it('throws when no template is configured', function (): void {
     $settings = app(BillingSettings::class);
     $settings->invoice_email_template_id = null;
