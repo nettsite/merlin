@@ -55,7 +55,16 @@
         </flux:navmenu>
     </flux:dropdown>
 
-    <flux:navbar.item href="/user-guide/" target="_blank">User Guide</flux:navbar.item>
+    <flux:dropdown>
+        <flux:navbar.item
+            icon:trailing="chevron-down"
+            :current="request()->routeIs('help')"
+        >Help</flux:navbar.item>
+        <flux:navmenu>
+            <flux:navmenu.item href="{{ route('help') }}" wire:navigate>Help Chat</flux:navmenu.item>
+            <flux:navmenu.item href="/docs/user-guide/" target="_blank">User Guide</flux:navmenu.item>
+        </flux:navmenu>
+    </flux:dropdown>
 
     <flux:dropdown>
         <flux:navbar.item

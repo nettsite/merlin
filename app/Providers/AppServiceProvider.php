@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Console\Commands\DocsSync;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\AccountGroup;
 use App\Modules\Accounting\Models\AccountType;
@@ -45,7 +46,7 @@ class AppServiceProvider extends ServiceProvider
 
         $this->app->bind(ModulePolicy::class, AllModulesPolicy::class);
 
-        $this->commands([GenerateRecurringInvoices::class, SendReminders::class]);
+        $this->commands([DocsSync::class, GenerateRecurringInvoices::class, SendReminders::class]);
 
         $this->app->singleton(ExchangeRateService::class, function ($app): ExchangeRateService {
             return new ExchangeRateService($app->make(CurrencySettings::class)->base_currency);

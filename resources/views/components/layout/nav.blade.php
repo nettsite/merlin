@@ -135,8 +135,15 @@
 
     <flux:sidebar.group heading="Help">
         <flux:sidebar.item
+            icon="chat-bubble-left-right"
+            href="{{ route('help') }}"
+            :current="request()->routeIs('help')"
+            wire:navigate
+        >Help Chat</flux:sidebar.item>
+
+        <flux:sidebar.item
             icon="book-open"
-            href="/user-guide/"
+            href="/docs/user-guide/"
             target="_blank"
         >User Guide</flux:sidebar.item>
     </flux:sidebar.group>
