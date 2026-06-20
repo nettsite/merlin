@@ -73,9 +73,11 @@ class InvoiceEmailTemplateService
 
         $renderer = new MergeTagRenderer;
 
+        $style = config('nettmail.email_body_style', 'font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#1f2937;');
+
         return $renderer->render(
             $baseTemplate->html ?? '',
-            array_merge($values, ['email_body' => $body]),
+            array_merge($values, ['email_body' => '<div style="'.$style.'">'.$body.'</div>']),
         );
     }
 

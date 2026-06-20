@@ -132,4 +132,10 @@ return [
         'email_body' => 'Email Body',
     ],
 
+    /*
+     * Inline CSS applied to the email_body wrapper div injected into the base template.
+     * Override to match the font used in your Unlayer/NettMail base template.
+     */
+    'email_body_style' => 'font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#1f2937;',
+
 ];

@@ -454,10 +454,16 @@ new #[Layout('components.layout.app')] class extends Component
                     x-data="{
                         editor: null,
                         init() {
+                            // Use style-based size so output has inline font-size (email-safe).
+                            const SizeStyle = Quill.import('attributors/style/size');
+                            SizeStyle.whitelist = ['12px', '13px', '14px', '15px', '16px', '18px', '20px'];
+                            Quill.register(SizeStyle, true);
+
                             this.editor = new Quill(this.$refs.editorEl, {
                                 theme: 'snow',
                                 modules: {
                                     toolbar: [
+                                        [{ size: ['12px', '13px', '14px', '15px', false, '16px', '18px', '20px'] }],
                                         ['bold', 'italic', 'underline'],
                                         ['link'],
                                         [{ list: 'bullet' }, { list: 'ordered' }],
@@ -465,6 +471,8 @@ new #[Layout('components.layout.app')] class extends Component
                                     ]
                                 }
                             });
+                            this.editor.root.style.fontFamily = 'Arial, Helvetica, sans-serif';
+                            this.editor.root.style.fontSize = '15px';
                             this.editor.root.innerHTML = @js($tplBody);
                             this.editor.on('text-change', () => {
                                 $wire.set('tplBody', this.editor.root.innerHTML, false);
