@@ -21,16 +21,8 @@ class BillingSettings extends Settings
     /** Tax liability account ID used on sales invoices. */
     public ?string $tax_liability_account_id = null;
 
-    /** NettMail template ID used for the sales invoice transactional email. */
-    public ?string $invoice_email_template_id = null;
-
-    /**
-     * Business-day offsets from due_date that trigger a reminder email.
-     * Negative = before due (e.g. -3 fires 3 business days early), positive = overdue.
-     *
-     * @var array<int, int>
-     */
-    public array $reminder_offsets = [-3, 1, 7, 14];
+    /** NettMail/Unlayer template used as the branded wrapper for all billing emails. Must contain {{email_body}}. */
+    public ?string $base_email_template_id = null;
 
     public static function group(): string
     {

@@ -3,10 +3,10 @@
 namespace App\Modules\Billing\Console;
 
 use App\Mail\SalesInvoiceMail;
+use App\Modules\Billing\Models\BillingEmailTemplate;
 use App\Modules\Billing\Services\BillingService;
 use App\Modules\Billing\Services\InvoiceEmailTemplateService;
 use App\Modules\Billing\Services\WorkingDayCalculator;
-use App\Modules\Billing\Settings\BillingSettings;
 use App\Modules\Purchasing\Models\Document;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
@@ -19,10 +19,9 @@ class SendReminders extends Command
 {
     protected $signature = 'billing:send-reminders {--dry-run : Preview without sending}';
 
-    protected $description = 'Send invoice reminder emails based on configured business-day offsets from due date.';
+    protected $description = 'Send invoice reminder emails based on enabled reminder templates.';
 
     public function handle(
-        BillingSettings $settings,
         WorkingDayCalculator $workingDays,
         InvoiceEmailTemplateService $templateService,
         BillingService $billingService,
@@ -30,15 +29,14 @@ class SendReminders extends Command
         $isDryRun = (bool) $this->option('dry-run');
         $today = Carbon::today()->toDateString();
 
-        $offsets = $settings->reminder_offsets;
+        $reminderTemplates = BillingEmailTemplate::reminder()->enabled()->orderBy('offset_days')->get();
 
-        if (empty($offsets)) {
-            $this->comment('No reminder offsets configured.');
+        if ($reminderTemplates->isEmpty()) {
+            $this->comment('No enabled reminder templates configured.');
 
             return self::SUCCESS;
         }
 
-        // Load all open invoices with due dates in one query, filter per offset in PHP.
         $candidates = Document::salesInvoices()
             ->whereIn('status', ['sent', 'partially_paid'])
             ->where('balance_due', '>', 0)
@@ -56,7 +54,9 @@ class SendReminders extends Command
         $skipped = 0;
         $errors = 0;
 
-        foreach ($offsets as $offset) {
+        foreach ($reminderTemplates as $reminder) {
+            $offset = $reminder->offset_days;
+
             $matched = $candidates->filter(
                 fn (Document $doc) => $workingDays->addBusinessDays($doc->due_date, $offset)->toDateString() === $today,
             );
@@ -66,7 +66,7 @@ class SendReminders extends Command
             }
 
             $label = $offset < 0 ? abs($offset).' business days before due' : $offset.' business days after due';
-            $this->line("Offset {$offset} ({$label}): {$matched->count()} invoice(s)");
+            $this->line("{$reminder->name} (offset {$offset} — {$label}): {$matched->count()} invoice(s)");
 
             foreach ($matched as $invoice) {
                 $clientName = $invoice->party?->business?->display_name ?? $invoice->party_id;
@@ -77,7 +77,7 @@ class SendReminders extends Command
                 }
 
                 try {
-                    $rendered = $templateService->render($invoice);
+                    $rendered = $templateService->render($invoice, $reminder);
                     $emails = array_column($billingService->resolveRecipients($invoice), 'email');
 
                     if (empty($emails)) {
@@ -90,15 +90,14 @@ class SendReminders extends Command
 
                     foreach ($emails as $email) {
                         Mail::mailer('nettmail')->to($email)->send(
-                            new SalesInvoiceMail($invoice, "Reminder: {$rendered['subject']}", $rendered['html']),
+                            new SalesInvoiceMail($invoice, $rendered['subject'], $rendered['html']),
                         );
                     }
 
                     $this->info('    Sent to: '.implode(', ', $emails));
-                    Log::info("billing:send-reminders — sent {$invoice->document_number} (offset {$offset}) to ".implode(', ', $emails));
+                    Log::info("billing:send-reminders — sent {$invoice->document_number} ({$reminder->name}) to ".implode(', ', $emails));
                     $sent++;
                 } catch (RuntimeException $e) {
-                    // No template configured — skip all invoices for this run.
                     $this->error("Template error: {$e->getMessage()}");
                     Log::error("billing:send-reminders — template error: {$e->getMessage()}");
 

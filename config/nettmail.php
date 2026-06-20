@@ -124,4 +124,12 @@ return [
         'physical_address' => env('NETTMAIL_PHYSICAL_ADDRESS'),
     ],
 
+    /*
+     * Extra merge tags shown in the template editor UI (key => label).
+     * These are in addition to the built-in defaults (first_name, last_name, etc.).
+     */
+    'extra_merge_tags' => [
+        'email_body' => 'Email Body',
+    ],
+
 ];

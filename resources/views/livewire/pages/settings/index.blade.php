@@ -1,7 +1,9 @@
 <?php
 
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Billing\Models\BillingEmailTemplate;
 use App\Modules\Billing\Models\PaymentTerm;
+use App\Modules\Billing\Services\InvoiceEmailTemplateService;
 use App\Modules\Billing\Settings\BillingSettings;
 use App\Modules\Core\Settings\CompanySettings;
 use App\Modules\Core\Settings\CurrencySettings;
@@ -79,9 +81,22 @@ new #[Layout('components.layout.app')] class extends Component
 
     public int $billingPeriodDay = 1;
 
-    public ?string $invoiceEmailTemplateId = null;
+    public ?string $baseEmailTemplateId = null;
 
-    public string $reminderOffsetsInput = '';
+    // ── Email Templates ────────────────────────────────────────────────────
+    public ?string $editingTemplateId = null;
+
+    public string $tplType = 'invoice';
+
+    public string $tplName = '';
+
+    public string $tplSubject = '';
+
+    public string $tplBody = '';
+
+    public ?int $tplOffsetDays = null;
+
+    public bool $tplEnabled = true;
 
     public function mount(): void
     {
@@ -122,8 +137,44 @@ new #[Layout('components.layout.app')] class extends Component
         $this->defaultPaymentTermId = $billing->default_payment_term_id;
         $this->taxLiabilityAccountId = $billing->tax_liability_account_id;
         $this->billingPeriodDay = $billing->billing_period_day;
-        $this->invoiceEmailTemplateId = $billing->invoice_email_template_id;
-        $this->reminderOffsetsInput = implode(', ', $billing->reminder_offsets);
+        $this->baseEmailTemplateId = $billing->base_email_template_id;
+
+        if ($this->tab === 'templates') {
+            $this->autoSelectFirstTemplate();
+        }
+    }
+
+    public function updatedTab(string $value): void
+    {
+        if ($value === 'templates' && $this->editingTemplateId === null) {
+            $this->autoSelectFirstTemplate();
+        }
+
+        $this->saved = false;
+    }
+
+    private function autoSelectFirstTemplate(): void
+    {
+        $first = BillingEmailTemplate::orderByRaw("type = 'invoice' DESC")
+            ->orderBy('offset_days')
+            ->first();
+
+        if ($first) {
+            $this->loadTemplate($first->id);
+        }
+    }
+
+    public function loadTemplate(string $id): void
+    {
+        $template = BillingEmailTemplate::findOrFail($id);
+        $this->editingTemplateId = $template->id;
+        $this->tplType = $template->type;
+        $this->tplName = $template->name;
+        $this->tplSubject = $template->subject;
+        $this->tplBody = $template->body;
+        $this->tplOffsetDays = $template->offset_days;
+        $this->tplEnabled = $template->enabled;
+        $this->saved = false;
     }
 
     public function save(): void
@@ -134,6 +185,7 @@ new #[Layout('components.layout.app')] class extends Component
             'general' => $this->saveGeneral(),
             'purchasing' => $this->savePurchasing(),
             'billing' => $this->saveBilling(),
+            'templates' => $this->saveTemplate(),
             default => null,
         };
     }
@@ -238,14 +290,8 @@ new #[Layout('components.layout.app')] class extends Component
             'defaultPaymentTermId' => 'nullable|uuid|exists:payment_terms,id',
             'taxLiabilityAccountId' => 'nullable|uuid|exists:accounts,id',
             'billingPeriodDay' => 'required|integer|min:1|max:28',
-            'invoiceEmailTemplateId' => 'nullable|uuid|exists:nettmail_templates,id',
-            'reminderOffsetsInput' => 'nullable|string|max:200',
+            'baseEmailTemplateId' => 'nullable|uuid|exists:nettmail_templates,id',
         ]);
-
-        $offsets = array_values(array_filter(
-            array_map('intval', array_map('trim', explode(',', $this->reminderOffsetsInput))),
-            fn ($v) => $v !== 0 || str_contains($this->reminderOffsetsInput, '0'),
-        ));
 
         $settings = app(BillingSettings::class);
         $settings->default_receivable_account_id = $this->defaultReceivableAccountId ?: null;
@@ -253,46 +299,92 @@ new #[Layout('components.layout.app')] class extends Component
         $settings->default_payment_term_id = $this->defaultPaymentTermId ?: null;
         $settings->tax_liability_account_id = $this->taxLiabilityAccountId ?: null;
         $settings->billing_period_day = $this->billingPeriodDay;
-        $settings->invoice_email_template_id = $this->invoiceEmailTemplateId ?: null;
-        $settings->reminder_offsets = $offsets;
+        $settings->base_email_template_id = $this->baseEmailTemplateId ?: null;
         $settings->save();
+
+        $this->saved = true;
+    }
+
+    private function saveTemplate(): void
+    {
+        if ($this->editingTemplateId === null) {
+            return;
+        }
+
+        $this->validate([
+            'tplName' => 'required|string|max:255',
+            'tplSubject' => 'required|string|max:500',
+            'tplBody' => 'required|string',
+            'tplOffsetDays' => 'nullable|integer',
+        ]);
+
+        $template = BillingEmailTemplate::findOrFail($this->editingTemplateId);
+        $template->name = $this->tplName;
+        $template->subject = $this->tplSubject;
+        $template->body = $this->tplBody;
+        $template->enabled = $this->tplEnabled;
+
+        if ($template->type === 'reminder') {
+            $template->offset_days = (int) $this->tplOffsetDays;
+        }
+
+        $template->save();
 
         $this->saved = true;
     }
 
     public function with(): array
     {
-        if ($this->tab !== 'billing') {
-            return [];
-        }
+        $data = [];
 
-        return [
-            'assetAccounts' => Account::postable()->active()
+        if ($this->tab === 'billing') {
+            $data['assetAccounts'] = Account::postable()->active()
                 ->whereHas('group.type', fn ($q) => $q->where('code', '1'))
                 ->orderBy('code')
-                ->get(['id', 'code', 'name']),
-            'liabilityAccounts' => Account::postable()->active()
+                ->get(['id', 'code', 'name']);
+            $data['liabilityAccounts'] = Account::postable()->active()
                 ->whereHas('group.type', fn ($q) => $q->where('code', '2'))
                 ->orderBy('code')
-                ->get(['id', 'code', 'name']),
-            'paymentTerms' => PaymentTerm::orderBy('name')->get(['id', 'name']),
-            'emailTemplates' => Template::where('type', TemplateType::Transactional)
+                ->get(['id', 'code', 'name']);
+            $data['paymentTerms'] = PaymentTerm::orderBy('name')->get(['id', 'name']);
+            $data['emailTemplates'] = Template::where('type', TemplateType::Transactional)
                 ->whereNull('archived_at')
                 ->orderBy('name')
-                ->get(['id', 'name']),
-        ];
+                ->get(['id', 'name']);
+        }
+
+        if ($this->tab === 'templates') {
+            $data['allTemplates'] = BillingEmailTemplate::orderByRaw("type = 'invoice' DESC")
+                ->orderBy('offset_days')
+                ->get();
+        }
+
+        return $data;
     }
 }; ?>
 
+@assets
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/quill@2/dist/quill.snow.css">
+<script src="https://cdn.jsdelivr.net/npm/quill@2/dist/quill.js"></script>
+@endassets
+
 <div>
-    {{-- Sticky header: title + tabs + save button --}}
+    {{-- Sticky header --}}
     <div class="sticky top-0 z-10 bg-white border-b border-line">
         <div class="flex items-center justify-between px-6 pt-5 pb-0">
-            <div>
-                <h1 class="text-[17px] font-semibold tracking-tight text-ink">Settings</h1>
-            </div>
+            <h1 class="text-[17px] font-semibold tracking-tight text-ink">Settings</h1>
 
-            @if($tab !== 'roles')
+            @if($tab === 'templates' && $editingTemplateId)
+                <div class="flex items-center gap-3 pb-4">
+                    @if($saved)
+                        <span class="text-sm text-success">Saved.</span>
+                    @endif
+                    {{-- Dispatch event so Alpine syncs Quill content before Livewire saves --}}
+                    <flux:button x-on:click="$dispatch('sync-and-save-template')" variant="primary" size="sm">
+                        Save Changes
+                    </flux:button>
+                </div>
+            @elseif(!in_array($tab, ['roles', 'templates']))
                 <div class="flex items-center gap-3 pb-4">
                     @if($saved)
                         <span wire:loading.remove wire:target="save" class="text-sm text-success">Saved.</span>
@@ -306,7 +398,7 @@ new #[Layout('components.layout.app')] class extends Component
 
         {{-- Tab bar --}}
         <div class="flex gap-0 px-6">
-            @foreach(['general' => 'General', 'purchasing' => 'Purchasing', 'billing' => 'Billing', 'roles' => 'Roles'] as $key => $label)
+            @foreach(['general' => 'General', 'purchasing' => 'Purchasing', 'billing' => 'Billing', 'roles' => 'Roles', 'templates' => 'Email Templates'] as $key => $label)
                 <button
                     type="button"
                     wire:click="$set('tab', '{{ $key }}')"
@@ -322,6 +414,135 @@ new #[Layout('components.layout.app')] class extends Component
     {{-- Tab content --}}
     @if($tab === 'roles')
         <livewire:pages.roles.index />
+
+    @elseif($tab === 'templates')
+        {{-- Template list sidebar + editor --}}
+        <div class="flex min-h-[600px] divide-x divide-line">
+
+            {{-- Sidebar: template list --}}
+            <div class="w-52 shrink-0 py-3">
+                @foreach ($allTemplates as $tmpl)
+                    <button
+                        type="button"
+                        wire:click="loadTemplate('{{ $tmpl->id }}')"
+                        class="w-full text-left px-4 py-3 border-l-2 transition-colors
+                            {{ $editingTemplateId === $tmpl->id
+                                ? 'border-accent bg-surface-alt text-ink'
+                                : 'border-transparent hover:bg-surface-alt text-ink-muted hover:text-ink' }}"
+                    >
+                        <p class="text-sm font-medium leading-tight">{{ $tmpl->name }}</p>
+                        <p class="text-xs text-ink-soft mt-0.5">
+                            @if($tmpl->type === 'invoice')
+                                New invoice
+                            @elseif($tmpl->offset_days < 0)
+                                {{ abs($tmpl->offset_days) }}d before due
+                            @else
+                                {{ $tmpl->offset_days }}d overdue
+                            @endif
+                            @if(!$tmpl->enabled)
+                                · <span class="text-danger">off</span>
+                            @endif
+                        </p>
+                    </button>
+                @endforeach
+            </div>
+
+            {{-- Editor --}}
+            @if($editingTemplateId)
+                <div class="flex-1 px-8 py-6 max-w-4xl"
+                    wire:key="tpl-{{ $editingTemplateId }}"
+                    x-data="{
+                        editor: null,
+                        init() {
+                            this.editor = new Quill(this.$refs.editorEl, {
+                                theme: 'snow',
+                                modules: {
+                                    toolbar: [
+                                        ['bold', 'italic', 'underline'],
+                                        ['link'],
+                                        [{ list: 'bullet' }, { list: 'ordered' }],
+                                        ['clean']
+                                    ]
+                                }
+                            });
+                            this.editor.root.innerHTML = @js($tplBody);
+                            this.editor.on('text-change', () => {
+                                $wire.set('tplBody', this.editor.root.innerHTML, false);
+                            });
+                        },
+                        syncContent() {
+                            if (this.editor) {
+                                $wire.set('tplBody', this.editor.root.innerHTML, false);
+                            }
+                        }
+                    }"
+                    x-on:sync-and-save-template.window="syncContent(); $nextTick(() => $wire.save())"
+                >
+                    <div class="space-y-5">
+                        {{-- Name / offset / enabled --}}
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+                            <flux:field>
+                                <flux:label>Name</flux:label>
+                                <flux:input wire:model="tplName" />
+                                <flux:error name="tplName" />
+                            </flux:field>
+
+                            @if($tplType === 'reminder')
+                                <flux:field>
+                                    <flux:label>Offset Days</flux:label>
+                                    <flux:input wire:model="tplOffsetDays" type="number" />
+                                    <flux:description>Negative = before due, positive = after</flux:description>
+                                    <flux:error name="tplOffsetDays" />
+                                </flux:field>
+                            @endif
+
+                            <div class="pb-1">
+                                <flux:field>
+                                    <flux:checkbox wire:model="tplEnabled" label="Enabled" />
+                                </flux:field>
+                            </div>
+                        </div>
+
+                        {{-- Subject --}}
+                        <flux:field>
+                            <flux:label>Subject</flux:label>
+                            <flux:input wire:model="tplSubject" />
+                            <flux:error name="tplSubject" />
+                        </flux:field>
+
+                        {{-- Body (Quill) --}}
+                        <flux:field>
+                            <flux:label>Body</flux:label>
+                            <div class="border border-line rounded-md overflow-hidden [&_.ql-toolbar]:border-0 [&_.ql-toolbar]:border-b [&_.ql-toolbar]:border-line [&_.ql-container]:border-0">
+                                <div x-ref="editorEl" class="min-h-64 text-sm"></div>
+                            </div>
+                            <flux:error name="tplBody" />
+                        </flux:field>
+
+                        {{-- Variables reference --}}
+                        <div class="rounded-md border border-line bg-surface-alt p-4 text-sm">
+                            <p class="text-xs font-semibold text-ink-muted uppercase tracking-wide mb-2">Available variables</p>
+                            <div class="flex flex-wrap gap-2">
+                                @foreach (InvoiceEmailTemplateService::availableShortcodes() as $tag => $desc)
+                                    <button
+                                        type="button"
+                                        title="{{ $desc }}"
+                                        x-on:click="
+                                            editor.focus();
+                                            const sel = editor.getSelection(true);
+                                            editor.insertText(sel ? sel.index : editor.getLength(), '{{ $tag }}');
+                                        "
+                                        class="font-mono text-xs bg-white border border-line rounded px-1.5 py-0.5 text-ink-soft hover:text-ink hover:border-ink-muted transition-colors cursor-pointer"
+                                    >{{ $tag }}</button>
+                                @endforeach
+                            </div>
+                            <p class="text-xs text-ink-muted mt-2">Click a variable to insert it at the cursor.</p>
+                        </div>
+                    </div>
+                </div>
+            @endif
+        </div>
+
     @else
         <div class="max-w-5xl mx-auto px-6 py-2 divide-y divide-line">
 
@@ -585,11 +806,11 @@ new #[Layout('components.layout.app')] class extends Component
                     </div>
                 </div>
 
-                {{-- Defaults & Email --}}
+                {{-- Defaults --}}
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-8 py-8">
                     <div>
-                        <h3 class="text-sm font-semibold text-ink">Defaults & Email</h3>
-                        <p class="mt-1 text-sm text-ink-muted">Values pre-selected when creating invoices and sending emails.</p>
+                        <h3 class="text-sm font-semibold text-ink">Defaults</h3>
+                        <p class="mt-1 text-sm text-ink-muted">Values pre-selected when creating invoices.</p>
                     </div>
                     <div class="col-span-2 space-y-5">
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -612,27 +833,27 @@ new #[Layout('components.layout.app')] class extends Component
                                 <flux:error name="billingPeriodDay" />
                             </flux:field>
                         </div>
+                    </div>
+                </div>
 
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <flux:field>
-                                <flux:label>Invoice Email Template</flux:label>
-                                <flux:select wire:model="invoiceEmailTemplateId">
-                                    <flux:select.option value="">— None —</flux:select.option>
-                                    @foreach ($emailTemplates as $template)
-                                        <flux:select.option value="{{ $template->id }}">{{ $template->name }}</flux:select.option>
-                                    @endforeach
-                                </flux:select>
-                                <flux:description>Template for invoice emails to clients</flux:description>
-                                <flux:error name="invoiceEmailTemplateId" />
-                            </flux:field>
-
-                            <flux:field>
-                                <flux:label>Reminder Offsets</flux:label>
-                                <flux:input wire:model="reminderOffsetsInput" placeholder="-3, 1, 7, 14" />
-                                <flux:description>Business-day offsets from due date (negative = before)</flux:description>
-                                <flux:error name="reminderOffsetsInput" />
-                            </flux:field>
-                        </div>
+                {{-- Email --}}
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-8 py-8">
+                    <div>
+                        <h3 class="text-sm font-semibold text-ink">Email</h3>
+                        <p class="mt-1 text-sm text-ink-muted">NettMail/Unlayer template used as the branded wrapper for all billing emails. Must contain <code class="text-xs bg-surface-alt px-1 rounded">@{{email_body}}</code> to pull in per-email content.</p>
+                    </div>
+                    <div class="col-span-2">
+                        <flux:field>
+                            <flux:label>Base Email Template</flux:label>
+                            <flux:select wire:model="baseEmailTemplateId" class="max-w-sm">
+                                <flux:select.option value="">— None —</flux:select.option>
+                                @foreach ($emailTemplates as $template)
+                                    <flux:select.option value="{{ $template->id }}">{{ $template->name }}</flux:select.option>
+                                @endforeach
+                            </flux:select>
+                            <flux:description>Edit individual email content under the Email Templates tab.</flux:description>
+                            <flux:error name="baseEmailTemplateId" />
+                        </flux:field>
                     </div>
                 </div>
 

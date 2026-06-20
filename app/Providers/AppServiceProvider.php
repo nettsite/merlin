@@ -8,6 +8,7 @@ use App\Modules\Accounting\Models\AccountGroup;
 use App\Modules\Accounting\Models\AccountType;
 use App\Modules\Billing\Console\GenerateRecurringInvoices;
 use App\Modules\Billing\Console\SendReminders;
+use App\Modules\Billing\Models\BillingEmailTemplate;
 use App\Modules\Billing\Models\PaymentTerm;
 use App\Modules\Billing\Models\RecurringInvoice;
 use App\Modules\Billing\Models\RecurringInvoiceLine;
@@ -83,6 +84,7 @@ class AppServiceProvider extends ServiceProvider
             'party' => Party::class,
             'party_relationship' => PartyRelationship::class,
             'person' => Person::class,
+            'billing_email_template' => BillingEmailTemplate::class,
             'payment_term' => PaymentTerm::class,
             'posting_rule' => PostingRule::class,
             'recurring_invoice' => RecurringInvoice::class,

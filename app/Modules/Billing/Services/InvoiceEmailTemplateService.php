@@ -2,6 +2,7 @@
 
 namespace App\Modules\Billing\Services;
 
+use App\Modules\Billing\Models\BillingEmailTemplate;
 use App\Modules\Billing\Settings\BillingSettings;
 use App\Modules\Purchasing\Models\Document;
 use Nettsite\NettMail\Core\Domain\Templates\MergeTagRenderer;
@@ -15,29 +16,31 @@ class InvoiceEmailTemplateService
     ) {}
 
     /**
-     * Render the sales invoice transactional email from the configured template.
+     * Render a billing email. Uses the invoice template by default; pass a reminder
+     * BillingEmailTemplate to render a reminder instead.
      *
      * @return array{subject: string, html: string}
      */
-    public function render(Document $invoice): array
+    public function render(Document $invoice, ?BillingEmailTemplate $emailTemplate = null): array
     {
-        $template = Template::find($this->billingSettings->invoice_email_template_id);
+        $emailTemplate ??= BillingEmailTemplate::forInvoice();
 
-        if ($template === null) {
-            throw new RuntimeException('No invoice email template configured.');
+        if ($emailTemplate === null) {
+            throw new RuntimeException('No invoice email template configured. Run the BillingEmailTemplateSeeder.');
         }
 
         $values = $this->mergeTagValues($invoice);
-        $renderer = new MergeTagRenderer;
 
-        return [
-            'subject' => $renderer->render($template->subject ?? '', $values),
-            'html' => $renderer->render($template->html ?? '', $values),
-        ];
+        $subject = $this->substitute($emailTemplate->subject, $values);
+        $body = $this->substitute($emailTemplate->body, $values);
+
+        $html = $this->wrapInBaseTemplate($body, $values);
+
+        return ['subject' => $subject, 'html' => $html];
     }
 
     /**
-     * Available shortcodes for use in invoice email templates.
+     * Available shortcodes for use in email template subject and body fields.
      *
      * @return array<string, string>
      */
@@ -46,12 +49,41 @@ class InvoiceEmailTemplateService
         return [
             '{{invoice_number}}' => 'Invoice number (e.g. INV-2026-00042)',
             '{{amount}}' => 'Invoice total (currency + amount)',
-            '{{due_date}}' => 'Payment due date (e.g. 30 Jun 2026)',
             '{{amount_outstanding}}' => 'Balance still owed (partial-payment aware)',
-            '{{invoice_url}}' => 'Link to view the invoice in the client portal',
+            '{{due_date}}' => 'Payment due date (e.g. 30 Jun 2026)',
             '{{client_name}}' => 'Client display name',
             '{{company_name}}' => 'Your company name',
+            '{{invoice_url}}' => 'Link to view the invoice in the client portal',
         ];
+    }
+
+    private function wrapInBaseTemplate(string $body, array $values): string
+    {
+        $baseTemplateId = $this->billingSettings->base_email_template_id;
+
+        if ($baseTemplateId === null) {
+            return $body;
+        }
+
+        $baseTemplate = Template::find($baseTemplateId);
+
+        if ($baseTemplate === null) {
+            return $body;
+        }
+
+        $renderer = new MergeTagRenderer;
+
+        return $renderer->render(
+            $baseTemplate->html ?? '',
+            array_merge($values, ['email_body' => $body]),
+        );
+    }
+
+    private function substitute(string $template, array $values): string
+    {
+        $search = array_map(fn (string $k): string => '{{'.$k.'}}', array_keys($values));
+
+        return str_replace($search, array_values($values), $template);
     }
 
     /**
@@ -63,37 +95,10 @@ class InvoiceEmailTemplateService
             'client_name' => $invoice->party?->displayName ?? '',
             'invoice_number' => $invoice->document_number ?? '',
             'amount' => $invoice->currency.' '.number_format((float) $invoice->total, 2),
-            'amount_due' => $invoice->currency.' '.number_format((float) $invoice->total, 2),
-            'due_date' => $invoice->due_date ? $invoice->due_date->format('d M Y') : '',
             'amount_outstanding' => $invoice->currency.' '.number_format((float) $invoice->balance_due, 2),
+            'due_date' => $invoice->due_date ? $invoice->due_date->format('d M Y') : '',
             'invoice_url' => url('/portal/invoices/'.$invoice->id),
-            'invoice_details_html' => $this->invoiceDetailsHtml($invoice),
             'company_name' => config('app.name'),
         ];
-    }
-
-    private function invoiceDetailsHtml(Document $invoice): string
-    {
-        $items = [];
-
-        if ($invoice->due_date) {
-            $items[] = 'Payment Due: '.e($invoice->due_date->format('d M Y'));
-        }
-
-        if ($invoice->paymentTerm) {
-            $items[] = 'Payment Terms: '.e($invoice->paymentTerm->name);
-        }
-
-        if ($invoice->reference) {
-            $items[] = 'Reference: '.e($invoice->reference);
-        }
-
-        if (empty($items)) {
-            return '';
-        }
-
-        $listItems = implode('', array_map(fn (string $item): string => "<li>{$item}</li>", $items));
-
-        return "<ul>{$listItems}</ul>";
     }
 }
