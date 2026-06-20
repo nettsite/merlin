@@ -471,8 +471,8 @@ new #[Layout('components.layout.app')] class extends Component
                                     ]
                                 }
                             });
-                            this.editor.root.style.fontFamily = 'Arial, Helvetica, sans-serif';
-                            this.editor.root.style.fontSize = '15px';
+                            this.editor.root.style.fontFamily = 'Inter, ui-sans-serif, system-ui, sans-serif';
+                            this.editor.root.style.fontSize = '16px';
                             this.editor.root.innerHTML = @js($tplBody);
                             this.editor.on('text-change', () => {
                                 $wire.set('tplBody', this.editor.root.innerHTML, false);
