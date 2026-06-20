@@ -38,10 +38,13 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
     Volt::route('reports/expenses-by-supplier', 'pages.reports.expenses-by-supplier')->name('reports.expenses-by-supplier');
     Volt::route('reports/llm-performance', 'pages.reports.llm-performance')->name('reports.llm-performance');
 
-    // Settings
-    Volt::route('settings/general', 'pages.settings.general')->name('settings.general');
-    Volt::route('settings/purchasing', 'pages.settings.purchasing')->name('settings.purchasing');
-    Volt::route('settings/billing', 'pages.settings.billing')->name('settings.billing');
+    // Settings (unified)
+    Volt::route('settings', 'pages.settings.index')->name('settings.index');
+    Route::redirect('settings/general', '/settings?tab=general')->name('settings.general');
+    Route::redirect('settings/purchasing', '/settings?tab=purchasing')->name('settings.purchasing');
+    Route::redirect('settings/billing', '/settings?tab=billing')->name('settings.billing');
+
+    // Administration
     Volt::route('roles', 'pages.roles.index')->name('roles.index');
     Volt::route('users', 'pages.users.index')->name('users.index');
     Volt::route('llm-logs', 'pages.llm-logs.index')->name('llm-logs.index');

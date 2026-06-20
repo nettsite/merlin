@@ -43,13 +43,10 @@
     <flux:dropdown>
         <flux:navbar.item
             icon:trailing="chevron-down"
-            :current="request()->is('settings/*', 'roles*', 'users*', 'llm-logs*')"
-        >Settings</flux:navbar.item>
+            :current="request()->is('settings*', 'roles*', 'users*', 'llm-logs*')"
+        >Administration</flux:navbar.item>
         <flux:navmenu>
-            <flux:navmenu.item href="{{ route('settings.general') }}" wire:navigate>General Settings</flux:navmenu.item>
-            <flux:navmenu.item href="{{ route('settings.purchasing') }}" wire:navigate>Purchasing Settings</flux:navmenu.item>
-            <flux:navmenu.item href="{{ route('settings.billing') }}" wire:navigate>Billing Settings</flux:navmenu.item>
-            <flux:navmenu.item href="{{ route('roles.index') }}" wire:navigate>Roles</flux:navmenu.item>
+            <flux:navmenu.item href="{{ route('settings.index') }}" wire:navigate>Settings</flux:navmenu.item>
             <flux:navmenu.item href="{{ route('users.index') }}" wire:navigate>Users</flux:navmenu.item>
             <flux:navmenu.item href="{{ route('llm-logs.index') }}" wire:navigate>LLM Logs</flux:navmenu.item>
         </flux:navmenu>

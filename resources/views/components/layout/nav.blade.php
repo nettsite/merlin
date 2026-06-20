@@ -89,34 +89,13 @@
         >Reports</flux:sidebar.item>
     </flux:sidebar.group>
 
-    <flux:sidebar.group heading="Settings">
+    <flux:sidebar.group heading="Administration">
         <flux:sidebar.item
             icon="cog-6-tooth"
-            href="{{ route('settings.general') }}"
-            :current="request()->routeIs('settings.general')"
+            href="{{ route('settings.index') }}"
+            :current="request()->routeIs('settings.*') || request()->routeIs('roles.*')"
             wire:navigate
-        >General Settings</flux:sidebar.item>
-
-        <flux:sidebar.item
-            icon="shopping-cart"
-            href="{{ route('settings.purchasing') }}"
-            :current="request()->routeIs('settings.purchasing')"
-            wire:navigate
-        >Purchasing Settings</flux:sidebar.item>
-
-        <flux:sidebar.item
-            icon="banknotes"
-            href="{{ route('settings.billing') }}"
-            :current="request()->routeIs('settings.billing')"
-            wire:navigate
-        >Billing Settings</flux:sidebar.item>
-
-        <flux:sidebar.item
-            icon="shield-check"
-            href="{{ route('roles.index') }}"
-            :current="request()->routeIs('roles.*')"
-            wire:navigate
-        >Roles</flux:sidebar.item>
+        >Settings</flux:sidebar.item>
 
         <flux:sidebar.item
             icon="users"

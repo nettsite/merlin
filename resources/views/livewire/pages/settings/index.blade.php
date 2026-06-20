@@ -1,0 +1,642 @@
+<?php
+
+use App\Modules\Accounting\Models\Account;
+use App\Modules\Billing\Models\PaymentTerm;
+use App\Modules\Billing\Settings\BillingSettings;
+use App\Modules\Core\Settings\CompanySettings;
+use App\Modules\Core\Settings\CurrencySettings;
+use App\Modules\Purchasing\Settings\PurchasingSettings;
+use Illuminate\Support\Facades\Storage;
+use Livewire\Attributes\Layout;
+use Livewire\Attributes\Url;
+use Livewire\Volt\Component;
+use Livewire\WithFileUploads;
+use NettSite\NettMail\Models\Template;
+use Nettsite\NettMail\Core\Domain\Templates\TemplateType;
+
+new #[Layout('components.layout.app')] class extends Component
+{
+    use WithFileUploads;
+
+    #[Url]
+    public string $tab = 'general';
+
+    public bool $saved = false;
+
+    // ── General / Company ──────────────────────────────────────────────────
+    public string $companyName = '';
+
+    public string $addressLine1 = '';
+
+    public string $addressLine2 = '';
+
+    public string $city = '';
+
+    public string $stateProvince = '';
+
+    public string $postalCode = '';
+
+    public string $country = '';
+
+    public string $phone = '';
+
+    public string $companyEmail = '';
+
+    public string $taxNumber = '';
+
+    public $logo = null;
+
+    public ?string $existingLogoUrl = null;
+
+    // ── General / Currency ─────────────────────────────────────────────────
+    public string $baseCurrency = '';
+
+    public string $locale = '';
+
+    // ── Purchasing ─────────────────────────────────────────────────────────
+    public string $defaultPayableAccount = '';
+
+    public float|string $taxDefaultRate = 15.00;
+
+    public string $taxLabel = '';
+
+    public float|string $autopostConfidence = 0.90;
+
+    public float|string $fallbackConfidence = 0.80;
+
+    public float|string $amountTolerance = 10.0;
+
+    public float|string $descriptionSimilarity = 60.0;
+
+    // ── Billing ────────────────────────────────────────────────────────────
+    public ?string $defaultReceivableAccountId = null;
+
+    public ?string $defaultBankAccountId = null;
+
+    public ?string $defaultPaymentTermId = null;
+
+    public ?string $taxLiabilityAccountId = null;
+
+    public int $billingPeriodDay = 1;
+
+    public ?string $invoiceEmailTemplateId = null;
+
+    public string $reminderOffsetsInput = '';
+
+    public function mount(): void
+    {
+        $this->authorize('access-panel');
+
+        $company = app(CompanySettings::class);
+        $this->companyName = $company->name;
+        $this->addressLine1 = $company->address_line_1;
+        $this->addressLine2 = $company->address_line_2;
+        $this->city = $company->city;
+        $this->stateProvince = $company->state_province;
+        $this->postalCode = $company->postal_code;
+        $this->country = $company->country;
+        $this->phone = $company->phone;
+        $this->companyEmail = $company->email;
+        $this->taxNumber = $company->tax_number;
+
+        if ($company->logo_path && Storage::disk('public')->exists($company->logo_path)) {
+            $this->existingLogoUrl = Storage::disk('public')->url($company->logo_path);
+        }
+
+        $currency = app(CurrencySettings::class);
+        $this->baseCurrency = $currency->base_currency;
+        $this->locale = $currency->locale;
+
+        $purchasing = app(PurchasingSettings::class);
+        $this->defaultPayableAccount = $purchasing->default_payable_account;
+        $this->taxDefaultRate = $purchasing->tax_default_rate;
+        $this->taxLabel = $purchasing->tax_label;
+        $this->autopostConfidence = $purchasing->autopost_confidence;
+        $this->fallbackConfidence = $purchasing->fallback_confidence;
+        $this->amountTolerance = $purchasing->amount_tolerance;
+        $this->descriptionSimilarity = $purchasing->description_similarity;
+
+        $billing = app(BillingSettings::class);
+        $this->defaultReceivableAccountId = $billing->default_receivable_account_id;
+        $this->defaultBankAccountId = $billing->default_bank_account_id;
+        $this->defaultPaymentTermId = $billing->default_payment_term_id;
+        $this->taxLiabilityAccountId = $billing->tax_liability_account_id;
+        $this->billingPeriodDay = $billing->billing_period_day;
+        $this->invoiceEmailTemplateId = $billing->invoice_email_template_id;
+        $this->reminderOffsetsInput = implode(', ', $billing->reminder_offsets);
+    }
+
+    public function save(): void
+    {
+        $this->saved = false;
+
+        match ($this->tab) {
+            'general' => $this->saveGeneral(),
+            'purchasing' => $this->savePurchasing(),
+            'billing' => $this->saveBilling(),
+            default => null,
+        };
+    }
+
+    private function saveGeneral(): void
+    {
+        $this->validate([
+            'companyName' => 'required|string|max:255',
+            'addressLine1' => 'nullable|string|max:255',
+            'addressLine2' => 'nullable|string|max:255',
+            'city' => 'nullable|string|max:100',
+            'stateProvince' => 'nullable|string|max:100',
+            'postalCode' => 'nullable|string|max:20',
+            'country' => 'nullable|string|max:100',
+            'phone' => 'nullable|string|max:50',
+            'companyEmail' => 'nullable|email|max:255',
+            'taxNumber' => 'nullable|string|max:50',
+            'logo' => 'nullable|image|max:2048',
+            'baseCurrency' => 'required|string|min:3|max:3',
+            'locale' => 'required|string|max:20',
+        ]);
+
+        $company = app(CompanySettings::class);
+        $company->name = $this->companyName;
+        $company->address_line_1 = $this->addressLine1;
+        $company->address_line_2 = $this->addressLine2;
+        $company->city = $this->city;
+        $company->state_province = $this->stateProvince;
+        $company->postal_code = $this->postalCode;
+        $company->country = $this->country;
+        $company->phone = $this->phone;
+        $company->email = $this->companyEmail;
+        $company->tax_number = $this->taxNumber;
+
+        if ($this->logo !== null) {
+            if ($company->logo_path) {
+                Storage::disk('public')->delete($company->logo_path);
+            }
+
+            $path = $this->logo->store('company', 'public');
+            $company->logo_path = $path;
+            $this->existingLogoUrl = Storage::disk('public')->url($path);
+            $this->logo = null;
+        }
+
+        $company->save();
+
+        $currency = app(CurrencySettings::class);
+        $currency->base_currency = strtoupper($this->baseCurrency);
+        $currency->locale = $this->locale;
+        $currency->save();
+
+        $this->saved = true;
+    }
+
+    public function removeLogo(): void
+    {
+        $this->authorize('access-panel');
+
+        $company = app(CompanySettings::class);
+
+        if ($company->logo_path) {
+            Storage::disk('public')->delete($company->logo_path);
+            $company->logo_path = null;
+            $company->save();
+        }
+
+        $this->existingLogoUrl = null;
+        $this->logo = null;
+    }
+
+    private function savePurchasing(): void
+    {
+        $this->validate([
+            'defaultPayableAccount' => 'required|string|max:20',
+            'taxDefaultRate' => 'required|numeric|min:0|max:100',
+            'taxLabel' => 'required|string|max:20',
+            'autopostConfidence' => 'required|numeric|min:0|max:1',
+            'fallbackConfidence' => 'required|numeric|min:0|max:1',
+            'amountTolerance' => 'required|numeric|min:0',
+            'descriptionSimilarity' => 'required|numeric|min:0|max:100',
+        ]);
+
+        $settings = app(PurchasingSettings::class);
+        $settings->default_payable_account = $this->defaultPayableAccount;
+        $settings->tax_default_rate = (float) $this->taxDefaultRate;
+        $settings->tax_label = $this->taxLabel;
+        $settings->autopost_confidence = (float) $this->autopostConfidence;
+        $settings->fallback_confidence = (float) $this->fallbackConfidence;
+        $settings->amount_tolerance = (float) $this->amountTolerance;
+        $settings->description_similarity = (float) $this->descriptionSimilarity;
+        $settings->save();
+
+        $this->saved = true;
+    }
+
+    private function saveBilling(): void
+    {
+        $this->validate([
+            'defaultReceivableAccountId' => 'nullable|uuid|exists:accounts,id',
+            'defaultBankAccountId' => 'nullable|uuid|exists:accounts,id',
+            'defaultPaymentTermId' => 'nullable|uuid|exists:payment_terms,id',
+            'taxLiabilityAccountId' => 'nullable|uuid|exists:accounts,id',
+            'billingPeriodDay' => 'required|integer|min:1|max:28',
+            'invoiceEmailTemplateId' => 'nullable|uuid|exists:nettmail_templates,id',
+            'reminderOffsetsInput' => 'nullable|string|max:200',
+        ]);
+
+        $offsets = array_values(array_filter(
+            array_map('intval', array_map('trim', explode(',', $this->reminderOffsetsInput))),
+            fn ($v) => $v !== 0 || str_contains($this->reminderOffsetsInput, '0'),
+        ));
+
+        $settings = app(BillingSettings::class);
+        $settings->default_receivable_account_id = $this->defaultReceivableAccountId ?: null;
+        $settings->default_bank_account_id = $this->defaultBankAccountId ?: null;
+        $settings->default_payment_term_id = $this->defaultPaymentTermId ?: null;
+        $settings->tax_liability_account_id = $this->taxLiabilityAccountId ?: null;
+        $settings->billing_period_day = $this->billingPeriodDay;
+        $settings->invoice_email_template_id = $this->invoiceEmailTemplateId ?: null;
+        $settings->reminder_offsets = $offsets;
+        $settings->save();
+
+        $this->saved = true;
+    }
+
+    public function with(): array
+    {
+        if ($this->tab !== 'billing') {
+            return [];
+        }
+
+        return [
+            'assetAccounts' => Account::postable()->active()
+                ->whereHas('group.type', fn ($q) => $q->where('code', '1'))
+                ->orderBy('code')
+                ->get(['id', 'code', 'name']),
+            'liabilityAccounts' => Account::postable()->active()
+                ->whereHas('group.type', fn ($q) => $q->where('code', '2'))
+                ->orderBy('code')
+                ->get(['id', 'code', 'name']),
+            'paymentTerms' => PaymentTerm::orderBy('name')->get(['id', 'name']),
+            'emailTemplates' => Template::where('type', TemplateType::Transactional)
+                ->whereNull('archived_at')
+                ->orderBy('name')
+                ->get(['id', 'name']),
+        ];
+    }
+}; ?>
+
+<div>
+    {{-- Sticky header: title + tabs + save button --}}
+    <div class="sticky top-0 z-10 bg-white border-b border-line">
+        <div class="flex items-center justify-between px-6 pt-5 pb-0">
+            <div>
+                <h1 class="text-[17px] font-semibold tracking-tight text-ink">Settings</h1>
+            </div>
+
+            @if($tab !== 'roles')
+                <div class="flex items-center gap-3 pb-4">
+                    @if($saved)
+                        <span wire:loading.remove wire:target="save" class="text-sm text-success">Saved.</span>
+                    @endif
+                    <flux:button wire:click="save" wire:loading.attr="disabled" variant="primary" size="sm">
+                        Save Changes
+                    </flux:button>
+                </div>
+            @endif
+        </div>
+
+        {{-- Tab bar --}}
+        <div class="flex gap-0 px-6">
+            @foreach(['general' => 'General', 'purchasing' => 'Purchasing', 'billing' => 'Billing', 'roles' => 'Roles'] as $key => $label)
+                <button
+                    type="button"
+                    wire:click="$set('tab', '{{ $key }}')"
+                    class="px-4 py-2.5 text-sm font-medium border-b-2 transition-colors
+                        {{ $tab === $key
+                            ? 'border-accent text-accent'
+                            : 'border-transparent text-ink-muted hover:text-ink hover:border-line' }}"
+                >{{ $label }}</button>
+            @endforeach
+        </div>
+    </div>
+
+    {{-- Tab content --}}
+    @if($tab === 'roles')
+        <livewire:pages.roles.index />
+    @else
+        <div class="max-w-5xl mx-auto px-6 py-2 divide-y divide-line">
+
+            {{-- ── GENERAL TAB ─────────────────────────────────── --}}
+            @if($tab === 'general')
+
+                {{-- Company Details --}}
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-8 py-8">
+                    <div>
+                        <h3 class="text-sm font-semibold text-ink">Company Details</h3>
+                        <p class="mt-1 text-sm text-ink-muted">Name, contact info, and tax registration.</p>
+                    </div>
+                    <div class="col-span-2 space-y-5">
+                        <flux:field>
+                            <flux:label>Company Name <span class="text-danger">*</span></flux:label>
+                            <flux:input wire:model="companyName" placeholder="Acme (Pty) Ltd" />
+                            <flux:error name="companyName" />
+                        </flux:field>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <flux:field>
+                                <flux:label>Phone</flux:label>
+                                <flux:input wire:model="phone" placeholder="+27 11 000 0000" />
+                                <flux:error name="phone" />
+                            </flux:field>
+                            <flux:field>
+                                <flux:label>Email</flux:label>
+                                <flux:input type="email" wire:model="companyEmail" placeholder="accounts@company.co.za" />
+                                <flux:error name="companyEmail" />
+                            </flux:field>
+                        </div>
+
+                        <flux:field>
+                            <flux:label>Tax / VAT Number</flux:label>
+                            <flux:input wire:model="taxNumber" placeholder="4123456789" class="max-w-xs" />
+                            <flux:error name="taxNumber" />
+                        </flux:field>
+                    </div>
+                </div>
+
+                {{-- Address --}}
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-8 py-8">
+                    <div>
+                        <h3 class="text-sm font-semibold text-ink">Address</h3>
+                        <p class="mt-1 text-sm text-ink-muted">Printed on invoices and quotes.</p>
+                    </div>
+                    <div class="col-span-2 space-y-4">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <flux:field>
+                                <flux:label>Address Line 1</flux:label>
+                                <flux:input wire:model="addressLine1" placeholder="123 Main Street" />
+                                <flux:error name="addressLine1" />
+                            </flux:field>
+                            <flux:field>
+                                <flux:label>Address Line 2</flux:label>
+                                <flux:input wire:model="addressLine2" placeholder="Suite 4" />
+                                <flux:error name="addressLine2" />
+                            </flux:field>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <flux:field>
+                                <flux:label>City</flux:label>
+                                <flux:input wire:model="city" placeholder="Johannesburg" />
+                                <flux:error name="city" />
+                            </flux:field>
+                            <flux:field>
+                                <flux:label>Province / State</flux:label>
+                                <flux:input wire:model="stateProvince" placeholder="Gauteng" />
+                                <flux:error name="stateProvince" />
+                            </flux:field>
+                            <flux:field>
+                                <flux:label>Postal Code</flux:label>
+                                <flux:input wire:model="postalCode" placeholder="2000" />
+                                <flux:error name="postalCode" />
+                            </flux:field>
+                        </div>
+
+                        <flux:field>
+                            <flux:label>Country</flux:label>
+                            <flux:input wire:model="country" placeholder="South Africa" class="max-w-xs" />
+                            <flux:error name="country" />
+                        </flux:field>
+                    </div>
+                </div>
+
+                {{-- Logo --}}
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-8 py-8">
+                    <div>
+                        <h3 class="text-sm font-semibold text-ink">Logo</h3>
+                        <p class="mt-1 text-sm text-ink-muted">Shown on PDFs and the portal. PNG, JPG or SVG, max 2 MB.</p>
+                    </div>
+                    <div class="col-span-2 space-y-4">
+                        @if($existingLogoUrl)
+                            <div class="flex items-center gap-4">
+                                <img src="{{ $existingLogoUrl }}" alt="Company logo" class="h-16 max-w-[200px] object-contain border border-line rounded p-1 bg-white">
+                                <flux:button type="button" wire:click="removeLogo" variant="ghost" size="sm" class="text-danger">Remove</flux:button>
+                            </div>
+                        @endif
+
+                        @if($logo)
+                            <img src="{{ $logo->temporaryUrl() }}" alt="Preview" class="h-16 max-w-[200px] object-contain border border-line rounded p-1 bg-white">
+                        @endif
+
+                        <flux:field>
+                            <flux:label>{{ $existingLogoUrl ? 'Replace Logo' : 'Upload Logo' }}</flux:label>
+                            <input
+                                type="file"
+                                wire:model="logo"
+                                accept="image/*"
+                                class="block text-sm text-ink-muted file:mr-3 file:py-1.5 file:px-3 file:rounded file:border file:border-line file:text-sm file:bg-surface-alt file:text-ink hover:file:bg-surface cursor-pointer"
+                            />
+                            <flux:error name="logo" />
+                        </flux:field>
+                    </div>
+                </div>
+
+                {{-- Currency --}}
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-8 py-8">
+                    <div>
+                        <h3 class="text-sm font-semibold text-ink">Currency & Localisation</h3>
+                        <p class="mt-1 text-sm text-ink-muted">Controls how amounts are formatted across the app.</p>
+                    </div>
+                    <div class="col-span-2">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <flux:field>
+                                <flux:label>Base Currency <span class="text-danger">*</span></flux:label>
+                                <flux:input wire:model="baseCurrency" placeholder="ZAR" class="uppercase" maxlength="3" />
+                                <flux:description>ISO 4217 three-letter code (e.g. ZAR, USD, EUR)</flux:description>
+                                <flux:error name="baseCurrency" />
+                            </flux:field>
+
+                            <flux:field>
+                                <flux:label>Locale <span class="text-danger">*</span></flux:label>
+                                <flux:input wire:model="locale" placeholder="en_ZA" />
+                                <flux:description>Number and currency formatting (e.g. en_ZA, en_US)</flux:description>
+                                <flux:error name="locale" />
+                            </flux:field>
+                        </div>
+                    </div>
+                </div>
+
+            {{-- ── PURCHASING TAB ──────────────────────────────── --}}
+            @elseif($tab === 'purchasing')
+
+                {{-- Defaults --}}
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-8 py-8">
+                    <div>
+                        <h3 class="text-sm font-semibold text-ink">Defaults</h3>
+                        <p class="mt-1 text-sm text-ink-muted">Default values applied to new purchase invoices.</p>
+                    </div>
+                    <div class="col-span-2 space-y-5">
+                        <flux:field>
+                            <flux:label>Default Payable Account <span class="text-danger">*</span></flux:label>
+                            <flux:input wire:model="defaultPayableAccount" placeholder="2000" class="max-w-xs" />
+                            <flux:description>Account code used as the default AP account on new invoices</flux:description>
+                            <flux:error name="defaultPayableAccount" />
+                        </flux:field>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <flux:field>
+                                <flux:label>Tax Label <span class="text-danger">*</span></flux:label>
+                                <flux:input wire:model="taxLabel" placeholder="VAT" />
+                                <flux:error name="taxLabel" />
+                            </flux:field>
+                            <flux:field>
+                                <flux:label>Default Tax Rate (%) <span class="text-danger">*</span></flux:label>
+                                <flux:input wire:model="taxDefaultRate" type="number" step="0.01" min="0" max="100" />
+                                <flux:error name="taxDefaultRate" />
+                            </flux:field>
+                        </div>
+                    </div>
+                </div>
+
+                {{-- Auto-Posting Thresholds --}}
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-8 py-8">
+                    <div>
+                        <h3 class="text-sm font-semibold text-ink">Auto-Posting Thresholds</h3>
+                        <p class="mt-1 text-sm text-ink-muted">Controls when LLM extractions are auto-posted and when a stronger model is used as fallback.</p>
+                    </div>
+                    <div class="col-span-2 space-y-5">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <flux:field>
+                                <flux:label>Min. Confidence for Auto-Post <span class="text-danger">*</span></flux:label>
+                                <flux:input wire:model="autopostConfidence" type="number" step="0.01" min="0" max="1" />
+                                <flux:description>0–1 scale</flux:description>
+                                <flux:error name="autopostConfidence" />
+                            </flux:field>
+                            <flux:field>
+                                <flux:label>Min. Fast-Model Confidence (fallback) <span class="text-danger">*</span></flux:label>
+                                <flux:input wire:model="fallbackConfidence" type="number" step="0.01" min="0" max="1" />
+                                <flux:description>Below this, re-run on stronger model</flux:description>
+                                <flux:error name="fallbackConfidence" />
+                            </flux:field>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <flux:field>
+                                <flux:label>Amount Tolerance (%) <span class="text-danger">*</span></flux:label>
+                                <flux:input wire:model="amountTolerance" type="number" step="0.1" min="0" />
+                                <flux:description>Max % diff for pattern-based auto-posting</flux:description>
+                                <flux:error name="amountTolerance" />
+                            </flux:field>
+                            <flux:field>
+                                <flux:label>Min. Description Similarity (0–100) <span class="text-danger">*</span></flux:label>
+                                <flux:input wire:model="descriptionSimilarity" type="number" step="1" min="0" max="100" />
+                                <flux:description>Min score for line description matching</flux:description>
+                                <flux:error name="descriptionSimilarity" />
+                            </flux:field>
+                        </div>
+                    </div>
+                </div>
+
+            {{-- ── BILLING TAB ─────────────────────────────────── --}}
+            @elseif($tab === 'billing')
+
+                {{-- Accounts --}}
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-8 py-8">
+                    <div>
+                        <h3 class="text-sm font-semibold text-ink">Accounts</h3>
+                        <p class="mt-1 text-sm text-ink-muted">Default GL accounts for sales invoices and payment recording.</p>
+                    </div>
+                    <div class="col-span-2 space-y-5">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <flux:field>
+                                <flux:label>Default Receivable Account</flux:label>
+                                <flux:select wire:model="defaultReceivableAccountId">
+                                    <flux:select.option value="">— None —</flux:select.option>
+                                    @foreach ($assetAccounts as $account)
+                                        <flux:select.option value="{{ $account->id }}">{{ $account->code }} — {{ $account->name }}</flux:select.option>
+                                    @endforeach
+                                </flux:select>
+                                <flux:description>AR control account on sales invoices</flux:description>
+                                <flux:error name="defaultReceivableAccountId" />
+                            </flux:field>
+
+                            <flux:field>
+                                <flux:label>Default Bank Account</flux:label>
+                                <flux:select wire:model="defaultBankAccountId">
+                                    <flux:select.option value="">— None —</flux:select.option>
+                                    @foreach ($assetAccounts as $account)
+                                        <flux:select.option value="{{ $account->id }}">{{ $account->code }} — {{ $account->name }}</flux:select.option>
+                                    @endforeach
+                                </flux:select>
+                                <flux:description>Pre-selected when recording payments</flux:description>
+                                <flux:error name="defaultBankAccountId" />
+                            </flux:field>
+                        </div>
+
+                        <flux:field>
+                            <flux:label>Tax Liability Account</flux:label>
+                            <flux:select wire:model="taxLiabilityAccountId" class="max-w-sm">
+                                <flux:select.option value="">— None —</flux:select.option>
+                                @foreach ($liabilityAccounts as $account)
+                                    <flux:select.option value="{{ $account->id }}">{{ $account->code }} — {{ $account->name }}</flux:select.option>
+                                @endforeach
+                            </flux:select>
+                            <flux:description>Liability account for output tax on sales invoices</flux:description>
+                            <flux:error name="taxLiabilityAccountId" />
+                        </flux:field>
+                    </div>
+                </div>
+
+                {{-- Defaults & Email --}}
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-8 py-8">
+                    <div>
+                        <h3 class="text-sm font-semibold text-ink">Defaults & Email</h3>
+                        <p class="mt-1 text-sm text-ink-muted">Values pre-selected when creating invoices and sending emails.</p>
+                    </div>
+                    <div class="col-span-2 space-y-5">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <flux:field>
+                                <flux:label>Default Payment Terms</flux:label>
+                                <flux:select wire:model="defaultPaymentTermId">
+                                    <flux:select.option value="">— None —</flux:select.option>
+                                    @foreach ($paymentTerms as $term)
+                                        <flux:select.option value="{{ $term->id }}">{{ $term->name }}</flux:select.option>
+                                    @endforeach
+                                </flux:select>
+                                <flux:description>Applied when a client has no payment term</flux:description>
+                                <flux:error name="defaultPaymentTermId" />
+                            </flux:field>
+
+                            <flux:field>
+                                <flux:label>Billing Period Day <span class="text-danger">*</span></flux:label>
+                                <flux:input wire:model="billingPeriodDay" type="number" min="1" max="28" />
+                                <flux:description>Day of month billing periods begin (1–28)</flux:description>
+                                <flux:error name="billingPeriodDay" />
+                            </flux:field>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <flux:field>
+                                <flux:label>Invoice Email Template</flux:label>
+                                <flux:select wire:model="invoiceEmailTemplateId">
+                                    <flux:select.option value="">— None —</flux:select.option>
+                                    @foreach ($emailTemplates as $template)
+                                        <flux:select.option value="{{ $template->id }}">{{ $template->name }}</flux:select.option>
+                                    @endforeach
+                                </flux:select>
+                                <flux:description>Template for invoice emails to clients</flux:description>
+                                <flux:error name="invoiceEmailTemplateId" />
+                            </flux:field>
+
+                            <flux:field>
+                                <flux:label>Reminder Offsets</flux:label>
+                                <flux:input wire:model="reminderOffsetsInput" placeholder="-3, 1, 7, 14" />
+                                <flux:description>Business-day offsets from due date (negative = before)</flux:description>
+                                <flux:error name="reminderOffsetsInput" />
+                            </flux:field>
+                        </div>
+                    </div>
+                </div>
+
+            @endif
+        </div>
+    @endif
+</div>
