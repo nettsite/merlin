@@ -63,6 +63,7 @@
         <flux:navmenu>
             <flux:navmenu.item href="{{ route('help') }}" wire:navigate>Help Chat</flux:navmenu.item>
             <flux:navmenu.item href="/docs/user-guide/" target="_blank">User Guide</flux:navmenu.item>
+            <flux:navmenu.item href="/docs/system-guide/" target="_blank">System Guide</flux:navmenu.item>
         </flux:navmenu>
     </flux:dropdown>
 

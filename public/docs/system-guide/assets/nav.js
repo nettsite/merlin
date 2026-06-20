@@ -116,7 +116,7 @@ function buildHeader() {
         <button class="sidebar-toggle" aria-label="Toggle navigation" title="Menu">☰</button>
         <a class="brand" href="index.html">
             <img src="../public/logo.svg" alt="" onerror="this.style.display='none'">
-            <span>Merlin Docs</span>
+            <span>Merlin System Guide</span>
         </a>
         <span class="header-spacer"></span>
         <a class="header-link" href="${REPO_URL}" target="_blank" rel="noopener">GitHub</a>

@@ -146,6 +146,12 @@
             href="/docs/user-guide/"
             target="_blank"
         >User Guide</flux:sidebar.item>
+
+        <flux:sidebar.item
+            icon="code-bracket"
+            href="/docs/system-guide/"
+            target="_blank"
+        >System Guide</flux:sidebar.item>
     </flux:sidebar.group>
 
     <flux:sidebar.group heading="Emails">
