@@ -63,6 +63,9 @@ class AppServiceProvider extends ServiceProvider
         $this->configureMorphMap();
         $this->configureDefaults();
         $this->configureAuthorization();
+
+        // Override published NettMail views so they survive composer updates.
+        \Livewire\Livewire::addNamespace('nettmail', resource_path('views/vendor/nettmail/livewire'));
     }
 
     /**
