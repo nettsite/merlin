@@ -128,9 +128,7 @@ return [
      * Extra merge tags shown in the template editor UI (key => label).
      * These are in addition to the built-in defaults (first_name, last_name, etc.).
      */
-    'extra_merge_tags' => [
-        'email_body' => 'Email Body',
-    ],
+    'extra_merge_tags' => [],
 
     /*
      * Inline CSS applied to the email_body wrapper div injected into the base template.

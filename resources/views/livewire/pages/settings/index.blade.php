@@ -848,7 +848,7 @@ new #[Layout('components.layout.app')] class extends Component
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-8 py-8">
                     <div>
                         <h3 class="text-sm font-semibold text-ink">Email</h3>
-                        <p class="mt-1 text-sm text-ink-muted">NettMail/Unlayer template used as the branded wrapper for all billing emails. Must contain <code class="text-xs bg-surface-alt px-1 rounded">@{{email_body}}</code> to pull in per-email content.</p>
+                        <p class="mt-1 text-sm text-ink-muted">NettMail/Unlayer template used as the branded wrapper for all billing emails. Must contain <code class="text-xs bg-surface-alt px-1 rounded">[email_body]</code> where the message body should appear.</p>
                     </div>
                     <div class="col-span-2">
                         <flux:field>

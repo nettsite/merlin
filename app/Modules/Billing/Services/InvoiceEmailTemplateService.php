@@ -71,14 +71,14 @@ class InvoiceEmailTemplateService
             return $body;
         }
 
-        $renderer = new MergeTagRenderer;
+        $style = config('nettmail.email_body_style', 'font-family:Inter,ui-sans-serif,system-ui,sans-serif;font-size:16px;line-height:1.6;color:#1f2937;');
+        $styledBody = '<div style="'.$style.'">'.$body.'</div>';
 
-        $style = config('nettmail.email_body_style', 'font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#1f2937;');
+        // [email_body] uses square brackets so GrapesJS/Unlayer does not wrap it
+        // in a <code> element the way it does with double-brace expressions.
+        $html = str_replace('[email_body]', $styledBody, $baseTemplate->html ?? '');
 
-        return $renderer->render(
-            $baseTemplate->html ?? '',
-            array_merge($values, ['email_body' => '<div style="'.$style.'">'.$body.'</div>']),
-        );
+        return (new MergeTagRenderer)->render($html, $values);
     }
 
     private function substitute(string $template, array $values): string
