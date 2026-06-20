@@ -83,7 +83,7 @@ app/Modules/
 ├── Core/        User, Party, Person, Business, Address, ContactAssignment
 ├── Accounting/  Account, AccountGroup, AccountType, FinancialYearService
 ├── Purchasing/  Document, DocumentLine, LlmLog, PostingRule + pipeline services
-└── Billing/     PaymentTerm, RecurringInvoice + BillingService, DueDateCalculator
+└── Billing/     PaymentTerm, RecurringInvoice + BillingService, RecurringInvoiceService, DueDateCalculator, WorkingDayCalculator
 ```
 
 All models use UUID primary keys. Polymorphic relationships are registered in `AppServiceProvider` via `Relation::enforceMorphMap()` — always add new morph-mapped models there before writing data.
@@ -112,7 +112,7 @@ Thresholds are configurable per business via `PurchasingSettings`.
 | Group | Pages |
 |---|---|
 | Expenses | Suppliers, Purchase Invoices, Posting Rules |
-| Billing | Clients, Sales Invoices, Recurring Invoices, Payment Terms |
+| Billing | Clients, Sales Invoices, Quotes, Credit Notes, Recurring Invoices, Payment Terms |
 | Accounting | Accounts, Account Groups |
 | Reports | Expenses by Account, Expenses by Supplier, LLM Performance |
 | Settings | General, Purchasing, Billing, Roles, Users, LLM Logs |

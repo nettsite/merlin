@@ -35,9 +35,9 @@ php artisan invoices:watch
 ```
 app/Modules/
 ├── Core/
-│   ├── Models/     — User, Party, Person, Business, Address, ContactAssignment, PartyRelationship
+│   ├── Models/     — User, Role, Permission, Party, Person, Business, Address, ContactAssignment, PartyRelationship
 │   ├── Services/   — PartyService (create/approve suppliers, persons, businesses)
-│   ├── Settings/   — CurrencySettings (base_currency, locale)
+│   ├── Settings/   — CurrencySettings (base_currency, locale), CompanySettings
 │   └── Policies/   — AllModulesPolicy (base; all domain policies extend this)
 ├── Accounting/
 │   ├── Models/     — Account, AccountGroup, AccountType
@@ -51,7 +51,9 @@ app/Modules/
 │   └── Settings/   — PurchasingSettings (autopost_confidence, tax_default_rate, etc.)
 └── Billing/
     ├── Models/     — PaymentTerm, RecurringInvoice, RecurringInvoiceLine
-    └── Services/   — BillingService (PDF generation), RecurringInvoiceService, DueDateCalculator, ProRataCalculator
+    ├── Enums/      — PaymentTermRule, RecurringFrequency, RecurringInvoiceStatus
+    ├── Console/    — GenerateRecurringInvoices, SendReminders
+    └── Services/   — BillingService (PDF generation), RecurringInvoiceService, DueDateCalculator, ProRataCalculator, WorkingDayCalculator (ZA public holidays), PortalInviteService
 
 app/Policies/       — 16 domain policies, all extend AllModulesPolicy
 app/Traits/         — HasDocumentNumber (auto-generates PREFIX-YEAR-NNNNN on create)
@@ -76,6 +78,8 @@ Routes use `Volt::route()` unless marked *view*. Any test that renders a view re
 | `/posting-rules` | `posting-rules/index.blade.php` | CRUD |
 | `/clients` | `clients/index.blade.php` | CRUD |
 | `/sales-invoices` | `sales-invoices/index.blade.php` | CRUD |
+| `/quotes` | `quotes/index.blade.php` | CRUD (uses Document model, type=quote) |
+| `/credit-notes` | `credit-notes/index.blade.php` | CRUD (uses Document model, type=credit_note) |
 | `/recurring-invoices` | `recurring-invoices/index.blade.php` | CRUD |
 | `/payment-terms` | `payment-terms/index.blade.php` | CRUD |
 | `/accounts` | `accounts/index.blade.php` | CRUD |
@@ -90,6 +94,8 @@ Routes use `Volt::route()` unless marked *view*. Any test that renders a view re
 | `/settings/general` | `settings/general.blade.php` | Spatie settings form |
 | `/settings/purchasing` | `settings/purchasing.blade.php` | Spatie settings form |
 | `/settings/billing` | `settings/billing.blade.php` | Spatie settings form |
+| `/portal/login` | `portal/auth/login.blade.php` | Guest-only, `auth:portal` guard |
+| `/portal/set-password/{token}` | `portal/auth/set-password.blade.php` | Invite accept / set password |
 
 ### CRUD Framework
 
