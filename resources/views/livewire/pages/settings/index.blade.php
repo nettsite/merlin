@@ -480,7 +480,10 @@ new #[Layout('components.layout.app')] class extends Component
                             });
                             quill.root.style.fontFamily = 'Inter, ui-sans-serif, system-ui, sans-serif';
                             quill.root.style.fontSize = '16px';
-                            quill.root.innerHTML = @js($tplBody);
+                            // Use the clipboard API, not quill.root.innerHTML — assigning
+                            // innerHTML directly desyncs Quill's internal Delta model from
+                            // the DOM, breaking typing and index-based inserts.
+                            quill.clipboard.dangerouslyPasteHTML(@js($tplBody));
                             quill.on('text-change', () => {
                                 $wire.set('tplBody', quill.root.innerHTML, false);
                             });
@@ -514,7 +517,7 @@ new #[Layout('components.layout.app')] class extends Component
                             // so a no-op here is safe.
                             const quill = this.$refs.editorEl?.__quill;
                             if (!quill) return;
-                            quill.root.innerHTML = body;
+                            quill.clipboard.dangerouslyPasteHTML(body);
                             this.cursorIndex = 0;
                         }
                     }"
