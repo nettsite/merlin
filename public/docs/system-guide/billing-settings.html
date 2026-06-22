@@ -16,7 +16,7 @@
         <main id="docs-content">
             <article>
                 <h1>Billing Settings</h1>
-                <p>The Billing Settings page (<code>/settings/billing</code>) controls the default accounts used on sales invoices, when billing periods start, the fallback payment term, and which email template is used when sending invoices to clients.</p>
+                <p>The Billing tab of <code>/settings</code> (redirected from <code>/settings/billing</code>) controls the default GL accounts used on sales invoices, when billing periods start, the fallback payment term, and which NettMail/Unlayer template is used as the branded wrapper for billing emails. Invoice and reminder email content is managed separately under the <strong>Email Templates</strong> tab.</p>
 
                 <h2 id="default-accounts">Default accounts</h2>
                 <p>Three GL accounts can be configured as system-wide defaults for the billing module:</p>
@@ -28,27 +28,61 @@
                         <tr><td>Tax liability account</td><td>The GL account used to post the VAT/GST liability on sales invoices.</td></tr>
                     </tbody>
                 </table>
-                <p>All three default to null (unset). The billing module will work without them, but you will need to select accounts manually on each invoice or payment until they are configured.</p>
+                <p>All three default to null (unset). The billing module will work without them, but accounts must be selected manually on each invoice or payment until they are configured.</p>
 
                 <h2 id="billing-period-day">Billing period day</h2>
-                <p>The billing period day (default: 1) sets the day of the month on which billing periods begin. This value is used by the "Beginning of Next Billing Period" payment term rule and by recurring invoice schedules when the frequency is set to monthly with a billing-period-based start day. For example, a billing period day of 1 means billing periods start on the 1st of each month.</p>
+                <p>Sets the day of the month on which billing periods begin (default: 25). Used by the "Beginning of Next Billing Period" payment term rule and by recurring invoice schedules with a billing-period-based start day.</p>
 
                 <h2 id="default-payment-term">Default payment term</h2>
-                <p>The default payment term is applied to new sales invoices when neither the client nor the invoice itself specifies a payment term. Select a term from the list of terms defined in <a href="payment-terms.html">Payment Terms</a>. Leave unset to require explicit selection on each invoice.</p>
+                <p>Applied to new sales invoices when neither the client nor the invoice itself specifies a payment term. Leave unset to require explicit selection on each invoice. See <a href="payment-terms.html">Payment Terms</a>.</p>
 
-                <h2 id="invoice-email-template">Invoice email template</h2>
-                <p>When you send a sales invoice by email, Merlin renders an Unlayer email template. The template to use is selected by this setting. Create and manage templates in the <strong>Emails &rsaquo; Templates</strong> section (the NettMail admin area), then return here to set which template is used for invoice emails. See <a href="email.html">Email (NettMail)</a>.</p>
+                <h2 id="base-email-template">Base email template</h2>
+                <p>An optional NettMail/Unlayer template used as the branded HTML wrapper for all billing emails (invoice sends and reminders). <code>InvoiceEmailTemplateService::wrapInBaseTemplate()</code> injects the compiled body HTML into the wrapper at the <code>[email_body]</code> placeholder (square brackets — not <code>{{email_body}}</code>, which Unlayer's drag-and-drop editor wraps in a <code>&lt;code&gt;</code> element). If <code>base_email_template_id</code> is null or the referenced template no longer exists, the compiled body is returned as-is.</p>
+                <p>The body is wrapped in a styled <code>&lt;div&gt;</code> before insertion, using the font and size configured via <code>nettmail.email_body_style</code> (defaults to Inter 16px). This matches the typography of the Quill editor in the Email Templates tab so the preview is representative.</p>
+                <p>Create the wrapper template in <strong>Emails &rsaquo; Templates</strong>, then select it here. See <a href="email.html">Email (NettMail)</a>.</p>
 
-                <h2 id="settings-reference">Settings reference</h2>
+                <h2 id="billing-email-templates">BillingEmailTemplate model</h2>
+                <p>Invoice and reminder email content is stored as <code>BillingEmailTemplate</code> records, not as NettMail templates or as scalar settings values. The model lives at <code>App\Modules\Billing\Models\BillingEmailTemplate</code>.</p>
+                <table>
+                    <thead><tr><th>Column</th><th>Type</th><th>Notes</th></tr></thead>
+                    <tbody>
+                        <tr><td><code>type</code></td><td>string</td><td><code>invoice</code> or <code>reminder</code></td></tr>
+                        <tr><td><code>name</code></td><td>string</td><td>Display name shown in the Email Templates sidebar</td></tr>
+                        <tr><td><code>subject</code></td><td>string</td><td>Email subject line; supports <code>{{shortcodes}}</code></td></tr>
+                        <tr><td><code>body</code></td><td>text</td><td>HTML body (authored in Quill); supports <code>{{shortcodes}}</code></td></tr>
+                        <tr><td><code>offset_days</code></td><td>integer or null</td><td>Reminders only — business-day offset from due date; negative = before, positive = overdue</td></tr>
+                        <tr><td><code>enabled</code></td><td>boolean</td><td>Disabled templates are skipped by send and scheduler</td></tr>
+                    </tbody>
+                </table>
+                <p><code>BillingEmailTemplate::forInvoice()</code> returns the first record with <code>type = 'invoice'</code>. There should be exactly one invoice template. Reminders are fetched via <code>scopeReminder()->scopeEnabled()</code> and matched by their <code>offset_days</code> to today's business-day distance from each invoice's due date.</p>
+                <p>Templates are seeded by <code>BillingEmailTemplateSeeder</code>. If no invoice template exists, <code>InvoiceEmailTemplateService::render()</code> throws a <code>RuntimeException</code>.</p>
+
+                <h2 id="email-template-shortcodes">Email shortcodes</h2>
+                <p>The following <code>{{shortcodes}}</code> are available in both <code>subject</code> and <code>body</code>:</p>
+                <table>
+                    <thead><tr><th>Shortcode</th><th>Description</th></tr></thead>
+                    <tbody>
+                        <tr><td><code>{{invoice_number}}</code></td><td>Invoice reference (e.g. INV-2026-00042)</td></tr>
+                        <tr><td><code>{{amount}}</code></td><td>Invoice total with currency symbol</td></tr>
+                        <tr><td><code>{{amount_outstanding}}</code></td><td>Balance still owed (partial-payment aware)</td></tr>
+                        <tr><td><code>{{due_date}}</code></td><td>Payment due date (e.g. 30 Jun 2026)</td></tr>
+                        <tr><td><code>{{client_name}}</code></td><td>Client display name</td></tr>
+                        <tr><td><code>{{company_name}}</code></td><td>Your company name from CompanySettings</td></tr>
+                        <tr><td><code>{{invoice_url}}</code></td><td>Direct link to the invoice in the client portal</td></tr>
+                        <tr><td><code>{{invoice_details_html}}</code></td><td>Optional HTML block with reference and due date — empty string when neither is set on the invoice</td></tr>
+                    </tbody>
+                </table>
+
+                <h2 id="settings-reference">BillingSettings reference</h2>
                 <table>
                     <thead><tr><th>Key</th><th>Type</th><th>Default</th></tr></thead>
                     <tbody>
-                        <tr><td><code>billing_period_day</code></td><td>integer (1–28)</td><td><code>1</code></td></tr>
+                        <tr><td><code>billing_period_day</code></td><td>integer (1–28)</td><td><code>25</code></td></tr>
                         <tr><td><code>default_receivable_account_id</code></td><td>UUID or null</td><td>null</td></tr>
                         <tr><td><code>default_bank_account_id</code></td><td>UUID or null</td><td>null</td></tr>
                         <tr><td><code>default_payment_term_id</code></td><td>UUID or null</td><td>null</td></tr>
                         <tr><td><code>tax_liability_account_id</code></td><td>UUID or null</td><td>null</td></tr>
-                        <tr><td><code>invoice_email_template_id</code></td><td>UUID or null</td><td>null</td></tr>
+                        <tr><td><code>base_email_template_id</code></td><td>UUID or null (NettMail Unlayer template)</td><td>null</td></tr>
                     </tbody>
                 </table>
             </article>

@@ -15,10 +15,10 @@
         <main id="docs-content">
             <article>
                 <h1>Settings</h1>
-                <p>Settings are split across three pages: General, Purchasing, and Billing. You'll find them all under <strong>Settings</strong> in the navigation.</p>
+                <p>All settings are on a single page at <strong>Settings</strong> in the navigation (<code>/settings</code>). Switch between sections using the tabs at the top: <strong>General</strong>, <strong>Purchasing</strong>, <strong>Billing</strong>, <strong>Roles</strong>, and <strong>Email Templates</strong>.</p>
 
                 <h2 id="general-settings">General settings</h2>
-                <p>The General settings page covers your company details, currency, and financial year.</p>
+                <p>The General tab covers your company details, currency, and financial year.</p>
 
                 <h3 id="company-details">Company details</h3>
                 <p>These appear on PDF invoices you send to clients. Fill in your company name, address, phone, email, and VAT/tax registration number. You can also upload your company logo — it will appear at the top of generated invoices.</p>
@@ -30,7 +30,7 @@
                 <p>Set the month your financial year starts. This is used as the default date range for all reports. For example, if your financial year runs from March to February, set this to March.</p>
 
                 <h2 id="purchasing-settings">Purchasing settings</h2>
-                <p>The Purchasing settings page controls how supplier invoices are processed.</p>
+                <p>The Purchasing tab controls how supplier invoices are processed.</p>
 
                 <h3 id="tax-label-and-rate">Tax label and rate</h3>
                 <p>Set the name for your tax (VAT, GST, etc.) and the default rate as a percentage. This is applied to new invoice lines automatically. For South African VAT, use "VAT" and 15. For Australian GST, use "GST" and 10.</p>
@@ -53,7 +53,7 @@
                 </ul>
 
                 <h2 id="billing-settings">Billing settings</h2>
-                <p>The Billing settings page controls defaults for sales invoices.</p>
+                <p>The Billing tab controls defaults for sales invoices.</p>
 
                 <h3 id="default-accounts">Default accounts</h3>
                 <ul>
@@ -68,8 +68,27 @@
                 <h3 id="default-payment-term">Default payment term</h3>
                 <p>Applied to new sales invoices when neither the client nor the invoice has a specific payment term set.</p>
 
-                <h3 id="invoice-email-template">Invoice email template</h3>
-                <p>The email template used when sending sales invoices to clients. Create templates under <strong>Emails &rsaquo; Templates</strong>, then return here to select which one to use. If this isn't set, the Send Invoice action will not work.</p>
+                <h3 id="base-email-template">Base email template</h3>
+                <p>An optional NettMail/Unlayer branded wrapper applied to all billing emails (invoices and reminders). Create the wrapper template in <strong>Emails &rsaquo; Templates</strong>, place <code>[email_body]</code> where the message content should appear, then select it here. Leave unset to send plain-text body emails without a branded wrapper.</p>
+
+                <h2 id="email-templates">Email templates</h2>
+                <p>The Email Templates tab is where you author the subject and body of billing emails. Each template has a type:</p>
+                <ul>
+                    <li><strong>New invoice</strong> (type: invoice) — sent when you click Send Invoice on a sales invoice. There should be exactly one invoice template.</li>
+                    <li><strong>Reminders</strong> (type: reminder) — sent automatically by the scheduler. Each reminder has an <strong>Offset Days</strong> value: negative means that many business days <em>before</em> the due date; positive means that many business days <em>after</em> (overdue). Create as many reminders as you need.</li>
+                </ul>
+                <p>Templates are edited using a rich-text editor. Click any variable chip to insert it at the cursor. Available variables:</p>
+                <ul>
+                    <li><code>{{invoice_number}}</code> — invoice reference (e.g. INV-2026-00042)</li>
+                    <li><code>{{amount}}</code> — invoice total including currency symbol</li>
+                    <li><code>{{amount_outstanding}}</code> — balance still owed (reflects partial payments)</li>
+                    <li><code>{{due_date}}</code> — payment due date</li>
+                    <li><code>{{client_name}}</code> — client display name</li>
+                    <li><code>{{company_name}}</code> — your company name</li>
+                    <li><code>{{invoice_url}}</code> — link to the invoice in the client portal</li>
+                    <li><code>{{invoice_details_html}}</code> — optional extra rows (reference number, due date) rendered as HTML — empty if neither is set on the invoice</li>
+                </ul>
+                <p>Toggle <strong>Enabled</strong> off to suspend a template without deleting it. A disabled reminder will not be sent; a disabled invoice template means Send Invoice will fail with a configuration error.</p>
             </article>
         </main>
 

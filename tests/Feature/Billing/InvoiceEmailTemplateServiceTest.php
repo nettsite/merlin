@@ -1,13 +1,11 @@
 <?php
 
+use App\Modules\Billing\Models\BillingEmailTemplate;
 use App\Modules\Billing\Services\BillingService;
 use App\Modules\Billing\Services\InvoiceEmailTemplateService;
-use App\Modules\Billing\Settings\BillingSettings;
 use App\Modules\Core\Models\Party;
 use App\Modules\Core\Services\PartyService;
 use App\Modules\Purchasing\Models\Document;
-use Nettsite\NettMail\Core\Domain\Templates\TemplateType;
-use NettSite\NettMail\Models\Template;
 
 function templateClient(): Party
 {
@@ -28,17 +26,18 @@ function templateDraft(?Party $client = null, array $data = []): Document
     ], $data));
 }
 
-it('renders merge tags into subject and html', function (): void {
-    $template = Template::create([
-        'name' => 'Test Template',
-        'type' => TemplateType::Transactional,
-        'subject' => 'Invoice {{invoice_number}} for {{client_name}}',
-        'html' => '<p>{{client_name}} owes {{amount_due}} from {{company_name}}</p>{{invoice_details_html}}',
-    ]);
+beforeEach(function (): void {
+    BillingEmailTemplate::where('type', 'invoice')->delete();
+});
 
-    $settings = app(BillingSettings::class);
-    $settings->invoice_email_template_id = $template->id;
-    $settings->save();
+it('renders merge tags into subject and html', function (): void {
+    BillingEmailTemplate::create([
+        'type' => 'invoice',
+        'name' => 'Test Template',
+        'subject' => 'Invoice {{invoice_number}} for {{client_name}}',
+        'body' => '<p>{{client_name}} from {{company_name}}</p>',
+        'enabled' => true,
+    ]);
 
     $client = templateClient();
     $doc = templateDraft($client);
@@ -51,16 +50,13 @@ it('renders merge tags into subject and html', function (): void {
 });
 
 it('invoice_details_html includes due date, payment term and reference when present', function (): void {
-    $template = Template::create([
+    BillingEmailTemplate::create([
+        'type' => 'invoice',
         'name' => 'Test Template',
-        'type' => TemplateType::Transactional,
         'subject' => 'Invoice {{invoice_number}}',
-        'html' => '{{invoice_details_html}}',
+        'body' => '{{invoice_details_html}}',
+        'enabled' => true,
     ]);
-
-    $settings = app(BillingSettings::class);
-    $settings->invoice_email_template_id = $template->id;
-    $settings->save();
 
     $doc = templateDraft(null, ['reference' => 'PO-123']);
     $doc->due_date = now()->addDays(30)->toDateString();
@@ -74,16 +70,13 @@ it('invoice_details_html includes due date, payment term and reference when pres
 });
 
 it('invoice_details_html is empty when no optional fields are set', function (): void {
-    $template = Template::create([
+    BillingEmailTemplate::create([
+        'type' => 'invoice',
         'name' => 'Test Template',
-        'type' => TemplateType::Transactional,
         'subject' => 'Invoice {{invoice_number}}',
-        'html' => '<div>{{invoice_details_html}}</div>',
+        'body' => '<div>{{invoice_details_html}}</div>',
+        'enabled' => true,
     ]);
-
-    $settings = app(BillingSettings::class);
-    $settings->invoice_email_template_id = $template->id;
-    $settings->save();
 
     $doc = templateDraft();
     $doc->due_date = null;
@@ -98,18 +91,15 @@ it('invoice_details_html is empty when no optional fields are set', function ():
 
 // --- Phase D shortcodes ---
 
-function shortcodeTemplate(string $html): void
+function shortcodeTemplate(string $body): void
 {
-    $template = Template::create([
+    BillingEmailTemplate::create([
+        'type' => 'invoice',
         'name' => 'Shortcode Test',
-        'type' => TemplateType::Transactional,
         'subject' => 'Test',
-        'html' => $html,
+        'body' => $body,
+        'enabled' => true,
     ]);
-
-    $settings = app(BillingSettings::class);
-    $settings->invoice_email_template_id = $template->id;
-    $settings->save();
 }
 
 it('renders {{invoice_number}} shortcode', function (): void {
@@ -170,10 +160,6 @@ it('leaves unknown shortcodes untouched', function (): void {
 });
 
 it('throws when no template is configured', function (): void {
-    $settings = app(BillingSettings::class);
-    $settings->invoice_email_template_id = null;
-    $settings->save();
-
     $doc = templateDraft();
 
     expect(fn () => app(InvoiceEmailTemplateService::class)->render($doc))

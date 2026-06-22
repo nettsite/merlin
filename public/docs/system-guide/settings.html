@@ -35,11 +35,13 @@
                 </table>
 
                 <h2 id="editing-settings">Editing settings</h2>
-                <p>Settings are edited through three pages in the Settings section of the navigation:</p>
+                <p>All in-app settings are on a single page at <code>/settings</code> with five tabs. The old per-section URLs (<code>/settings/general</code>, <code>/settings/purchasing</code>, <code>/settings/billing</code>) redirect to the corresponding tab and are preserved for backwards compatibility.</p>
                 <ul>
-                    <li><strong><a href="general-settings.html">General</a></strong> (<code>/settings/general</code>) — company details, currency and locale, and financial year start month</li>
-                    <li><strong><a href="purchasing-settings.html">Purchasing</a></strong> (<code>/settings/purchasing</code>) — tax rate and label, default payable account, confidence thresholds, and matching tolerances</li>
-                    <li><strong><a href="billing-settings.html">Billing</a></strong> (<code>/settings/billing</code>) — default accounts, billing period day, default payment term, and invoice email template</li>
+                    <li><strong><a href="general-settings.html">General</a></strong> — company details, currency and locale, and financial year start month</li>
+                    <li><strong><a href="purchasing-settings.html">Purchasing</a></strong> — tax rate and label, default payable account, confidence thresholds, and matching tolerances</li>
+                    <li><strong><a href="billing-settings.html">Billing</a></strong> — default GL accounts, billing period day, default payment term, and base email wrapper template</li>
+                    <li><strong>Roles</strong> — embeds the roles management page inline</li>
+                    <li><strong>Email Templates</strong> — manage <code>BillingEmailTemplate</code> records (invoice and reminder templates) using the built-in Quill editor; see <a href="billing-settings.html">Billing Settings</a></li>
                 </ul>
 
                 <h2 id="settings-reference">Settings reference</h2>
@@ -73,12 +75,12 @@
                         <tr><td><code>amount_tolerance</code></td><td>float (%)</td><td><code>10.0</code></td><td>Purchasing</td></tr>
                         <tr><td><code>description_similarity</code></td><td>float (0–100)</td><td><code>60.0</code></td><td>Purchasing</td></tr>
                         <tr><td colspan="4"><em>Billing</em></td></tr>
-                        <tr><td><code>billing_period_day</code></td><td>integer (1–28)</td><td><code>1</code></td><td>Billing</td></tr>
+                        <tr><td><code>billing_period_day</code></td><td>integer (1–28)</td><td><code>25</code></td><td>Billing</td></tr>
                         <tr><td><code>default_receivable_account_id</code></td><td>UUID or null</td><td>null</td><td>Billing</td></tr>
                         <tr><td><code>default_bank_account_id</code></td><td>UUID or null</td><td>null</td><td>Billing</td></tr>
                         <tr><td><code>default_payment_term_id</code></td><td>UUID or null</td><td>null</td><td>Billing</td></tr>
                         <tr><td><code>tax_liability_account_id</code></td><td>UUID or null</td><td>null</td><td>Billing</td></tr>
-                        <tr><td><code>invoice_email_template_id</code></td><td>UUID or null</td><td>null</td><td>Billing</td></tr>
+                        <tr><td><code>base_email_template_id</code></td><td>UUID or null (NettMail template)</td><td>null</td><td>Billing</td></tr>
                     </tbody>
                 </table>
             </article>

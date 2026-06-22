@@ -25,14 +25,20 @@
                 <p><strong>Transactional email</strong> is one-to-one email triggered by a specific user action. In Merlin, the primary transactional email is the sales invoice email, sent when you click Send Invoice on an invoice. Transactional emails use the Unlayer template selected in Billing Settings and are sent immediately via the configured mail driver.</p>
                 <p><strong>Campaign email</strong> is one-to-many email sent to a contact list or segment. NettMail's campaign features (Templates, Contacts, Lists, Segments, Campaigns) are managed through the Emails admin section. Campaign emails respect rate limits configured by <code>NETTMAIL_SENDING_RATE_LIMIT</code> (default: 60 sends per minute).</p>
 
-                <h2 id="invoice-email-templates">Invoice email templates</h2>
-                <p>Sales invoice emails are rendered using Unlayer drag-and-drop templates rather than static Blade views. This lets non-technical users customise the look of invoice emails without touching code. The workflow is:</p>
+                <h2 id="invoice-email-templates">Invoice and reminder email templates</h2>
+                <p>Invoice and reminder email content is stored as <code>BillingEmailTemplate</code> database records — not as NettMail/Unlayer templates. This lets non-technical users author email content directly in the <strong>Settings &rsaquo; Email Templates</strong> tab using the built-in Quill rich-text editor, without needing to use the Unlayer drag-and-drop builder.</p>
+                <p>There are two types:</p>
+                <ul>
+                    <li><strong>Invoice</strong> (<code>type = 'invoice'</code>) — rendered by <code>InvoiceEmailTemplateService</code> when a user clicks Send Invoice. <code>BillingEmailTemplate::forInvoice()</code> retrieves the first record of this type.</li>
+                    <li><strong>Reminder</strong> (<code>type = 'reminder'</code>) — each record has an <code>offset_days</code> value (business-day offset from due date; negative = before, positive = overdue). The <code>billing:send-reminders</code> command compares today's distance to each open invoice's due date and fires whichever enabled reminder templates match.</li>
+                </ul>
+                <p>The rendering pipeline for both types (<code>InvoiceEmailTemplateService::render()</code>):</p>
                 <ol>
-                    <li>Go to <strong>Emails &rsaquo; Templates</strong> and create or edit an Unlayer template for your invoice email.</li>
-                    <li>Go to <strong>Settings &rsaquo; Billing</strong> and select that template as the invoice email template.</li>
-                    <li>When you send a sales invoice, <code>InvoiceEmailTemplateService</code> renders the selected template with invoice merge tags and passes the resulting HTML to <code>SalesInvoiceMail</code> for delivery.</li>
+                    <li>Substitute <code>{{shortcodes}}</code> in the subject and body using <code>mergeTagValues()</code>.</li>
+                    <li>If <code>BillingSettings::base_email_template_id</code> is set, fetch the NettMail Unlayer template and inject the styled body at the <code>[email_body]</code> placeholder (square brackets — not <code>{{email_body}}</code>, which Unlayer wraps in <code>&lt;code&gt;</code>). The body is first wrapped in a styled <code>&lt;div&gt;</code> (Inter 16px, configurable via <code>nettmail.email_body_style</code>). Any remaining NettMail merge tags in the Unlayer template are then resolved via <code>MergeTagRenderer</code>.</li>
+                    <li>If no base template is set, the compiled body is returned as-is.</li>
                 </ol>
-                <p>The Unlayer project ID is configured via <code>NETTMAIL_UNLAYER_PROJECT_ID</code> in <code>.env</code>.</p>
+                <p>The Unlayer project ID for the branded wrapper is configured via <code>NETTMAIL_UNLAYER_PROJECT_ID</code> in <code>.env</code>. See <a href="billing-settings.html">Billing Settings</a> for the full shortcode reference and <code>BillingEmailTemplate</code> model details.</p>
 
                 <h2 id="configuring-mail-delivery">Configuring mail delivery</h2>
                 <p>NettMail supports multiple mail drivers. Set <code>NETTMAIL_DRIVER</code> to one of the following and configure the corresponding variables:</p>
@@ -61,7 +67,7 @@ NETTMAIL_FROM_ADDRESS=invoices@acmeplumbing.example.com</code></pre>
                     <li><strong>Segments</strong> — define dynamic contact segments based on rules</li>
                     <li><strong>Campaigns</strong> — create and send bulk email campaigns to lists or segments</li>
                 </ul>
-                <p>NEEDS CONFIRMATION: exact route paths for NettMail admin pages (owned by the package, not Merlin).</p>
+                <p>NettMail admin routes are registered under the prefix set by <code>NETTMAIL_ROUTES_PREFIX</code> (default: <code>nettmail</code>). The exact paths are owned by the package and not hardcoded in Merlin.</p>
             </article>
         </main>
 

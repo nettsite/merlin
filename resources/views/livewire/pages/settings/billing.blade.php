@@ -2,13 +2,10 @@
 
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Billing\Models\PaymentTerm;
-use App\Modules\Billing\Services\InvoiceEmailTemplateService;
 use App\Modules\Billing\Settings\BillingSettings;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Validate;
 use Livewire\Volt\Component;
-use NettSite\NettMail\Models\Template;
-use Nettsite\NettMail\Core\Domain\Templates\TemplateType;
 
 new #[Layout('components.layout.app')] class extends Component
 {
@@ -27,12 +24,6 @@ new #[Layout('components.layout.app')] class extends Component
     #[Validate('required|integer|min:1|max:28')]
     public int $billingPeriodDay = 1;
 
-    #[Validate('nullable|uuid|exists:nettmail_templates,id')]
-    public ?string $invoiceEmailTemplateId = null;
-
-    #[Validate('nullable|string|max:200')]
-    public string $reminderOffsetsInput = '';
-
     public bool $saved = false;
 
     public function mount(): void
@@ -45,18 +36,11 @@ new #[Layout('components.layout.app')] class extends Component
         $this->defaultPaymentTermId = $settings->default_payment_term_id;
         $this->taxLiabilityAccountId = $settings->tax_liability_account_id;
         $this->billingPeriodDay = $settings->billing_period_day;
-        $this->invoiceEmailTemplateId = $settings->invoice_email_template_id;
-        $this->reminderOffsetsInput = implode(', ', $settings->reminder_offsets);
     }
 
     public function save(): void
     {
         $this->validate();
-
-        $offsets = array_values(array_filter(
-            array_map('intval', array_map('trim', explode(',', $this->reminderOffsetsInput))),
-            fn ($v) => $v !== 0 || str_contains($this->reminderOffsetsInput, '0'),
-        ));
 
         $settings = app(BillingSettings::class);
         $settings->default_receivable_account_id = $this->defaultReceivableAccountId ?: null;
@@ -64,8 +48,6 @@ new #[Layout('components.layout.app')] class extends Component
         $settings->default_payment_term_id = $this->defaultPaymentTermId ?: null;
         $settings->tax_liability_account_id = $this->taxLiabilityAccountId ?: null;
         $settings->billing_period_day = $this->billingPeriodDay;
-        $settings->invoice_email_template_id = $this->invoiceEmailTemplateId ?: null;
-        $settings->reminder_offsets = $offsets;
         $settings->save();
 
         $this->saved = true;
@@ -83,10 +65,6 @@ new #[Layout('components.layout.app')] class extends Component
                 ->orderBy('code')
                 ->get(['id', 'code', 'name']),
             'paymentTerms' => PaymentTerm::orderBy('name')->get(['id', 'name']),
-            'emailTemplates' => Template::where('type', TemplateType::Transactional)
-                ->whereNull('archived_at')
-                ->orderBy('name')
-                ->get(['id', 'name']),
         ];
     }
 }; ?>
@@ -160,44 +138,6 @@ new #[Layout('components.layout.app')] class extends Component
                 <flux:description>Day of month on which billing periods begin (1–28)</flux:description>
                 <flux:error name="billingPeriodDay" />
             </flux:field>
-        </div>
-
-        <div class="space-y-5">
-            <h2 class="text-sm font-semibold text-ink border-b border-line pb-2">Email</h2>
-
-            <flux:field>
-                <flux:label>Invoice Email Template</flux:label>
-                <flux:select wire:model="invoiceEmailTemplateId" class="max-w-xs">
-                    <flux:select.option value="">— None —</flux:select.option>
-                    @foreach ($emailTemplates as $template)
-                        <flux:select.option value="{{ $template->id }}">{{ $template->name }}</flux:select.option>
-                    @endforeach
-                </flux:select>
-                <flux:description>Template used for the sales invoice email sent to clients</flux:description>
-                <flux:error name="invoiceEmailTemplateId" />
-            </flux:field>
-
-            <flux:field>
-                <flux:label>Reminder Offsets</flux:label>
-                <flux:input wire:model="reminderOffsetsInput" placeholder="-3, 1, 7, 14" class="max-w-xs" />
-                <flux:description>
-                    Comma-separated business-day offsets from due date. Negative = before due, positive = overdue.
-                    e.g. <code>-3, 1, 7, 14</code>
-                </flux:description>
-                <flux:error name="reminderOffsetsInput" />
-            </flux:field>
-
-            <div class="mt-4 rounded-md border border-line bg-surface-alt p-4 text-sm">
-                <p class="font-medium text-ink mb-2">Available shortcodes</p>
-                <dl class="space-y-1">
-                    @foreach (InvoiceEmailTemplateService::availableShortcodes() as $tag => $description)
-                        <div class="flex gap-3">
-                            <dt class="font-mono text-xs text-ink-soft shrink-0 pt-0.5 select-all">{{ $tag }}</dt>
-                            <dd class="text-ink-muted">{{ $description }}</dd>
-                        </div>
-                    @endforeach
-                </dl>
-            </div>
         </div>
 
         <div class="flex items-center gap-4 pt-2">

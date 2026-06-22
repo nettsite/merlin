@@ -1,6 +1,7 @@
 <?php
 
 use App\Mail\SalesInvoiceMail;
+use App\Modules\Billing\Models\BillingEmailTemplate;
 use App\Modules\Billing\Services\BillingService;
 use App\Modules\Core\Models\Party;
 use App\Modules\Core\Models\User;
@@ -8,6 +9,13 @@ use App\Modules\Core\Services\PartyService;
 use App\Modules\Purchasing\Models\Document;
 use Illuminate\Support\Facades\Mail;
 use Livewire\Volt\Volt;
+
+beforeEach(function (): void {
+    BillingEmailTemplate::firstOrCreate(
+        ['type' => 'invoice', 'name' => 'Default Invoice'],
+        ['subject' => 'Invoice {{invoice_number}}', 'body' => '<p>Please find your invoice {{invoice_number}} attached.</p>', 'enabled' => true],
+    );
+});
 
 function sendUserWith(array $permissions): User
 {

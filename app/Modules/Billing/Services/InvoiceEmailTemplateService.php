@@ -54,6 +54,7 @@ class InvoiceEmailTemplateService
             '{{client_name}}' => 'Client display name',
             '{{company_name}}' => 'Your company name',
             '{{invoice_url}}' => 'Link to view the invoice in the client portal',
+            '{{invoice_details_html}}' => 'Optional detail rows (reference, due date) — empty when not set',
         ];
     }
 
@@ -81,6 +82,21 @@ class InvoiceEmailTemplateService
         return (new MergeTagRenderer)->render($html, $values);
     }
 
+    private function buildDetailsHtml(Document $invoice): string
+    {
+        $parts = [];
+
+        if ($invoice->reference) {
+            $parts[] = '<p>Reference: '.htmlspecialchars($invoice->reference).'</p>';
+        }
+
+        if ($invoice->due_date) {
+            $parts[] = '<p>Payment Due: '.$invoice->due_date->format('d M Y').'</p>';
+        }
+
+        return implode('', $parts);
+    }
+
     private function substitute(string $template, array $values): string
     {
         $search = array_map(fn (string $k): string => '{{'.$k.'}}', array_keys($values));
@@ -101,6 +117,7 @@ class InvoiceEmailTemplateService
             'due_date' => $invoice->due_date ? $invoice->due_date->format('d M Y') : '',
             'invoice_url' => url('/portal/invoices/'.$invoice->id),
             'company_name' => config('app.name'),
+            'invoice_details_html' => $this->buildDetailsHtml($invoice),
         ];
     }
 }

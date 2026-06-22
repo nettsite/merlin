@@ -1,6 +1,7 @@
 <?php
 
 use App\Exceptions\InvalidDocumentStateException;
+use App\Modules\Billing\Models\BillingEmailTemplate;
 use App\Modules\Billing\Models\PaymentTerm;
 use App\Modules\Billing\Services\BillingService;
 use App\Modules\Core\Models\Party;
@@ -10,6 +11,13 @@ use App\Modules\Purchasing\Models\Document;
 use App\Modules\Purchasing\Services\DocumentService;
 use Illuminate\Support\Facades\Mail;
 use Livewire\Volt\Volt;
+
+beforeEach(function (): void {
+    BillingEmailTemplate::firstOrCreate(
+        ['type' => 'invoice', 'name' => 'Default Invoice'],
+        ['subject' => 'Invoice {{invoice_number}}', 'body' => '<p>Please find your invoice attached.</p>', 'enabled' => true],
+    );
+});
 
 function siUserWith(array $permissions): User
 {

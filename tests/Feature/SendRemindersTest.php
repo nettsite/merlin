@@ -1,6 +1,6 @@
 <?php
 
-use App\Modules\Billing\Settings\BillingSettings;
+use App\Modules\Billing\Models\BillingEmailTemplate;
 use App\Modules\Core\Models\Party;
 use App\Modules\Core\Services\PartyService;
 use App\Modules\Purchasing\Models\Document;
@@ -34,6 +34,18 @@ function openInvoiceWithDueDate(Party $client, string $dueDate): Document
     ]);
 }
 
+function reminderTemplate(int $offsetDays, string $name = 'Test Reminder'): BillingEmailTemplate
+{
+    return BillingEmailTemplate::create([
+        'type' => 'reminder',
+        'name' => $name,
+        'subject' => 'Reminder: {{invoice_number}}',
+        'body' => 'Your invoice is due.',
+        'offset_days' => $offsetDays,
+        'enabled' => true,
+    ]);
+}
+
 // ── Tests ─────────────────────────────────────────────────────────────────────
 
 it('fires the -3 offset on the correct date when a public holiday sits in the window', function (): void {
@@ -43,10 +55,7 @@ it('fires the -3 offset on the correct date when a public holiday sits in the wi
     //   -1 = Apr 7 (Tue), -2 = Apr 2 (Thu→skip Fri Apr3/Sat/Sun/Mon Apr6), -3 = Apr 1
     // So invoice due Apr 8 fires on Apr 1.
     Carbon::setTestNow(Carbon::parse('2026-04-01'));
-
-    $settings = app(BillingSettings::class);
-    $settings->reminder_offsets = [-3];
-    $settings->save();
+    reminderTemplate(-3);
 
     $client = reminderClient();
     openInvoiceWithDueDate($client, '2026-04-08');
@@ -54,14 +63,14 @@ it('fires the -3 offset on the correct date when a public holiday sits in the wi
     $this->artisan('billing:send-reminders --dry-run')
         ->assertExitCode(0)
         ->expectsOutputToContain('1 invoice(s)');
-})->afterEach(fn () => Carbon::setTestNow());
+})->afterEach(function (): void {
+    BillingEmailTemplate::where('type', 'reminder')->delete();
+    Carbon::setTestNow();
+});
 
 it('does not fire for a due date that does not match the -3 offset', function (): void {
     Carbon::setTestNow(Carbon::parse('2026-04-01'));
-
-    $settings = app(BillingSettings::class);
-    $settings->reminder_offsets = [-3];
-    $settings->save();
+    reminderTemplate(-3);
 
     $client = reminderClient();
     openInvoiceWithDueDate($client, '2026-04-07'); // wrong date — addBusinessDays(Apr 7, -3) != Apr 1
@@ -70,14 +79,14 @@ it('does not fire for a due date that does not match the -3 offset', function ()
     $this->artisan('billing:send-reminders --dry-run')
         ->assertExitCode(0)
         ->doesntExpectOutputToContain('invoice(s)');
-})->afterEach(fn () => Carbon::setTestNow());
+})->afterEach(function (): void {
+    BillingEmailTemplate::where('type', 'reminder')->delete();
+    Carbon::setTestNow();
+});
 
 it('skips paid invoices', function (): void {
     Carbon::setTestNow(Carbon::parse('2026-04-01'));
-
-    $settings = app(BillingSettings::class);
-    $settings->reminder_offsets = [-3];
-    $settings->save();
+    reminderTemplate(-3);
 
     $client = reminderClient();
     Document::create([
@@ -97,14 +106,14 @@ it('skips paid invoices', function (): void {
     $this->artisan('billing:send-reminders --dry-run')
         ->assertExitCode(0)
         ->expectsOutputToContain('No open invoices');
-})->afterEach(fn () => Carbon::setTestNow());
+})->afterEach(function (): void {
+    BillingEmailTemplate::where('type', 'reminder')->delete();
+    Carbon::setTestNow();
+});
 
 it('skips invoices with zero balance_due even when status is sent', function (): void {
     Carbon::setTestNow(Carbon::parse('2026-04-01'));
-
-    $settings = app(BillingSettings::class);
-    $settings->reminder_offsets = [-3];
-    $settings->save();
+    reminderTemplate(-3);
 
     $client = reminderClient();
     Document::create([
@@ -124,16 +133,16 @@ it('skips invoices with zero balance_due even when status is sent', function ():
     $this->artisan('billing:send-reminders --dry-run')
         ->assertExitCode(0)
         ->expectsOutputToContain('No open invoices');
-})->afterEach(fn () => Carbon::setTestNow());
+})->afterEach(function (): void {
+    BillingEmailTemplate::where('type', 'reminder')->delete();
+    Carbon::setTestNow();
+});
 
 it('fires the +7 overdue reminder on the correct date', function (): void {
     // Freeze today to Apr 16 (Thu). addBusinessDays(Apr 7 Tue, +7):
     // +1=Apr8, +2=Apr9, +3=Apr10, +4=Apr13, +5=Apr14, +6=Apr15, +7=Apr16 — matches today.
     Carbon::setTestNow(Carbon::parse('2026-04-16'));
-
-    $settings = app(BillingSettings::class);
-    $settings->reminder_offsets = [7];
-    $settings->save();
+    reminderTemplate(7);
 
     $client = reminderClient();
     openInvoiceWithDueDate($client, '2026-04-07');
@@ -141,18 +150,15 @@ it('fires the +7 overdue reminder on the correct date', function (): void {
     $this->artisan('billing:send-reminders --dry-run')
         ->assertExitCode(0)
         ->expectsOutputToContain('1 invoice(s)');
-})->afterEach(fn () => Carbon::setTestNow());
+})->afterEach(function (): void {
+    BillingEmailTemplate::where('type', 'reminder')->delete();
+    Carbon::setTestNow();
+});
 
-it('reports no offsets configured when reminder_offsets is empty', function (): void {
-    $settings = app(BillingSettings::class);
-    $settings->reminder_offsets = [];
-    $settings->save();
+it('reports no enabled reminder templates when none are configured', function (): void {
+    BillingEmailTemplate::where('type', 'reminder')->delete();
 
     $this->artisan('billing:send-reminders')
         ->assertExitCode(0)
-        ->expectsOutputToContain('No reminder offsets configured');
-})->afterEach(function (): void {
-    $settings = app(BillingSettings::class);
-    $settings->reminder_offsets = [-3, 1, 7, 14];
-    $settings->save();
+        ->expectsOutputToContain('No enabled reminder templates configured');
 });

@@ -3,6 +3,7 @@
 use App\Mail\SalesInvoiceMail;
 use App\Modules\Billing\Enums\RecurringFrequency;
 use App\Modules\Billing\Enums\RecurringInvoiceStatus;
+use App\Modules\Billing\Models\BillingEmailTemplate;
 use App\Modules\Billing\Models\RecurringInvoice;
 use App\Modules\Billing\Services\RecurringInvoiceService;
 use App\Modules\Core\Models\Party;
@@ -13,6 +14,13 @@ use App\Modules\Purchasing\Models\Document;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Mail;
 use Livewire\Volt\Volt;
+
+beforeEach(function (): void {
+    BillingEmailTemplate::firstOrCreate(
+        ['type' => 'invoice', 'name' => 'Default Invoice'],
+        ['subject' => 'Invoice {{invoice_number}}', 'body' => '<p>Please find your invoice attached.</p>', 'enabled' => true],
+    );
+});
 
 // Tests in this file use absolute 2026 dates; freeze the clock so "due"
 // comparisons against now() never rot as the real calendar advances.
