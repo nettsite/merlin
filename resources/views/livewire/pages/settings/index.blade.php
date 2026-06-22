@@ -454,6 +454,7 @@ new #[Layout('components.layout.app')] class extends Component
             {{-- Editor --}}
             @if($editingTemplateId)
                 <div class="flex-1 px-8 py-6 max-w-4xl"
+                    wire:key="template-editor"
                     x-data="{
                         cursorIndex: 0,
                         init() {
@@ -508,7 +509,10 @@ new #[Layout('components.layout.app')] class extends Component
                             this.cursorIndex = idx + tag.length;
                         },
                         loadBody(body) {
-                            const quill = this.$refs.editorEl.__quill;
+                            // May fire before init() (server dispatches template-loaded
+                            // while the panel is morphed in); init seeds the first body,
+                            // so a no-op here is safe.
+                            const quill = this.$refs.editorEl?.__quill;
                             if (!quill) return;
                             quill.root.innerHTML = body;
                             this.cursorIndex = 0;
