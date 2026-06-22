@@ -49,6 +49,22 @@ it('renders merge tags into subject and html', function (): void {
         ->and($rendered['html'])->toContain(config('app.name'));
 });
 
+it('renders the reference merge tag', function (): void {
+    BillingEmailTemplate::create([
+        'type' => 'invoice',
+        'name' => 'Test Template',
+        'subject' => 'Invoice {{invoice_number}}',
+        'body' => '<p>Ref: {{reference}}</p>',
+        'enabled' => true,
+    ]);
+
+    $doc = templateDraft(null, ['reference' => 'PO-123']);
+
+    $rendered = app(InvoiceEmailTemplateService::class)->render($doc);
+
+    expect($rendered['html'])->toContain('Ref: PO-123');
+});
+
 // --- Phase D shortcodes ---
 
 function shortcodeTemplate(string $body): void

@@ -506,13 +506,20 @@ new #[Layout('components.layout.app')] class extends Component
                                 $wire.set('tplBody', quill.root.innerHTML, false);
                             }
                         },
+                        captureCursor() {
+                            // Runs on button mousedown — the editor still has focus here,
+                            // so getSelection() returns the true live caret (event-based
+                            // tracking lags behind typing).
+                            const quill = this.$refs.editorEl?.__quill;
+                            const range = quill?.getSelection();
+                            if (range) this.cursorIndex = range.index;
+                        },
                         insertTag(tag) {
                             const quill = this.$refs.editorEl.__quill;
                             if (!quill) return;
                             const idx = this.cursorIndex;
-                            quill.focus();
-                            quill.setSelection(idx, 0);
                             quill.insertText(idx, tag);
+                            quill.setSelection(idx + tag.length, 0);
                             this.cursorIndex = idx + tag.length;
                         },
                         loadBody(body) {
@@ -577,6 +584,7 @@ new #[Layout('components.layout.app')] class extends Component
                                     <button
                                         type="button"
                                         title="{{ $desc }}"
+                                        x-on:mousedown="captureCursor()"
                                         x-on:click="insertTag('{{ $tag }}')"
                                         class="font-mono text-xs bg-white border border-line rounded px-1.5 py-0.5 text-ink-soft hover:text-ink hover:border-ink-muted transition-colors cursor-pointer"
                                     >{{ $tag }}</button>

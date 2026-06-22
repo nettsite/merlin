@@ -54,6 +54,7 @@ class InvoiceEmailTemplateService
             '{{client_name}}' => 'Client display name',
             '{{company_name}}' => 'Your company name',
             '{{invoice_url}}' => 'Link to view the invoice in the client portal',
+            '{{reference}}' => 'Invoice reference (blank if not set)',
         ];
     }
 
@@ -101,6 +102,7 @@ class InvoiceEmailTemplateService
             'due_date' => $invoice->due_date ? $invoice->due_date->format('d M Y') : '',
             'invoice_url' => url('/portal/invoices/'.$invoice->id),
             'company_name' => config('app.name'),
+            'reference' => $invoice->reference ?? '',
         ];
     }
 }
