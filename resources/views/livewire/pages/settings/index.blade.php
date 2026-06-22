@@ -452,14 +452,17 @@ new #[Layout('components.layout.app')] class extends Component
                 <div class="flex-1 px-8 py-6 max-w-4xl"
                     wire:key="tpl-{{ $editingTemplateId }}"
                     x-data="{
-                        editor: null,
+                        cursorIndex: 0,
                         init() {
                             // Use style-based size so output has inline font-size (email-safe).
                             const SizeStyle = Quill.import('attributors/style/size');
                             SizeStyle.whitelist = ['12px', '13px', '14px', '15px', '16px', '18px', '20px'];
                             Quill.register(SizeStyle, true);
 
-                            this.editor = new Quill(this.$refs.editorEl, {
+                            // Store raw Quill instance on the DOM element, not in Alpine's
+                            // reactive data — wrapping a Quill instance in Alpine's Proxy
+                            // corrupts Quill's internal this.selection / savedRange access.
+                            const quill = new Quill(this.$refs.editorEl, {
                                 theme: 'snow',
                                 modules: {
                                     toolbar: [
@@ -471,17 +474,35 @@ new #[Layout('components.layout.app')] class extends Component
                                     ]
                                 }
                             });
-                            this.editor.root.style.fontFamily = 'Inter, ui-sans-serif, system-ui, sans-serif';
-                            this.editor.root.style.fontSize = '16px';
-                            this.editor.root.innerHTML = @js($tplBody);
-                            this.editor.on('text-change', () => {
-                                $wire.set('tplBody', this.editor.root.innerHTML, false);
+                            quill.root.style.fontFamily = 'Inter, ui-sans-serif, system-ui, sans-serif';
+                            quill.root.style.fontSize = '16px';
+                            quill.root.innerHTML = @js($tplBody);
+                            quill.on('text-change', () => {
+                                $wire.set('tplBody', quill.root.innerHTML, false);
                             });
+                            quill.on('selection-change', (range) => {
+                                if (range) this.cursorIndex = range.index;
+                            });
+
+                            // Stash on the editor element (stable via $refs) — not in
+                            // Alpine reactive data (Proxy corrupts Quill) and not on
+                            // $el (contextual: resolves to the clicked button in handlers).
+                            this.$refs.editorEl.__quill = quill;
                         },
                         syncContent() {
-                            if (this.editor) {
-                                $wire.set('tplBody', this.editor.root.innerHTML, false);
+                            const quill = this.$refs.editorEl.__quill;
+                            if (quill) {
+                                $wire.set('tplBody', quill.root.innerHTML, false);
                             }
+                        },
+                        insertTag(tag) {
+                            const quill = this.$refs.editorEl.__quill;
+                            if (!quill) return;
+                            const idx = this.cursorIndex;
+                            quill.focus();
+                            quill.setSelection(idx, 0);
+                            quill.insertText(idx, tag);
+                            this.cursorIndex = idx + tag.length;
                         }
                     }"
                     x-on:sync-and-save-template.window="syncContent(); $nextTick(() => $wire.save())"
@@ -535,11 +556,7 @@ new #[Layout('components.layout.app')] class extends Component
                                     <button
                                         type="button"
                                         title="{{ $desc }}"
-                                        x-on:click="
-                                            editor.focus();
-                                            const sel = editor.getSelection(true);
-                                            editor.insertText(sel ? sel.index : editor.getLength(), '{{ $tag }}');
-                                        "
+                                        x-on:click="insertTag('{{ $tag }}')"
                                         class="font-mono text-xs bg-white border border-line rounded px-1.5 py-0.5 text-ink-soft hover:text-ink hover:border-ink-muted transition-colors cursor-pointer"
                                     >{{ $tag }}</button>
                                 @endforeach
