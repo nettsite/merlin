@@ -486,6 +486,10 @@ new #[Layout('components.layout.app')] class extends Component
                             quill.clipboard.dangerouslyPasteHTML(@js($tplBody));
                             quill.on('text-change', () => {
                                 $wire.set('tplBody', quill.root.innerHTML, false);
+                                // selection-change does NOT fire while typing, so the
+                                // cursor index goes stale; refresh it on every keystroke.
+                                const range = quill.getSelection();
+                                if (range) this.cursorIndex = range.index;
                             });
                             quill.on('selection-change', (range) => {
                                 if (range) this.cursorIndex = range.index;
