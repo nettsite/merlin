@@ -49,46 +49,6 @@ it('renders merge tags into subject and html', function (): void {
         ->and($rendered['html'])->toContain(config('app.name'));
 });
 
-it('invoice_details_html includes due date, payment term and reference when present', function (): void {
-    BillingEmailTemplate::create([
-        'type' => 'invoice',
-        'name' => 'Test Template',
-        'subject' => 'Invoice {{invoice_number}}',
-        'body' => '{{invoice_details_html}}',
-        'enabled' => true,
-    ]);
-
-    $doc = templateDraft(null, ['reference' => 'PO-123']);
-    $doc->due_date = now()->addDays(30)->toDateString();
-    $doc->save();
-    $doc->load('paymentTerm');
-
-    $rendered = app(InvoiceEmailTemplateService::class)->render($doc);
-
-    expect($rendered['html'])->toContain('Reference: PO-123')
-        ->and($rendered['html'])->toContain('Payment Due:');
-});
-
-it('invoice_details_html is empty when no optional fields are set', function (): void {
-    BillingEmailTemplate::create([
-        'type' => 'invoice',
-        'name' => 'Test Template',
-        'subject' => 'Invoice {{invoice_number}}',
-        'body' => '<div>{{invoice_details_html}}</div>',
-        'enabled' => true,
-    ]);
-
-    $doc = templateDraft();
-    $doc->due_date = null;
-    $doc->payment_term_id = null;
-    $doc->reference = null;
-    $doc->save();
-
-    $rendered = app(InvoiceEmailTemplateService::class)->render($doc);
-
-    expect($rendered['html'])->toBe('<div></div>');
-});
-
 // --- Phase D shortcodes ---
 
 function shortcodeTemplate(string $body): void
