@@ -175,6 +175,10 @@ new #[Layout('components.layout.app')] class extends Component
         $this->tplOffsetDays = $template->offset_days;
         $this->tplEnabled = $template->enabled;
         $this->saved = false;
+
+        // Push the new body into the wire:ignore'd Quill editor, which Livewire
+        // can no longer update via DOM morphing.
+        $this->dispatch('template-loaded', body: $template->body);
     }
 
     public function save(): void
@@ -450,7 +454,6 @@ new #[Layout('components.layout.app')] class extends Component
             {{-- Editor --}}
             @if($editingTemplateId)
                 <div class="flex-1 px-8 py-6 max-w-4xl"
-                    wire:key="tpl-{{ $editingTemplateId }}"
                     x-data="{
                         cursorIndex: 0,
                         init() {
@@ -503,9 +506,16 @@ new #[Layout('components.layout.app')] class extends Component
                             quill.setSelection(idx, 0);
                             quill.insertText(idx, tag);
                             this.cursorIndex = idx + tag.length;
+                        },
+                        loadBody(body) {
+                            const quill = this.$refs.editorEl.__quill;
+                            if (!quill) return;
+                            quill.root.innerHTML = body;
+                            this.cursorIndex = 0;
                         }
                     }"
                     x-on:sync-and-save-template.window="syncContent(); $nextTick(() => $wire.save())"
+                    x-on:template-loaded.window="loadBody($event.detail.body)"
                 >
                     <div class="space-y-5">
                         {{-- Name / offset / enabled --}}
@@ -542,7 +552,7 @@ new #[Layout('components.layout.app')] class extends Component
                         {{-- Body (Quill) --}}
                         <flux:field>
                             <flux:label>Body</flux:label>
-                            <div class="border border-line rounded-md overflow-hidden [&_.ql-toolbar]:border-0 [&_.ql-toolbar]:border-b [&_.ql-toolbar]:border-line [&_.ql-container]:border-0">
+                            <div wire:ignore class="border border-line rounded-md overflow-hidden [&_.ql-toolbar]:border-0 [&_.ql-toolbar]:border-b [&_.ql-toolbar]:border-line [&_.ql-container]:border-0">
                                 <div x-ref="editorEl" class="min-h-64 text-sm"></div>
                             </div>
                             <flux:error name="tplBody" />
