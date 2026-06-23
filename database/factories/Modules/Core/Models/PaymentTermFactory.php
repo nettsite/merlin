@@ -1,9 +1,9 @@
 <?php
 
-namespace Database\Factories\Modules\Billing\Models;
+namespace Database\Factories\Modules\Core\Models;
 
-use App\Modules\Billing\Enums\PaymentTermRule;
-use App\Modules\Billing\Models\PaymentTerm;
+use App\Modules\Core\Enums\PaymentTermRule;
+use App\Modules\Core\Models\PaymentTerm;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**

@@ -7,7 +7,7 @@ use App\Modules\Billing\Models\BillingEmailTemplate;
 use App\Modules\Billing\Services\BillingService;
 use App\Modules\Billing\Services\InvoiceEmailTemplateService;
 use App\Modules\Billing\Services\WorkingDayCalculator;
-use App\Modules\Purchasing\Models\Document;
+use App\Modules\Core\Models\Document;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;

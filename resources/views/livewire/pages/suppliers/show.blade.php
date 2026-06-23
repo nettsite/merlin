@@ -1,9 +1,9 @@
 <?php
 
 use App\Modules\Accounting\Models\Account;
-use App\Modules\Billing\Models\PaymentTerm;
+use App\Modules\Core\Models\PaymentTerm;
 use App\Modules\Core\Models\Party;
-use App\Modules\Purchasing\Models\Document;
+use App\Modules\Core\Models\Document;
 use Carbon\Carbon;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Validate;

@@ -1,11 +1,11 @@
 <?php
 
 use App\Modules\Billing\Services\PortalInviteService;
+use App\Modules\Core\Models\Document;
 use App\Modules\Core\Models\Party;
 use App\Modules\Core\Models\Person;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Services\PartyService;
-use App\Modules\Purchasing\Models\Document;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;

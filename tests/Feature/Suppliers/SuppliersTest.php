@@ -1,9 +1,9 @@
 <?php
 
+use App\Modules\Core\Models\Document;
 use App\Modules\Core\Models\Party;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Services\PartyService;
-use App\Modules\Purchasing\Models\Document;
 use Livewire\Volt\Volt;
 
 function supplierUserWith(array $permissions): User

@@ -3,8 +3,8 @@
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\AccountGroup;
 use App\Modules\Accounting\Models\AccountType;
-use App\Modules\Billing\Models\PaymentTerm;
 use App\Modules\Billing\Settings\BillingSettings;
+use App\Modules\Core\Models\PaymentTerm;
 use App\Modules\Core\Models\User;
 use Livewire\Volt\Volt;
 

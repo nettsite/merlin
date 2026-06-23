@@ -2,8 +2,8 @@
 
 namespace App\Policies;
 
+use App\Modules\Core\Models\Document;
 use App\Modules\Core\Models\User;
-use App\Modules\Purchasing\Models\Document;
 
 class DocumentPolicy
 {

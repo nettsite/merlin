@@ -4,8 +4,8 @@ namespace App\Console\Commands;
 
 use App\Exceptions\InvalidFileTypeException;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Core\Models\Document;
 use App\Modules\Core\Settings\CurrencySettings;
-use App\Modules\Purchasing\Models\Document;
 use App\Modules\Purchasing\Services\InvoiceProcessingService;
 use App\Modules\Purchasing\Services\Pdf\MagikaService;
 use App\Modules\Purchasing\Settings\PurchasingSettings;

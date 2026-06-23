@@ -9,22 +9,22 @@ use App\Modules\Accounting\Models\AccountType;
 use App\Modules\Billing\Console\GenerateRecurringInvoices;
 use App\Modules\Billing\Console\SendReminders;
 use App\Modules\Billing\Models\BillingEmailTemplate;
-use App\Modules\Billing\Models\PaymentTerm;
 use App\Modules\Billing\Models\RecurringInvoice;
 use App\Modules\Billing\Models\RecurringInvoiceLine;
 use App\Modules\Core\Contracts\ModulePolicy;
 use App\Modules\Core\Models\Business;
 use App\Modules\Core\Models\ContactAssignment;
+use App\Modules\Core\Models\Document;
+use App\Modules\Core\Models\DocumentActivity;
+use App\Modules\Core\Models\DocumentLine;
+use App\Modules\Core\Models\DocumentRelationship;
 use App\Modules\Core\Models\Party;
 use App\Modules\Core\Models\PartyRelationship;
+use App\Modules\Core\Models\PaymentTerm;
 use App\Modules\Core\Models\Person;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Policies\AllModulesPolicy;
 use App\Modules\Core\Settings\CurrencySettings;
-use App\Modules\Purchasing\Models\Document;
-use App\Modules\Purchasing\Models\DocumentActivity;
-use App\Modules\Purchasing\Models\DocumentLine;
-use App\Modules\Purchasing\Models\DocumentRelationship;
 use App\Modules\Purchasing\Models\LlmLog;
 use App\Modules\Purchasing\Models\PostingRule;
 use App\Modules\Purchasing\Services\ExchangeRateService;
@@ -36,6 +36,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
+use Livewire\Livewire;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -65,7 +66,7 @@ class AppServiceProvider extends ServiceProvider
         $this->configureAuthorization();
 
         // Override published NettMail views so they survive composer updates.
-        \Livewire\Livewire::addNamespace('nettmail', resource_path('views/vendor/nettmail/livewire'));
+        Livewire::addNamespace('nettmail', resource_path('views/vendor/nettmail/livewire'));
     }
 
     /**

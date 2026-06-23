@@ -1,9 +1,9 @@
 <?php
 
-namespace Database\Factories\Modules\Purchasing\Models;
+namespace Database\Factories\Modules\Core\Models;
 
-use App\Modules\Purchasing\Models\Document;
-use App\Modules\Purchasing\Models\DocumentLine;
+use App\Modules\Core\Models\Document;
+use App\Modules\Core\Models\DocumentLine;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**

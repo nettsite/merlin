@@ -3,7 +3,7 @@
 namespace App\Modules\Accounting\Services;
 
 use App\Modules\Accounting\Settings\AccountingSettings;
-use App\Modules\Purchasing\Models\Document;
+use App\Modules\Core\Models\Document;
 use Carbon\Carbon;
 
 class FinancialYearService

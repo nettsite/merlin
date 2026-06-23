@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Modules\Purchasing\Models;
+namespace App\Modules\Core\Models;
 
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;

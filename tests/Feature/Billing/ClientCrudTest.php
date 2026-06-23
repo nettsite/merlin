@@ -1,7 +1,7 @@
 <?php
 
-use App\Modules\Billing\Models\PaymentTerm;
 use App\Modules\Core\Models\Party;
+use App\Modules\Core\Models\PaymentTerm;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Services\PartyService;
 use Livewire\Volt\Volt;

@@ -2,11 +2,12 @@
 
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Core\Models\Business;
+use App\Modules\Core\Models\Document;
+use App\Modules\Core\Models\DocumentLine;
 use App\Modules\Core\Models\Party;
 use App\Modules\Core\Models\Person;
 use App\Modules\Core\Models\User;
-use App\Modules\Purchasing\Models\Document;
-use App\Modules\Purchasing\Models\DocumentLine;
+use App\Providers\AppServiceProvider;
 use Illuminate\Database\Eloquent\Relations\Relation;
 
 /**
@@ -23,7 +24,7 @@ use Illuminate\Database\Eloquent\Relations\Relation;
 arch('no hasRole() calls in app code')
     ->expect('App')
     ->not->toUse('hasRole')
-    ->ignoring(App\Providers\AppServiceProvider::class);
+    ->ignoring(AppServiceProvider::class);
 
 /**
  * All concrete Policy classes live in App\Policies. Confirm they expose at least

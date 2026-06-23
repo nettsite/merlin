@@ -2,8 +2,8 @@
 
 use App\Livewire\Concerns\HasCrudForm;
 use App\Livewire\Concerns\HasCrudTable;
-use App\Modules\Billing\Enums\PaymentTermRule;
-use App\Modules\Billing\Models\PaymentTerm;
+use App\Modules\Core\Enums\PaymentTermRule;
+use App\Modules\Core\Models\PaymentTerm;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Validate;
 use Livewire\Volt\Component;
@@ -109,7 +109,7 @@ new #[Layout('components.layout.app')] class extends Component
 <div>
 <x-crud.table title="Payment Terms" description="Reusable due date rules for clients and invoices">
     <x-slot name="actions">
-        @can('create', \App\Modules\Billing\Models\PaymentTerm::class)
+        @can('create', \App\Modules\Core\Models\PaymentTerm::class)
             <flux:button wire:click="create" icon="plus" size="sm" variant="primary">
                 New Payment Term
             </flux:button>
@@ -193,7 +193,7 @@ new #[Layout('components.layout.app')] class extends Component
         <flux:error name="rule" />
     </flux:field>
 
-    @if($rule && \App\Modules\Billing\Enums\PaymentTermRule::from($rule)->requiresDays())
+    @if($rule && \App\Modules\Core\Enums\PaymentTermRule::from($rule)->requiresDays())
         <flux:field>
             <flux:label>Days <span class="text-danger">*</span></flux:label>
             <flux:input wire:model="days" type="number" min="1" max="365" placeholder="e.g. 30" />
@@ -201,7 +201,7 @@ new #[Layout('components.layout.app')] class extends Component
         </flux:field>
     @endif
 
-    @if($rule && \App\Modules\Billing\Enums\PaymentTermRule::from($rule)->requiresDayOfMonth())
+    @if($rule && \App\Modules\Core\Enums\PaymentTermRule::from($rule)->requiresDayOfMonth())
         <flux:field>
             <flux:label>Day of Month <span class="text-danger">*</span></flux:label>
             <flux:input wire:model="dayOfMonth" type="number" min="1" max="28" placeholder="e.g. 25" />

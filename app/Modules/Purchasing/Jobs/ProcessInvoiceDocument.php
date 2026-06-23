@@ -2,7 +2,7 @@
 
 namespace App\Modules\Purchasing\Jobs;
 
-use App\Modules\Purchasing\Models\Document;
+use App\Modules\Core\Models\Document;
 use App\Modules\Purchasing\Services\InvoiceProcessingService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;

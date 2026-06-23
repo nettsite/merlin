@@ -2,7 +2,7 @@
 
 namespace App\Policies;
 
-use App\Modules\Billing\Models\PaymentTerm;
+use App\Modules\Core\Models\PaymentTerm;
 use App\Modules\Core\Models\User;
 
 class PaymentTermPolicy

@@ -2,13 +2,13 @@
 
 use App\Exceptions\InvalidDocumentStateException;
 use App\Modules\Billing\Models\BillingEmailTemplate;
-use App\Modules\Billing\Models\PaymentTerm;
 use App\Modules\Billing\Services\BillingService;
+use App\Modules\Core\Models\Document;
 use App\Modules\Core\Models\Party;
+use App\Modules\Core\Models\PaymentTerm;
 use App\Modules\Core\Models\User;
+use App\Modules\Core\Services\DocumentService;
 use App\Modules\Core\Services\PartyService;
-use App\Modules\Purchasing\Models\Document;
-use App\Modules\Purchasing\Services\DocumentService;
 use Illuminate\Support\Facades\Mail;
 use Livewire\Volt\Volt;
 

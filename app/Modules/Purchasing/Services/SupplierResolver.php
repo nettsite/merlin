@@ -2,10 +2,10 @@
 
 namespace App\Modules\Purchasing\Services;
 
+use App\Modules\Core\Models\Document;
 use App\Modules\Core\Models\Party;
 use App\Modules\Core\Services\PartyService;
 use App\Modules\Purchasing\DTO\ExtractedInvoice;
-use App\Modules\Purchasing\Models\Document;
 
 class SupplierResolver
 {

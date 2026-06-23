@@ -1,10 +1,10 @@
 <?php
 
 use App\Exceptions\LlmApiException;
+use App\Modules\Core\Models\Document;
 use App\Modules\Core\Models\User;
 use App\Modules\Purchasing\DTO\ExtractedInvoice;
 use App\Modules\Purchasing\DTO\ExtractedInvoiceLine;
-use App\Modules\Purchasing\Models\Document;
 use App\Modules\Purchasing\Models\LlmLog;
 use App\Modules\Purchasing\Services\LlmService;
 use App\Modules\Purchasing\Settings\PurchasingSettings;

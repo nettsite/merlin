@@ -3,9 +3,9 @@
 use App\Modules\Billing\Models\BillingEmailTemplate;
 use App\Modules\Billing\Services\BillingService;
 use App\Modules\Billing\Services\InvoiceEmailTemplateService;
+use App\Modules\Core\Models\Document;
 use App\Modules\Core\Models\Party;
 use App\Modules\Core\Services\PartyService;
-use App\Modules\Purchasing\Models\Document;
 
 function templateClient(): Party
 {

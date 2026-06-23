@@ -1,7 +1,7 @@
 <?php
 
 use App\Modules\Core\Settings\CurrencySettings;
-use App\Modules\Purchasing\Models\Document;
+use App\Modules\Core\Models\Document;
 use Livewire\Attributes\Layout;
 use Livewire\Volt\Component;
 

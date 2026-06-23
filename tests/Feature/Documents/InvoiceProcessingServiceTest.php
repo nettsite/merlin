@@ -1,14 +1,14 @@
 <?php
 
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Core\Models\Document;
+use App\Modules\Core\Models\DocumentActivity;
+use App\Modules\Core\Models\DocumentLine;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Settings\CurrencySettings;
 use App\Modules\Purchasing\DTO\ExtractedInvoice;
 use App\Modules\Purchasing\DTO\ExtractedInvoiceLine;
 use App\Modules\Purchasing\Jobs\ProcessInvoiceDocument;
-use App\Modules\Purchasing\Models\Document;
-use App\Modules\Purchasing\Models\DocumentActivity;
-use App\Modules\Purchasing\Models\DocumentLine;
 use App\Modules\Purchasing\Services\AccountResolver;
 use App\Modules\Purchasing\Services\DocumentTextExtractor;
 use App\Modules\Purchasing\Services\ExchangeRateService;

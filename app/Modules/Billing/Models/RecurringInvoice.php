@@ -5,6 +5,7 @@ namespace App\Modules\Billing\Models;
 use App\Modules\Billing\Enums\RecurringFrequency;
 use App\Modules\Billing\Enums\RecurringInvoiceStatus;
 use App\Modules\Core\Models\Party;
+use App\Modules\Core\Models\PaymentTerm;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;

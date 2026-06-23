@@ -1,9 +1,9 @@
 <?php
 
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Core\Models\Document;
+use App\Modules\Core\Models\DocumentLine;
 use App\Modules\Core\Models\Party;
-use App\Modules\Purchasing\Models\Document;
-use App\Modules\Purchasing\Models\DocumentLine;
 use App\Modules\Purchasing\Models\PostingRule;
 use App\Modules\Purchasing\Services\PostingRuleService;
 use Illuminate\Foundation\Testing\RefreshDatabase;

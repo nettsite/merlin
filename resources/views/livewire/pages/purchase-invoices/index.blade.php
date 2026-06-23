@@ -4,8 +4,8 @@ use App\Modules\Accounting\Models\Account;
 use App\Modules\Core\Models\Party;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Settings\CurrencySettings;
-use App\Modules\Purchasing\Models\Document;
-use App\Modules\Purchasing\Models\DocumentLine;
+use App\Modules\Core\Models\Document;
+use App\Modules\Core\Models\DocumentLine;
 use App\Modules\Purchasing\Services\DocumentService;
 use App\Modules\Purchasing\Services\ExchangeRateService;
 use Illuminate\Support\Facades\Auth;
@@ -629,7 +629,7 @@ new #[Layout('components.layout.app')] class extends Component
         <h1 class="text-[17px] font-semibold tracking-tight text-ink">Purchase Invoices</h1>
         <p class="mt-0.5 text-sm text-ink-muted">Supplier invoices and their processing status</p>
     </div>
-    @can('create', \App\Modules\Purchasing\Models\Document::class)
+    @can('create', \App\Modules\Core\Models\Document::class)
         <flux:button wire:click="openUpload" icon="arrow-up-tray" size="sm" variant="primary">
             Upload Invoice
         </flux:button>

@@ -2,7 +2,7 @@
 
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Core\Settings\CurrencySettings;
-use App\Modules\Purchasing\Models\DocumentLine;
+use App\Modules\Core\Models\DocumentLine;
 use Illuminate\Support\Carbon;
 use Livewire\Attributes\Layout;
 use Livewire\Volt\Component;
@@ -36,7 +36,7 @@ new #[Layout('components.layout.app')] class extends Component
                 SUM(document_lines.line_total + COALESCE(document_lines.tax_amount, 0)) as total_incl
             ')
             ->where('documents.document_type', 'purchase_invoice')
-            ->whereIn('documents.status', \App\Modules\Purchasing\Models\Document::POSTED_STATUSES)
+            ->whereIn('documents.status', \App\Modules\Core\Models\Document::POSTED_STATUSES)
             // The manual join bypasses Document's SoftDeletes scope.
             ->whereNull('documents.deleted_at')
             ->whereNotNull('document_lines.account_id')

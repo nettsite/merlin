@@ -3,14 +3,14 @@
 namespace App\Modules\Billing\Services;
 
 use App\Mail\SalesInvoiceMail;
-use App\Modules\Billing\Models\PaymentTerm;
 use App\Modules\Billing\Settings\BillingSettings;
+use App\Modules\Core\Models\Document;
+use App\Modules\Core\Models\DocumentRelationship;
 use App\Modules\Core\Models\Party;
+use App\Modules\Core\Models\PaymentTerm;
 use App\Modules\Core\Models\User;
+use App\Modules\Core\Services\DocumentService;
 use App\Modules\Core\Settings\CurrencySettings;
-use App\Modules\Purchasing\Models\Document;
-use App\Modules\Purchasing\Models\DocumentRelationship;
-use App\Modules\Purchasing\Services\DocumentService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;

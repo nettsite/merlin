@@ -3,9 +3,9 @@
 namespace App\Modules\Purchasing\Services;
 
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Core\Models\Document;
+use App\Modules\Core\Models\DocumentLine;
 use App\Modules\Purchasing\DTO\ExtractedInvoiceLine;
-use App\Modules\Purchasing\Models\Document;
-use App\Modules\Purchasing\Models\DocumentLine;
 
 class AccountResolver
 {

@@ -2,7 +2,7 @@
 
 namespace App\Exceptions;
 
-use App\Modules\Purchasing\Models\Document;
+use App\Modules\Core\Models\Document;
 use RuntimeException;
 
 class InvalidDocumentStateException extends RuntimeException

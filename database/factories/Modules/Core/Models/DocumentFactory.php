@@ -1,10 +1,10 @@
 <?php
 
-namespace Database\Factories\Modules\Purchasing\Models;
+namespace Database\Factories\Modules\Core\Models;
 
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Core\Models\Document;
 use App\Modules\Core\Models\Party;
-use App\Modules\Purchasing\Models\Document;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**

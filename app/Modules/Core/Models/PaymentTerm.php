@@ -1,8 +1,8 @@
 <?php
 
-namespace App\Modules\Billing\Models;
+namespace App\Modules\Core\Models;
 
-use App\Modules\Billing\Enums\PaymentTermRule;
+use App\Modules\Core\Enums\PaymentTermRule;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;

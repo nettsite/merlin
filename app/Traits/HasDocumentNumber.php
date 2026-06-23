@@ -2,7 +2,7 @@
 
 namespace App\Traits;
 
-use App\Modules\Purchasing\Models\Document;
+use App\Modules\Core\Models\Document;
 
 trait HasDocumentNumber
 {

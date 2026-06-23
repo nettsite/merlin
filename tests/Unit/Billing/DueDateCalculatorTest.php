@@ -2,9 +2,9 @@
 
 namespace Tests\Unit\Billing;
 
-use App\Modules\Billing\Enums\PaymentTermRule;
-use App\Modules\Billing\Models\PaymentTerm;
 use App\Modules\Billing\Services\DueDateCalculator;
+use App\Modules\Core\Enums\PaymentTermRule;
+use App\Modules\Core\Models\PaymentTerm;
 use Carbon\Carbon;
 use PHPUnit\Framework\TestCase;
 

@@ -1,12 +1,12 @@
 <?php
 
 use App\Exceptions\InvalidDocumentStateException;
+use App\Modules\Core\Models\Document;
+use App\Modules\Core\Models\DocumentRelationship;
 use App\Modules\Core\Models\Party;
 use App\Modules\Core\Models\User;
+use App\Modules\Core\Services\DocumentService;
 use App\Modules\Core\Services\PartyService;
-use App\Modules\Purchasing\Models\Document;
-use App\Modules\Purchasing\Models\DocumentRelationship;
-use App\Modules\Purchasing\Services\DocumentService;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 

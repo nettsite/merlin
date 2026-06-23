@@ -1,8 +1,8 @@
 <?php
 
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Core\Models\Document;
 use App\Modules\Core\Models\User;
-use App\Modules\Purchasing\Models\Document;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Volt\Volt;
 

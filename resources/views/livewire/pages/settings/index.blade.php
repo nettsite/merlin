@@ -2,7 +2,7 @@
 
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Billing\Models\BillingEmailTemplate;
-use App\Modules\Billing\Models\PaymentTerm;
+use App\Modules\Core\Models\PaymentTerm;
 use App\Modules\Billing\Services\InvoiceEmailTemplateService;
 use App\Modules\Billing\Settings\BillingSettings;
 use App\Modules\Core\Settings\CompanySettings;

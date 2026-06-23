@@ -1,11 +1,8 @@
 <?php
 
-namespace App\Modules\Purchasing\Models;
+namespace App\Modules\Core\Models;
 
 use App\Modules\Accounting\Models\Account;
-use App\Modules\Billing\Models\PaymentTerm;
-use App\Modules\Core\Models\Party;
-use App\Modules\Core\Models\Person;
 use App\Modules\Core\Settings\CurrencySettings;
 use App\Traits\HasDocumentNumber;
 use Carbon\Carbon;

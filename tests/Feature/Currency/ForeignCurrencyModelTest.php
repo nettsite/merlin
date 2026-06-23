@@ -1,7 +1,7 @@
 <?php
 
-use App\Modules\Purchasing\Models\Document;
-use App\Modules\Purchasing\Models\DocumentLine;
+use App\Modules\Core\Models\Document;
+use App\Modules\Core\Models\DocumentLine;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
 uses(RefreshDatabase::class);

@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Modules\Billing\Enums;
+namespace App\Modules\Core\Enums;
 
 enum PaymentTermRule: string
 {

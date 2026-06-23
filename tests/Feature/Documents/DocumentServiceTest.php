@@ -2,11 +2,11 @@
 
 use App\Exceptions\InvalidDocumentStateException;
 use App\Exceptions\InvalidFileTypeException;
+use App\Modules\Core\Models\Document;
+use App\Modules\Core\Models\DocumentActivity;
+use App\Modules\Core\Models\DocumentLine;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Settings\CurrencySettings;
-use App\Modules\Purchasing\Models\Document;
-use App\Modules\Purchasing\Models\DocumentActivity;
-use App\Modules\Purchasing\Models\DocumentLine;
 use App\Modules\Purchasing\Services\DocumentService;
 use App\Modules\Purchasing\Services\Pdf\MagikaService;
 use App\Modules\Purchasing\Settings\PurchasingSettings;

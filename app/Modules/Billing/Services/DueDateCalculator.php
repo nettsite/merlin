@@ -2,8 +2,8 @@
 
 namespace App\Modules\Billing\Services;
 
-use App\Modules\Billing\Enums\PaymentTermRule;
-use App\Modules\Billing\Models\PaymentTerm;
+use App\Modules\Core\Enums\PaymentTermRule;
+use App\Modules\Core\Models\PaymentTerm;
 use Carbon\Carbon;
 
 class DueDateCalculator

@@ -1,8 +1,8 @@
 <?php
 
+use App\Modules\Core\Models\Document;
 use App\Modules\Core\Models\User;
-use App\Modules\Purchasing\Models\Document;
-use App\Modules\Purchasing\Services\DocumentService;
+use App\Modules\Core\Services\DocumentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Volt\Volt;
 use Spatie\Permission\Models\Permission;

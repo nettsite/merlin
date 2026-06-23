@@ -2,8 +2,8 @@
 
 namespace App\Modules\Purchasing\Services;
 
-use App\Modules\Purchasing\Models\Document;
-use App\Modules\Purchasing\Models\DocumentLine;
+use App\Modules\Core\Models\Document;
+use App\Modules\Core\Models\DocumentLine;
 use App\Modules\Purchasing\Models\PostingRule;
 use App\Modules\Purchasing\Settings\PurchasingSettings;
 use Illuminate\Support\Collection;

@@ -2,8 +2,8 @@
 
 namespace Database\Seeders;
 
-use App\Modules\Billing\Enums\PaymentTermRule;
-use App\Modules\Billing\Models\PaymentTerm;
+use App\Modules\Core\Enums\PaymentTermRule;
+use App\Modules\Core\Models\PaymentTerm;
 use Illuminate\Database\Seeder;
 
 class PaymentTermSeeder extends Seeder

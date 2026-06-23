@@ -3,7 +3,6 @@
 namespace App\Modules\Core\Models;
 
 use App\Modules\Accounting\Models\Account;
-use App\Modules\Billing\Models\PaymentTerm;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;

@@ -1,10 +1,9 @@
 <?php
 
+use App\Modules\Core\Models\Document;
 use App\Modules\Core\Models\User;
-use App\Modules\Purchasing\Models\Document;
 use App\Modules\Purchasing\Services\DocumentService;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Queue;
 use Livewire\Volt\Volt;
 
 function userWithDocumentPermissions(): User

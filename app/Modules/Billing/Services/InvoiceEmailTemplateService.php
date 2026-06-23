@@ -4,7 +4,7 @@ namespace App\Modules\Billing\Services;
 
 use App\Modules\Billing\Models\BillingEmailTemplate;
 use App\Modules\Billing\Settings\BillingSettings;
-use App\Modules\Purchasing\Models\Document;
+use App\Modules\Core\Models\Document;
 use Nettsite\NettMail\Core\Domain\Templates\MergeTagRenderer;
 use NettSite\NettMail\Models\Template;
 use RuntimeException;

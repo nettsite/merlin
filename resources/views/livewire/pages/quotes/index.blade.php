@@ -1,13 +1,13 @@
 <?php
 
-use App\Modules\Billing\Models\PaymentTerm;
+use App\Modules\Core\Models\PaymentTerm;
 use App\Modules\Billing\Services\BillingService;
 use App\Modules\Billing\Settings\BillingSettings;
 use App\Modules\Core\Models\Party;
 use App\Modules\Core\Settings\CurrencySettings;
-use App\Modules\Purchasing\Models\Document;
-use App\Modules\Purchasing\Models\DocumentLine;
-use App\Modules\Purchasing\Services\DocumentService;
+use App\Modules\Core\Models\Document;
+use App\Modules\Core\Models\DocumentLine;
+use App\Modules\Core\Services\DocumentService;
 use App\Modules\Purchasing\Services\ExchangeRateService;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Layout;
@@ -425,7 +425,7 @@ new #[Layout('components.layout.app')] class extends Component
         <h1 class="text-[17px] font-semibold tracking-tight text-ink">Quotes</h1>
         <p class="mt-0.5 text-sm text-ink-muted">Client quotes and acceptance status</p>
     </div>
-    @can('create', \App\Modules\Purchasing\Models\Document::class)
+    @can('create', \App\Modules\Core\Models\Document::class)
         <flux:button wire:click="openCreate" icon="plus" size="sm" variant="primary">
             New Quote
         </flux:button>
@@ -505,7 +505,7 @@ new #[Layout('components.layout.app')] class extends Component
                 <tr>
                     <td colspan="5" class="px-4 py-12 text-center">
                         <p class="font-medium text-ink">No quotes yet.</p>
-                        @can('create', \App\Modules\Purchasing\Models\Document::class)
+                        @can('create', \App\Modules\Core\Models\Document::class)
                             <p class="mt-1 text-sm text-ink-muted">Create your first quote to get started.</p>
                         @endcan
                     </td>

@@ -2,7 +2,7 @@
 
 namespace App\Mail;
 
-use App\Modules\Purchasing\Models\Document;
+use App\Modules\Core\Models\Document;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailables\Attachment;
 use Illuminate\Mail\Mailables\Content;

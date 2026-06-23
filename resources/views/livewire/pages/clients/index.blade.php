@@ -3,7 +3,7 @@
 use App\Livewire\Concerns\HasCrudForm;
 use App\Livewire\Concerns\HasCrudTable;
 use App\Modules\Accounting\Models\Account;
-use App\Modules\Billing\Models\PaymentTerm;
+use App\Modules\Core\Models\PaymentTerm;
 use App\Modules\Core\Models\ContactAssignment;
 use App\Modules\Core\Models\Party;
 use App\Modules\Core\Models\PartyRelationship;

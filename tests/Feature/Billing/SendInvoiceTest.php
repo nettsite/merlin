@@ -3,10 +3,10 @@
 use App\Mail\SalesInvoiceMail;
 use App\Modules\Billing\Models\BillingEmailTemplate;
 use App\Modules\Billing\Services\BillingService;
+use App\Modules\Core\Models\Document;
 use App\Modules\Core\Models\Party;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Services\PartyService;
-use App\Modules\Purchasing\Models\Document;
 use Illuminate\Support\Facades\Mail;
 use Livewire\Volt\Volt;
 

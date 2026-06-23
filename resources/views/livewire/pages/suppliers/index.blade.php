@@ -3,11 +3,11 @@
 use App\Livewire\Concerns\HasCrudForm;
 use App\Livewire\Concerns\HasCrudTable;
 use App\Modules\Accounting\Models\Account;
-use App\Modules\Billing\Models\PaymentTerm;
+use App\Modules\Core\Models\PaymentTerm;
 use App\Modules\Core\Models\Party;
 use App\Modules\Core\Models\PartyRelationship;
 use App\Modules\Core\Services\PartyService;
-use App\Modules\Purchasing\Models\Document;
+use App\Modules\Core\Models\Document;
 use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Livewire\Attributes\Layout;

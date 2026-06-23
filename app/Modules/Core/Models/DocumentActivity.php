@@ -1,8 +1,7 @@
 <?php
 
-namespace App\Modules\Purchasing\Models;
+namespace App\Modules\Core\Models;
 
-use App\Modules\Core\Models\User;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
