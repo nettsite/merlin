@@ -30,7 +30,7 @@
     </flux:sidebar>
 
     {{-- Top navigation --}}
-    <flux:header class="bg-white border-b border-line">
+    <flux:header sticky class="bg-white border-b border-line">
         <flux:sidebar.toggle class="lg:hidden" icon="bars-2" inset="left" />
 
         <a href="{{ route('dashboard') }}" wire:navigate class="flex items-center shrink-0 mr-4">
