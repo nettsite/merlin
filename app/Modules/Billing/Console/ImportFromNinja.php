@@ -187,13 +187,13 @@ class ImportFromNinja extends Command
                         'default_receivable_account_id' => $this->receivableAccountId,
                     ]);
 
-                    if ($client->address1) {
+                    if ($client->address1 && $client->city) {
                         Address::create([
                             'party_id' => $party->id,
                             'type' => 'billing',
                             'line_1' => $client->address1,
                             'line_2' => $client->address2 ?: null,
-                            'city' => $client->city ?: null,
+                            'city' => $client->city,
                             'state_province' => $client->state ?: null,
                             'postal_code' => $client->postal_code ?: null,
                             'country' => $this->ninjaCountryCode((int) $client->country_id),
@@ -202,13 +202,13 @@ class ImportFromNinja extends Command
                         ]);
                     }
 
-                    if ($client->shipping_address1) {
+                    if ($client->shipping_address1 && $client->shipping_city) {
                         Address::create([
                             'party_id' => $party->id,
                             'type' => 'shipping',
                             'line_1' => $client->shipping_address1,
                             'line_2' => $client->shipping_address2 ?: null,
-                            'city' => $client->shipping_city ?: null,
+                            'city' => $client->shipping_city,
                             'state_province' => $client->shipping_state ?: null,
                             'postal_code' => $client->shipping_postal_code ?: null,
                             'country' => $this->ninjaCountryCode((int) $client->shipping_country_id),
@@ -547,6 +547,13 @@ class ImportFromNinja extends Command
 
             if ($dry) {
                 $this->created++;
+
+                continue;
+            }
+
+            if ((float) $payment->amount <= 0) {
+                $this->warn("    Payment #{$payment->id}: zero amount — skip");
+                $this->skipped++;
 
                 continue;
             }
@@ -984,7 +991,7 @@ class ImportFromNinja extends Command
         };
     }
 
-    private function ninjaCountryCode(int $countryId): ?string
+    private function ninjaCountryCode(int $countryId): string
     {
         return match ($countryId) {
             516 => 'NA',
@@ -992,7 +999,7 @@ class ImportFromNinja extends Command
             840 => 'US',
             826 => 'GB',
             276 => 'DE',
-            default => null,
+            default => 'ZA', // all clients in this dataset are South African
         };
     }
 

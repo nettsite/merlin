@@ -13,6 +13,7 @@ use App\Modules\Billing\Models\BillingEmailTemplate;
 use App\Modules\Billing\Models\RecurringInvoice;
 use App\Modules\Billing\Models\RecurringInvoiceLine;
 use App\Modules\Core\Contracts\ModulePolicy;
+use App\Modules\Core\Models\Address;
 use App\Modules\Core\Models\Business;
 use App\Modules\Core\Models\ContactAssignment;
 use App\Modules\Core\Models\Document;
@@ -77,6 +78,7 @@ class AppServiceProvider extends ServiceProvider
     {
         Relation::enforceMorphMap([
             'account' => Account::class,
+            'address' => Address::class,
             'account_group' => AccountGroup::class,
             'account_type' => AccountType::class,
             'business' => Business::class,
