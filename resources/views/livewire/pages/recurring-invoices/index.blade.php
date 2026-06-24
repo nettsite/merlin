@@ -47,11 +47,51 @@ new #[Layout('components.layout.app')] class extends Component
     /** @var array<int, array<string, mixed>> */
     public array $formLines = [];
 
+    public string $filterFrequency = '';
+
+    public string $filterStatus = '';
+
     public string $activeTab = 'details';
 
     public function mount(): void
     {
         $this->authorize('viewAny', RecurringInvoice::class);
+        $this->sortBy = session('ri.sortBy', 'next_invoice_date');
+        $this->sortDir = session('ri.sortDir', 'desc');
+        $this->filterFrequency = session('ri.filterFrequency', '');
+        $this->filterStatus = session('ri.filterStatus', '');
+        $this->search = session('ri.search', '');
+    }
+
+    public function sort(string $column): void
+    {
+        if ($this->sortBy === $column) {
+            $this->sortDir = $this->sortDir === 'asc' ? 'desc' : 'asc';
+        } else {
+            $this->sortBy = $column;
+            $this->sortDir = 'asc';
+        }
+
+        session(['ri.sortBy' => $this->sortBy, 'ri.sortDir' => $this->sortDir]);
+        $this->resetPage();
+    }
+
+    public function updatedSearch(): void
+    {
+        session(['ri.search' => $this->search]);
+        $this->resetPage();
+    }
+
+    public function updatedFilterFrequency(): void
+    {
+        session(['ri.filterFrequency' => $this->filterFrequency]);
+        $this->resetPage();
+    }
+
+    public function updatedFilterStatus(): void
+    {
+        session(['ri.filterStatus' => $this->filterStatus]);
+        $this->resetPage();
     }
 
     public function create(): void
@@ -204,13 +244,22 @@ new #[Layout('components.layout.app')] class extends Component
                     ->where('trading_name', 'like', "%{$this->search}%")
                     ->orWhere('legal_name', 'like', "%{$this->search}%")
                 ))
-                ->orderBy('next_invoice_date')
+                ->when($this->filterFrequency, fn ($q) => $q->where('frequency', $this->filterFrequency))
+                ->when($this->filterStatus, fn ($q) => $q->where('status', $this->filterStatus))
+                ->when(
+                    $this->sortBy === 'client',
+                    fn ($q) => $q
+                        ->join('businesses', 'businesses.id', '=', 'recurring_invoices.client_id')
+                        ->orderBy('businesses.trading_name', $this->sortDir)
+                        ->select('recurring_invoices.*'),
+                    fn ($q) => $q->orderBy($this->sortBy ?: 'next_invoice_date', $this->sortDir)
+                )
                 ->paginate($this->perPage),
             // Client dropdown only renders inside the form flyout.
             'clients' => $this->showForm ? Party::clients()->with('business')->get() : collect(),
             'paymentTerms' => PaymentTerm::orderBy('name')->get(['id', 'name']),
             'accounts' => Account::postable()->income()->active()->orderBy('code')->get(['id', 'code', 'name']),
-            'frequencies' => RecurringFrequency::cases(),
+            'frequencies' => RecurringInvoice::select('frequency')->distinct()->get()->pluck('frequency')->sortBy(fn ($f) => $f->value)->values(),
             'historyInvoices' => $historyInvoices,
             'currencySymbol' => ExchangeRateService::currencySymbol(
                 app(CurrencySettings::class)->base_currency
@@ -229,7 +278,7 @@ new #[Layout('components.layout.app')] class extends Component
 @endif
 
 {{-- Table --}}
-<x-crud.table title="Recurring Invoices" description="Automated billing templates that generate invoices on a schedule." :rows="$rows">
+<x-crud.table title="Recurring Invoices" description="Automated billing templates that generate invoices on a schedule.">
     <x-slot name="actions">
         @can('create', \App\Modules\Billing\Models\RecurringInvoice::class)
             <flux:button wire:click="create" variant="primary" icon="plus" size="sm">New Template</flux:button>
@@ -237,78 +286,103 @@ new #[Layout('components.layout.app')] class extends Component
     </x-slot>
 
     <x-slot name="search">
-        <flux:input wire:model.live.debounce.300ms="search" placeholder="Search clients…" icon="magnifying-glass" size="sm" class="max-w-xs" />
+        <div class="flex items-center gap-3 border-b border-line bg-surface-alt px-6 py-3">
+            <flux:input wire:model.live.debounce.300ms="search" placeholder="Search clients…" icon="magnifying-glass" size="sm" class="max-w-xs" />
+            <div class="flex gap-1">
+                @foreach(['' => 'All', 'active' => 'Active', 'paused' => 'Paused', 'completed' => 'Completed'] as $value => $label)
+                    <button
+                        wire:click="$set('filterStatus', '{{ $value }}')"
+                        @class([
+                            'px-3 py-1.5 text-sm rounded-md font-medium transition-colors',
+                            'bg-white text-ink shadow-sm ring-1 ring-inset ring-line' => $filterStatus === $value,
+                            'text-ink-soft hover:text-ink' => $filterStatus !== $value,
+                        ])
+                    >{{ $label }}</button>
+                @endforeach
+            </div>
+            <div class="flex-none">
+                <flux:select wire:model.live="filterFrequency" size="sm">
+                    <option value="">Frequency</option>
+                    @foreach($frequencies as $freq)
+                        <option value="{{ $freq->value }}">{{ $freq->label() }}</option>
+                    @endforeach
+                </flux:select>
+            </div>
+        </div>
     </x-slot>
 
-    <x-slot name="head">
-        <tr>
-            <x-crud.th column="client" :sortBy="$sortBy" :sortDir="$sortDir">Client</x-crud.th>
-            <x-crud.th column="frequency" :sortBy="$sortBy" :sortDir="$sortDir">Frequency</x-crud.th>
-            <x-crud.th column="next_invoice_date" :sortBy="$sortBy" :sortDir="$sortDir">Next Date</x-crud.th>
-            <x-crud.th :right="true">Value (ex tax)</x-crud.th>
-            <x-crud.th column="status" :sortBy="$sortBy" :sortDir="$sortDir">Status</x-crud.th>
-            <th class="px-4 py-3 text-right text-xs font-semibold text-ink-muted uppercase tracking-wide"></th>
-        </tr>
-    </x-slot>
-
-    @forelse($rows as $template)
-        @php
-            $templateValue = $template->lines->sum(
-                fn ($l) => $l->quantity * $l->unit_price * (1 - $l->discount_percent / 100)
-            );
-        @endphp
-        <tr class="group hover:bg-surface-alt transition-colors">
-            <td class="px-4 py-3 font-medium text-ink">
-                {{ $template->client?->business?->display_name ?? '—' }}
-            </td>
-            <td class="px-4 py-3 text-ink-soft">
-                {{ $template->frequency->label() }}
-            </td>
-            <td class="px-4 py-3 tabular-nums text-ink-soft">
-                {{ $template->next_invoice_date->format('d M Y') }}
-            </td>
-            <td class="px-4 py-3 text-right tabular-nums text-ink-soft">
-                {{ $currencySymbol }}{{ number_format($templateValue, 2) }}
-            </td>
-            <td class="px-4 py-3">
-                <span @class([
-                    'inline-flex items-center px-2 py-0.5 rounded text-xs font-medium',
-                    'bg-green-50 text-success' => $template->status === \App\Modules\Billing\Enums\RecurringInvoiceStatus::Active,
-                    'bg-yellow-50 text-warning' => $template->status === \App\Modules\Billing\Enums\RecurringInvoiceStatus::Paused,
-                    'bg-surface-alt text-ink-muted' => $template->status === \App\Modules\Billing\Enums\RecurringInvoiceStatus::Completed,
-                ])>
-                    {{ $template->status->label() }}
-                </span>
-            </td>
-            <td class="px-4 py-3 text-right">
-                <div class="flex items-center justify-end gap-2">
-                    @can('update', $template)
-                        @if($template->status === \App\Modules\Billing\Enums\RecurringInvoiceStatus::Active)
-                            <flux:button wire:click="pause('{{ $template->id }}')" size="sm" variant="ghost">Pause</flux:button>
-                        @elseif($template->status === \App\Modules\Billing\Enums\RecurringInvoiceStatus::Paused)
-                            <flux:button wire:click="activate('{{ $template->id }}')" size="sm" variant="ghost">Activate</flux:button>
-                        @endif
-                        <flux:button wire:click="edit('{{ $template->id }}')" size="sm" variant="ghost" icon="pencil" />
-                    @endcan
-                    @can('delete', $template)
-                        <flux:button
-                            wire:click="delete('{{ $template->id }}')"
-                            wire:confirm="Delete this recurring invoice template? This cannot be undone."
-                            size="sm" variant="ghost" icon="trash"
-                            class="text-danger hover:text-danger"
-                        />
-                    @endcan
-                </div>
-            </td>
-        </tr>
-    @empty
-        <tr>
-            <td colspan="6" class="px-4 py-12 text-center">
-                <p class="font-medium text-ink">No recurring invoice templates yet.</p>
-                <p class="mt-1 text-sm text-ink-muted">Create a template to automate invoice generation.</p>
-            </td>
-        </tr>
-    @endforelse
+    <table class="w-full text-sm">
+        <thead>
+            <tr>
+                <x-crud.th column="client" :sort-by="$sortBy" :sort-dir="$sortDir">Client</x-crud.th>
+                <x-crud.th :right="true">Amount (ex tax)</x-crud.th>
+                <x-crud.th column="frequency" :sort-by="$sortBy" :sort-dir="$sortDir">Frequency</x-crud.th>
+                <x-crud.th column="next_invoice_date" :sort-by="$sortBy" :sort-dir="$sortDir">Next Date</x-crud.th>
+                <x-crud.th column="status" :sort-by="$sortBy" :sort-dir="$sortDir">Status</x-crud.th>
+                <th class="px-4 py-3 text-right text-xs font-semibold text-ink-muted uppercase tracking-wide"></th>
+            </tr>
+        </thead>
+        <tbody>
+            @forelse($rows as $template)
+                @php
+                    $templateValue = $template->lines->sum(
+                        fn ($l) => $l->quantity * $l->unit_price * (1 - $l->discount_percent / 100)
+                    );
+                @endphp
+                <tr class="group border-t border-line hover:bg-surface-alt transition-colors">
+                    <td class="px-4 py-3 font-medium text-ink">
+                        {{ $template->client?->business?->display_name ?? '—' }}
+                    </td>
+                    <td class="px-4 py-3 text-right tabular-nums text-ink-soft">
+                        {{ $currencySymbol }}{{ number_format($templateValue, 2) }}
+                    </td>
+                    <td class="px-4 py-3 text-ink-soft">
+                        {{ $template->frequency->label() }}
+                    </td>
+                    <td class="px-4 py-3 tabular-nums text-ink-soft">
+                        {{ $template->next_invoice_date->format('d M Y') }}
+                    </td>
+                    <td class="px-4 py-3">
+                        <span @class([
+                            'inline-flex items-center px-2 py-0.5 rounded text-xs font-medium',
+                            'bg-green-50 text-success' => $template->status === \App\Modules\Billing\Enums\RecurringInvoiceStatus::Active,
+                            'bg-yellow-50 text-warning' => $template->status === \App\Modules\Billing\Enums\RecurringInvoiceStatus::Paused,
+                            'bg-surface-alt text-ink-muted' => $template->status === \App\Modules\Billing\Enums\RecurringInvoiceStatus::Completed,
+                        ])>
+                            {{ $template->status->label() }}
+                        </span>
+                    </td>
+                    <td class="px-4 py-3 text-right">
+                        <div class="flex items-center justify-end gap-2">
+                            @can('update', $template)
+                                @if($template->status === \App\Modules\Billing\Enums\RecurringInvoiceStatus::Active)
+                                    <flux:button wire:click="pause('{{ $template->id }}')" size="sm" variant="ghost">Pause</flux:button>
+                                @elseif($template->status === \App\Modules\Billing\Enums\RecurringInvoiceStatus::Paused)
+                                    <flux:button wire:click="activate('{{ $template->id }}')" size="sm" variant="ghost">Activate</flux:button>
+                                @endif
+                                <flux:button wire:click="edit('{{ $template->id }}')" size="sm" variant="ghost" icon="pencil" />
+                            @endcan
+                            @can('delete', $template)
+                                <flux:button
+                                    wire:click="delete('{{ $template->id }}')"
+                                    wire:confirm="Delete this recurring invoice template? This cannot be undone."
+                                    size="sm" variant="ghost" icon="trash"
+                                    class="text-danger hover:text-danger"
+                                />
+                            @endcan
+                        </div>
+                    </td>
+                </tr>
+            @empty
+                <tr>
+                    <td colspan="6" class="px-4 py-12 text-center">
+                        <p class="font-medium text-ink">No recurring invoice templates yet.</p>
+                        <p class="mt-1 text-sm text-ink-muted">Create a template to automate invoice generation.</p>
+                    </td>
+                </tr>
+            @endforelse
+        </tbody>
+    </table>
 
     <x-slot name="pagination">
         {{ $rows->links() }}

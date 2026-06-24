@@ -14,20 +14,22 @@
         @endif
     </div>
 
-    {{-- Search --}}
-    <div class="px-6 py-3 border-b border-line bg-surface-alt">
-        <flux:input
-            wire:model.live.debounce.300ms="search"
-            placeholder="Search..."
-            size="sm"
-            icon="magnifying-glass"
-            class="max-w-xs"
-        />
-    </div>
-
-    {{-- Optional filter/toolbar slot --}}
-    @if(isset($filters))
-        {{ $filters }}
+    {{-- Search / toolbar --}}
+    @if(isset($search))
+        {{ $search }}
+    @else
+        <div class="px-6 py-3 border-b border-line bg-surface-alt">
+            <flux:input
+                wire:model.live.debounce.300ms="search"
+                placeholder="Search..."
+                size="sm"
+                icon="magnifying-glass"
+                class="max-w-xs"
+            />
+        </div>
+        @if(isset($filters))
+            {{ $filters }}
+        @endif
     @endif
 
     {{-- Table --}}
