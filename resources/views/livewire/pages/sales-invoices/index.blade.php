@@ -23,6 +23,10 @@ new #[Layout('components.layout.app')] class extends Component
 
     public string $statusFilter = '';
 
+    public string $sortBy = 'issue_date';
+
+    public string $sortDir = 'desc';
+
     // Create modal
     public bool $showCreateModal = false;
 
@@ -84,15 +88,34 @@ new #[Layout('components.layout.app')] class extends Component
     {
         $this->authorize('viewAny', Document::class);
         $this->createForm['issue_date'] = now()->toDateString();
+        $this->sortBy = session('si.sortBy', 'issue_date');
+        $this->sortDir = session('si.sortDir', 'desc');
+        $this->statusFilter = session('si.statusFilter', '');
+        $this->search = session('si.search', '');
+    }
+
+    public function sort(string $column): void
+    {
+        if ($this->sortBy === $column) {
+            $this->sortDir = $this->sortDir === 'asc' ? 'desc' : 'asc';
+        } else {
+            $this->sortBy = $column;
+            $this->sortDir = 'asc';
+        }
+
+        session(['si.sortBy' => $this->sortBy, 'si.sortDir' => $this->sortDir]);
+        $this->resetPage();
     }
 
     public function updatedSearch(): void
     {
+        session(['si.search' => $this->search]);
         $this->resetPage();
     }
 
     public function updatedStatusFilter(): void
     {
+        session(['si.statusFilter' => $this->statusFilter]);
         $this->resetPage();
     }
 
@@ -483,8 +506,14 @@ new #[Layout('components.layout.app')] class extends Component
                     );
             }))
             ->when($this->statusFilter, fn ($q) => $q->where('status', $this->statusFilter))
-            ->latest('issue_date')
-            ->latest('created_at')
+            ->when(
+                $this->sortBy === 'client',
+                fn ($q) => $q
+                    ->join('businesses', 'businesses.id', '=', 'documents.party_id')
+                    ->orderBy('businesses.trading_name', $this->sortDir)
+                    ->select('documents.*'),
+                fn ($q) => $q->orderBy($this->sortBy, $this->sortDir)->orderBy('created_at', 'desc')
+            )
             ->paginate(25);
 
         $detail = null;
@@ -545,42 +574,26 @@ new #[Layout('components.layout.app')] class extends Component
     @endcan
 </div>
 
-{{-- Status tabs --}}
-<div class="flex items-center gap-1 px-6 pt-4 border-b border-line overflow-x-auto">
-    @php
-        $tabs = [
-            '' => 'All',
-            'draft' => 'Draft',
-            'sent' => 'Sent',
-            'voided' => 'Voided',
-        ];
-    @endphp
-    @foreach($tabs as $status => $label)
-        <button
-            wire:click="$set('statusFilter', '{{ $status }}')"
-            @class([
-                'px-3 py-2 text-sm font-medium border-b-2 whitespace-nowrap transition-colors',
-                'border-primary text-primary' => $statusFilter === $status,
-                'border-transparent text-ink-soft hover:text-ink' => $statusFilter !== $status,
-            ])
-        >
-            {{ $label }}
-            @if($status !== '' && ($statusCounts[$status] ?? 0) > 0)
-                <span class="ml-1 text-xs text-ink-muted">({{ $statusCounts[$status] }})</span>
-            @endif
-        </button>
-    @endforeach
-</div>
-
-{{-- Search --}}
-<div class="px-6 py-3 border-b border-line bg-surface-alt">
-    <flux:input
-        wire:model.live.debounce.300ms="search"
-        placeholder="Search invoices…"
-        size="sm"
-        icon="magnifying-glass"
-        class="max-w-xs"
-    />
+{{-- Toolbar --}}
+<div class="flex items-center gap-3 px-6 py-3 border-b border-line bg-surface-alt">
+    <flux:input wire:model.live.debounce.300ms="search" placeholder="Search invoices…" icon="magnifying-glass" size="sm" class="max-w-xs" />
+    <div class="flex gap-1">
+        @foreach(['' => 'All', 'draft' => 'Draft', 'sent' => 'Sent', 'voided' => 'Voided'] as $status => $label)
+            <button
+                wire:click="$set('statusFilter', '{{ $status }}')"
+                @class([
+                    'px-3 py-1.5 text-sm rounded-md font-medium transition-colors whitespace-nowrap',
+                    'bg-white text-ink shadow-sm ring-1 ring-inset ring-line' => $statusFilter === $status,
+                    'text-ink-soft hover:text-ink' => $statusFilter !== $status,
+                ])
+            >
+                {{ $label }}
+                @if($status !== '' && ($statusCounts[$status] ?? 0) > 0)
+                    <span class="ml-1 text-xs opacity-60">{{ $statusCounts[$status] }}</span>
+                @endif
+            </button>
+        @endforeach
+    </div>
 </div>
 
 {{-- Table --}}
@@ -588,12 +601,12 @@ new #[Layout('components.layout.app')] class extends Component
     <table class="w-full text-sm">
         <thead>
             <tr>
-                <th class="px-4 py-3 text-left text-xs font-medium text-ink-muted uppercase tracking-wide">Number</th>
-                <th class="px-4 py-3 text-left text-xs font-medium text-ink-muted uppercase tracking-wide">Client</th>
-                <th class="px-4 py-3 text-left text-xs font-medium text-ink-muted uppercase tracking-wide">Issue Date</th>
-                <th class="px-4 py-3 text-left text-xs font-medium text-ink-muted uppercase tracking-wide">Due Date</th>
-                <th class="px-4 py-3 text-right text-xs font-medium text-ink-muted uppercase tracking-wide">Total</th>
-                <th class="px-4 py-3 text-left text-xs font-medium text-ink-muted uppercase tracking-wide">Status</th>
+                <x-crud.th column="document_number" :sort-by="$sortBy" :sort-dir="$sortDir">Number</x-crud.th>
+                <x-crud.th column="client" :sort-by="$sortBy" :sort-dir="$sortDir">Client</x-crud.th>
+                <x-crud.th column="issue_date" :sort-by="$sortBy" :sort-dir="$sortDir">Issue Date</x-crud.th>
+                <x-crud.th column="due_date" :sort-by="$sortBy" :sort-dir="$sortDir">Due Date</x-crud.th>
+                <x-crud.th column="total" :sort-by="$sortBy" :sort-dir="$sortDir" :right="true">Total</x-crud.th>
+                <x-crud.th column="status" :sort-by="$sortBy" :sort-dir="$sortDir">Status</x-crud.th>
             </tr>
         </thead>
         <tbody>
