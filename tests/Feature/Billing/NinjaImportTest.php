@@ -319,49 +319,6 @@ it('imports invoice with correct document number, lines and totals', function ()
     expect($l1->account_id)->toBe(Account::where('code', '4000')->value('id'));
 });
 
-it('imports payment document with correct total and reference', function (): void {
-    $this->artisan('ninja:import', ['path' => ninjaEnvDir()])->assertSuccessful();
-
-    $paymentDoc = Document::query()
-        ->where('document_type', 'payment')
-        ->whereJsonContains('metadata->ninja_id', 201)
-        ->first();
-
-    expect($paymentDoc)->not->toBeNull();
-    expect((float) $paymentDoc->total)->toBe(2800.0);
-    expect($paymentDoc->reference)->toBe('PAY-0201');
-    expect($paymentDoc->status)->toBe('posted');
-    expect($paymentDoc->contra_account_id)->toBe(Account::where('code', '1000')->value('id'));
-});
-
-it('links payment to invoice via DocumentRelationship', function (): void {
-    $this->artisan('ninja:import', ['path' => ninjaEnvDir()])->assertSuccessful();
-
-    $invoice = Document::where('document_type', 'sales_invoice')
-        ->whereJsonContains('metadata->ninja_id', 101)->first();
-
-    $payment = Document::where('document_type', 'payment')
-        ->whereJsonContains('metadata->ninja_id', 201)->first();
-
-    $link = DocumentRelationship::query()
-        ->where('parent_document_id', $invoice->id)
-        ->where('child_document_id', $payment->id)
-        ->where('relationship_type', 'payment_for')
-        ->first();
-
-    expect($link)->not->toBeNull();
-});
-
-it('updates invoice amount_paid and status to paid after payment', function (): void {
-    $this->artisan('ninja:import', ['path' => ninjaEnvDir()])->assertSuccessful();
-
-    $invoice = Document::where('document_type', 'sales_invoice')
-        ->whereJsonContains('metadata->ninja_id', 101)->first();
-
-    expect((float) $invoice->amount_paid)->toBe(2800.0);
-    expect((float) $invoice->balance_due)->toBe(0.0);
-    expect($invoice->status)->toBe('paid');
-});
 
 it('imports recurring invoice with correct frequency and status', function (): void {
     $this->artisan('ninja:import', ['path' => ninjaEnvDir()])->assertSuccessful();

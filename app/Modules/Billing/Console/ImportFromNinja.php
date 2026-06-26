@@ -14,7 +14,6 @@ use App\Modules\Core\Models\DocumentLine;
 use App\Modules\Core\Models\DocumentRelationship;
 use App\Modules\Core\Models\Party;
 use App\Modules\Core\Models\PartyRelationship;
-use App\Modules\Core\Services\DocumentService;
 use App\Modules\Core\Services\PartyService;
 use Illuminate\Console\Command;
 use Illuminate\Database\Query\Builder;
@@ -55,9 +54,9 @@ class ImportFromNinja extends Command
 
     private int $errored = 0;
 
-    private const ALL_PHASES = ['clients', 'contacts', 'invoices', 'quotes', 'credits', 'payments', 'recurring'];
+    private const ALL_PHASES = ['clients', 'contacts', 'invoices', 'quotes', 'credits', 'recurring'];
 
-    public function handle(PartyService $partyService, DocumentService $documentService): int
+    public function handle(PartyService $partyService): int
     {
         $path = $this->argument('path') ?? $this->ask('InvoiceNinja install path?');
 
@@ -92,10 +91,6 @@ class ImportFromNinja extends Command
             $this->loadClientMap();
         }
 
-        if ($only === 'payments') {
-            $this->loadInvoiceAndCreditMaps();
-        }
-
         $summary = [];
 
         foreach (self::ALL_PHASES as $phase) {
@@ -112,7 +107,6 @@ class ImportFromNinja extends Command
                 'invoices' => $this->importInvoices($isDryRun, $limit),
                 'quotes' => $this->importQuotes($isDryRun, $limit),
                 'credits' => $this->importCredits($isDryRun, $limit),
-                'payments' => $this->importPayments($documentService, $isDryRun, $limit),
                 'recurring' => $this->importRecurring($isDryRun, $limit),
             };
 
