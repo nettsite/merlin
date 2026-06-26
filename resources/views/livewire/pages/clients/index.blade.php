@@ -5,9 +5,11 @@ use App\Livewire\Concerns\HasCrudTable;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Core\Models\PaymentTerm;
 use App\Modules\Core\Models\ContactAssignment;
+use App\Modules\Core\Models\Document;
 use App\Modules\Core\Models\Party;
 use App\Modules\Core\Models\PartyRelationship;
 use App\Modules\Core\Services\PartyService;
+use Carbon\Carbon;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Validate;
 use Livewire\Volt\Component;
@@ -67,6 +69,27 @@ new #[Layout('components.layout.app')] class extends Component
     public string $newContactEmail = '';
     public string $newContactPhone = '';
     public bool $newContactReceivesInvoices = true;
+
+    // ── Period filter ────────────────────────────────────────
+
+    public string $dateRange = 'this_year';
+    public string $dateFrom = '';
+    public string $dateTo = '';
+
+    public function updatedDateRange(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatedDateFrom(): void
+    {
+        $this->resetPage();
+    }
+
+    public function updatedDateTo(): void
+    {
+        $this->resetPage();
+    }
 
     // ── Supplier cross-link ──────────────────────────────────
 
@@ -313,13 +336,51 @@ new #[Layout('components.layout.app')] class extends Component
         $party->delete();
     }
 
+    private function dateRangeBounds(): array
+    {
+        return match ($this->dateRange) {
+            'this_month' => [now()->startOfMonth(), now()],
+            'custom' => [
+                $this->dateFrom ? Carbon::parse($this->dateFrom) : now()->startOfYear(),
+                $this->dateTo ? Carbon::parse($this->dateTo) : now(),
+            ],
+            default => [now()->startOfYear(), now()],
+        };
+    }
+
     public function with(): array
     {
         $sortColumn = match ($this->sortBy) {
-            'status'        => 'parties.status',
-            'primary_email' => 'parties.primary_email',
-            default         => 'businesses.legal_name',
+            'status'          => 'parties.status',
+            'primary_email'   => 'parties.primary_email',
+            'total_owing'     => 'total_owing',
+            'total_invoiced'  => 'total_invoiced',
+            default           => 'businesses.legal_name',
         };
+
+        [$dateStart, $dateEnd] = $this->dateRangeBounds();
+
+        $totalInvoicedSub = Document::salesInvoices()
+            ->selectRaw('COALESCE(SUM(total), 0)')
+            ->whereColumn('party_id', 'parties.id')
+            ->whereBetween('issue_date', [$dateStart->toDateString(), $dateEnd->toDateString()]);
+
+        $totalOwingSub = Document::salesInvoices()
+            ->selectRaw('COALESCE(SUM(balance_due), 0)')
+            ->whereColumn('party_id', 'parties.id')
+            ->unpaid();
+
+        $baseQuery = Party::clients()
+            ->join('businesses', 'businesses.id', '=', 'parties.id')
+            ->select('parties.*')
+            ->when(
+                $this->search,
+                fn ($q) => $q->where(function ($q): void {
+                    $q->where('businesses.legal_name', 'like', "%{$this->search}%")
+                        ->orWhere('businesses.trading_name', 'like', "%{$this->search}%")
+                        ->orWhere('parties.primary_email', 'like', "%{$this->search}%");
+                })
+            );
 
         return [
             'paymentTerms' => PaymentTerm::orderBy('name')->get(['id', 'name']),
@@ -327,18 +388,10 @@ new #[Layout('components.layout.app')] class extends Component
                 ->whereHas('group.type', fn ($q) => $q->where('code', '2'))
                 ->orderBy('code')
                 ->get(['id', 'code', 'name']),
-            'rows' => Party::clients()
-                ->join('businesses', 'businesses.id', '=', 'parties.id')
-                ->select('parties.*')
+            'rows' => $baseQuery
+                ->selectSub($totalOwingSub, 'total_owing')
+                ->selectSub($totalInvoicedSub, 'total_invoiced')
                 ->with(['business', 'relationships'])
-                ->when(
-                    $this->search,
-                    fn ($q) => $q->where(function ($q): void {
-                        $q->where('businesses.legal_name', 'like', "%{$this->search}%")
-                            ->orWhere('businesses.trading_name', 'like', "%{$this->search}%")
-                            ->orWhere('parties.primary_email', 'like', "%{$this->search}%");
-                    })
-                )
                 ->orderBy($sortColumn, $this->sortDir)
                 ->paginate($this->perPage),
         ];
@@ -355,6 +408,31 @@ new #[Layout('components.layout.app')] class extends Component
         @endcan
     </x-slot>
 
+    <x-slot name="filters">
+        <div class="flex flex-wrap items-center justify-end gap-3 border-b border-line px-6 py-3">
+            <div class="flex flex-wrap items-center gap-2 text-sm">
+                <span class="text-ink-muted">Total invoiced:</span>
+                <div class="flex gap-1">
+                    @foreach(['this_year' => 'This year', 'this_month' => 'This month', 'custom' => 'Custom'] as $value => $label)
+                        <button
+                            wire:click="$set('dateRange', '{{ $value }}')"
+                            @class([
+                                'px-3 py-1.5 text-sm rounded-md font-medium transition-colors',
+                                'bg-white text-ink shadow-sm ring-1 ring-inset ring-line' => $dateRange === $value,
+                                'text-ink-soft hover:text-ink' => $dateRange !== $value,
+                            ])
+                        >{{ $label }}</button>
+                    @endforeach
+                </div>
+                @if($dateRange === 'custom')
+                    <flux:input type="date" wire:model.live="dateFrom" size="sm" class="w-36" />
+                    <span class="text-ink-muted">to</span>
+                    <flux:input type="date" wire:model.live="dateTo" size="sm" class="w-36" />
+                @endif
+            </div>
+        </div>
+    </x-slot>
+
     <table class="w-full text-sm">
         <thead>
             <tr>
@@ -362,6 +440,8 @@ new #[Layout('components.layout.app')] class extends Component
                 <x-crud.th column="primary_email" :sort-by="$sortBy" :sort-dir="$sortDir">Email</x-crud.th>
                 <x-crud.th>Phone</x-crud.th>
                 <x-crud.th column="status" :sort-by="$sortBy" :sort-dir="$sortDir">Status</x-crud.th>
+                <x-crud.th column="total_owing" :sort-by="$sortBy" :sort-dir="$sortDir" :right="true">Owing</x-crud.th>
+                <x-crud.th column="total_invoiced" :sort-by="$sortBy" :sort-dir="$sortDir" :right="true">Invoiced</x-crud.th>
                 <x-crud.th></x-crud.th>
             </tr>
         </thead>
@@ -388,6 +468,20 @@ new #[Layout('components.layout.app')] class extends Component
                         ])>
                             {{ ucfirst($party->status) }}
                         </span>
+                    </td>
+                    <td class="px-4 py-3 text-right tabular-nums">
+                        @if((float) $party->total_owing > 0)
+                            <span class="font-medium text-ink">{{ number_format((float) $party->total_owing, 2) }}</span>
+                        @else
+                            <span class="text-ink-muted">—</span>
+                        @endif
+                    </td>
+                    <td class="px-4 py-3 text-right tabular-nums text-ink-soft">
+                        @if((float) $party->total_invoiced > 0)
+                            {{ number_format((float) $party->total_invoiced, 2) }}
+                        @else
+                            <span class="text-ink-muted">—</span>
+                        @endif
                     </td>
                     <td class="px-4 py-3 text-right">
                         <div class="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -419,7 +513,7 @@ new #[Layout('components.layout.app')] class extends Component
                 </tr>
             @empty
                 <tr>
-                    <td colspan="5" class="px-4 py-12 text-center">
+                    <td colspan="7" class="px-4 py-12 text-center">
                         <p class="font-medium text-ink">No clients yet.</p>
                         <p class="mt-1 text-sm text-ink-muted">Add your first client to get started.</p>
                     </td>
