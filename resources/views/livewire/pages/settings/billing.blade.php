@@ -13,7 +13,7 @@ new #[Layout('components.layout.app')] class extends Component
     public ?string $defaultReceivableAccountId = null;
 
     #[Validate('nullable|uuid|exists:accounts,id')]
-    public ?string $defaultBankAccountId = null;
+    public ?string $defaultContraAccountId = null;
 
     #[Validate('nullable|uuid|exists:payment_terms,id')]
     public ?string $defaultPaymentTermId = null;
@@ -32,7 +32,7 @@ new #[Layout('components.layout.app')] class extends Component
 
         $settings = app(BillingSettings::class);
         $this->defaultReceivableAccountId = $settings->default_receivable_account_id;
-        $this->defaultBankAccountId = $settings->default_bank_account_id;
+        $this->defaultContraAccountId = $settings->default_contra_account_id;
         $this->defaultPaymentTermId = $settings->default_payment_term_id;
         $this->taxLiabilityAccountId = $settings->tax_liability_account_id;
         $this->billingPeriodDay = $settings->billing_period_day;
@@ -44,7 +44,7 @@ new #[Layout('components.layout.app')] class extends Component
 
         $settings = app(BillingSettings::class);
         $settings->default_receivable_account_id = $this->defaultReceivableAccountId ?: null;
-        $settings->default_bank_account_id = $this->defaultBankAccountId ?: null;
+        $settings->default_contra_account_id = $this->defaultContraAccountId ?: null;
         $settings->default_payment_term_id = $this->defaultPaymentTermId ?: null;
         $settings->tax_liability_account_id = $this->taxLiabilityAccountId ?: null;
         $settings->billing_period_day = $this->billingPeriodDay;
@@ -94,14 +94,14 @@ new #[Layout('components.layout.app')] class extends Component
 
             <flux:field>
                 <flux:label>Default Bank Account</flux:label>
-                <flux:select wire:model="defaultBankAccountId" class="max-w-xs">
+                <flux:select wire:model="defaultContraAccountId" class="max-w-xs">
                     <flux:select.option value="">— None —</flux:select.option>
                     @foreach ($assetAccounts as $account)
                         <flux:select.option value="{{ $account->id }}">{{ $account->code }} — {{ $account->name }}</flux:select.option>
                     @endforeach
                 </flux:select>
                 <flux:description>Bank account pre-selected when recording payments</flux:description>
-                <flux:error name="defaultBankAccountId" />
+                <flux:error name="defaultContraAccountId" />
             </flux:field>
 
             <flux:field>

@@ -2,10 +2,10 @@
 
 namespace Tests\Unit\Documents;
 
-use App\Modules\Purchasing\DTO\MagikaResult;
-use App\Modules\Purchasing\Services\DocumentTextExtractor;
-use App\Modules\Purchasing\Services\Pdf\MagikaService;
-use App\Modules\Purchasing\Services\Pdf\PdfExtractor;
+use App\Modules\Core\DTO\MagikaResult;
+use App\Modules\Core\Services\DocumentTextExtractor;
+use App\Modules\Core\Services\Pdf\MagikaService;
+use App\Modules\Core\Services\Pdf\PdfExtractor;
 use Mockery;
 use Paperdoc\Contracts\DocumentInterface;
 use Paperdoc\Facades\Paperdoc;

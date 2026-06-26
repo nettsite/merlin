@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Modules\Purchasing\Services;
+namespace App\Modules\Core\Services;
 
 use App\Mail\ModelHealthAlertMail;
 use Illuminate\Support\Facades\Cache;

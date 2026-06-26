@@ -1,8 +1,8 @@
 <?php
 
 use App\Mail\ModelHealthAlertMail;
-use App\Modules\Purchasing\Services\LlmService;
-use App\Modules\Purchasing\Services\ModelHealthService;
+use App\Modules\Core\Services\LlmService;
+use App\Modules\Core\Services\ModelHealthService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;

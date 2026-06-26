@@ -1,9 +1,9 @@
 <?php
 
-namespace App\Modules\Purchasing\Services;
+namespace App\Modules\Core\Services;
 
-use App\Modules\Purchasing\Services\Pdf\MagikaService;
-use App\Modules\Purchasing\Services\Pdf\PdfExtractor;
+use App\Modules\Core\Services\Pdf\MagikaService;
+use App\Modules\Core\Services\Pdf\PdfExtractor;
 use Illuminate\Database\Eloquent\Model;
 use Paperdoc\Facades\Paperdoc;
 

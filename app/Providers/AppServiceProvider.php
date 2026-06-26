@@ -14,23 +14,24 @@ use App\Modules\Billing\Models\RecurringInvoice;
 use App\Modules\Billing\Models\RecurringInvoiceLine;
 use App\Modules\Core\Contracts\ModulePolicy;
 use App\Modules\Core\Models\Address;
+use App\Modules\Core\Models\BankTemplate;
 use App\Modules\Core\Models\Business;
 use App\Modules\Core\Models\ContactAssignment;
 use App\Modules\Core\Models\Document;
 use App\Modules\Core\Models\DocumentActivity;
 use App\Modules\Core\Models\DocumentLine;
 use App\Modules\Core\Models\DocumentRelationship;
+use App\Modules\Core\Models\LlmLog;
 use App\Modules\Core\Models\Party;
 use App\Modules\Core\Models\PartyRelationship;
 use App\Modules\Core\Models\PaymentTerm;
 use App\Modules\Core\Models\Person;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Policies\AllModulesPolicy;
+use App\Modules\Core\Services\Pdf\MagikaService;
 use App\Modules\Core\Settings\CurrencySettings;
-use App\Modules\Purchasing\Models\LlmLog;
 use App\Modules\Purchasing\Models\PostingRule;
 use App\Modules\Purchasing\Services\ExchangeRateService;
-use App\Modules\Purchasing\Services\Pdf\MagikaService;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Facades\Date;
@@ -79,6 +80,7 @@ class AppServiceProvider extends ServiceProvider
         Relation::enforceMorphMap([
             'account' => Account::class,
             'address' => Address::class,
+            'bank_template' => BankTemplate::class,
             'account_group' => AccountGroup::class,
             'account_type' => AccountType::class,
             'business' => Business::class,

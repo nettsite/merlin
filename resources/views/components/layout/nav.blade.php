@@ -75,6 +75,13 @@
 
     <flux:sidebar.group heading="Accounting">
         <flux:sidebar.item
+            icon="building-library"
+            href="{{ route('bank-statements.index') }}"
+            :current="request()->routeIs('bank-statements.*')"
+            wire:navigate
+        >Bank Statements</flux:sidebar.item>
+
+        <flux:sidebar.item
             icon="banknotes"
             href="{{ route('accounts.index') }}"
             :current="request()->routeIs('accounts.*')"

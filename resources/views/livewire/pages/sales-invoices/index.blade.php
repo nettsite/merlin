@@ -81,7 +81,7 @@ new #[Layout('components.layout.app')] class extends Component
         'amount' => '',
         'date' => '',
         'reference' => '',
-        'bank_account_id' => '',
+        'contra_account_id' => '',
     ];
 
     public function mount(): void
@@ -438,7 +438,7 @@ new #[Layout('components.layout.app')] class extends Component
             'amount' => number_format((float) $doc->balance_due, 2, '.', ''),
             'date' => now()->toDateString(),
             'reference' => '',
-            'bank_account_id' => app(\App\Modules\Billing\Settings\BillingSettings::class)->default_bank_account_id ?? '',
+            'contra_account_id' => app(\App\Modules\Billing\Settings\BillingSettings::class)->default_contra_account_id ?? '',
         ];
         $this->showPaymentModal = true;
     }
@@ -451,7 +451,7 @@ new #[Layout('components.layout.app')] class extends Component
             'paymentForm.amount' => 'required|numeric|min:0.01',
             'paymentForm.date' => 'required|date',
             'paymentForm.reference' => 'nullable|string|max:255',
-            'paymentForm.bank_account_id' => 'nullable|uuid|exists:accounts,id',
+            'paymentForm.contra_account_id' => 'nullable|uuid|exists:accounts,id',
         ]);
 
         $doc = Document::findOrFail($this->detailId);
@@ -461,7 +461,7 @@ new #[Layout('components.layout.app')] class extends Component
                 'amount' => (float) $this->paymentForm['amount'],
                 'date' => $this->paymentForm['date'],
                 'reference' => $this->paymentForm['reference'] ?: null,
-                'bank_account_id' => $this->paymentForm['bank_account_id'] ?: null,
+                'contra_account_id' => $this->paymentForm['contra_account_id'] ?: null,
             ], Auth::user());
         } catch (\InvalidArgumentException|\RuntimeException $e) {
             $this->addError('paymentForm.amount', $e->getMessage());

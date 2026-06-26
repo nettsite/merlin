@@ -31,6 +31,7 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
     Volt::route('recurring-invoices', 'pages.recurring-invoices.index')->name('recurring-invoices.index');
 
     // Accounting
+    Volt::route('bank-statements', 'pages.bank-statements.index')->name('bank-statements.index');
     Volt::route('accounts', 'pages.accounts.index')->name('accounts.index');
     Volt::route('account-groups', 'pages.account-groups.index')->name('account-groups.index');
 

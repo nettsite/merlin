@@ -62,7 +62,7 @@ it('saves all settings', function (): void {
 
     Volt::test('pages.settings.billing')
         ->set('defaultReceivableAccountId', $asset->id)
-        ->set('defaultBankAccountId', $asset->id)
+        ->set('defaultContraAccountId', $asset->id)
         ->set('defaultPaymentTermId', $paymentTerm->id)
         ->set('taxLiabilityAccountId', $liability->id)
         ->set('billingPeriodDay', 15)
@@ -72,7 +72,7 @@ it('saves all settings', function (): void {
 
     $settings = app(BillingSettings::class);
     expect($settings->default_receivable_account_id)->toBe($asset->id)
-        ->and($settings->default_bank_account_id)->toBe($asset->id)
+        ->and($settings->default_contra_account_id)->toBe($asset->id)
         ->and($settings->default_payment_term_id)->toBe($paymentTerm->id)
         ->and($settings->tax_liability_account_id)->toBe($liability->id)
         ->and($settings->billing_period_day)->toBe(15);
@@ -124,7 +124,7 @@ it('clears nullable fields when blanked', function (): void {
 
     Volt::test('pages.settings.billing')
         ->set('defaultReceivableAccountId', '')
-        ->set('defaultBankAccountId', '')
+        ->set('defaultContraAccountId', '')
         ->set('defaultPaymentTermId', '')
         ->set('taxLiabilityAccountId', '')
         ->set('billingPeriodDay', 1)
@@ -133,7 +133,7 @@ it('clears nullable fields when blanked', function (): void {
 
     $settings = app(BillingSettings::class);
     expect($settings->default_receivable_account_id)->toBeNull()
-        ->and($settings->default_bank_account_id)->toBeNull()
+        ->and($settings->default_contra_account_id)->toBeNull()
         ->and($settings->default_payment_term_id)->toBeNull()
         ->and($settings->tax_liability_account_id)->toBeNull();
 });

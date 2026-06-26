@@ -5,6 +5,8 @@ namespace App\Modules\Purchasing\Services;
 use App\Modules\Core\Models\Document;
 use App\Modules\Core\Models\DocumentLine;
 use App\Modules\Core\Models\Party;
+use App\Modules\Core\Services\DocumentTextExtractor;
+use App\Modules\Core\Services\LlmService;
 use App\Modules\Core\Settings\CurrencySettings;
 use App\Modules\Purchasing\Settings\PurchasingSettings;
 use Illuminate\Support\Facades\Log;

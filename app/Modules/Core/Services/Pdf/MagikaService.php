@@ -1,9 +1,9 @@
 <?php
 
-namespace App\Modules\Purchasing\Services\Pdf;
+namespace App\Modules\Core\Services\Pdf;
 
 use App\Exceptions\InvalidFileTypeException;
-use App\Modules\Purchasing\DTO\MagikaResult;
+use App\Modules\Core\DTO\MagikaResult;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\Process\ExecutableFinder;
 use Symfony\Component\Process\Process;

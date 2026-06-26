@@ -101,6 +101,22 @@ return [
             'default_status' => 'draft',
             'requires_due_date' => false,
         ],
+        'bank_statement' => [
+            'label' => 'Bank Statement',
+            'direction' => 'inbound',
+            'prefix' => 'BSTMT',
+            'default_status' => 'received',
+            'requires_due_date' => false,
+            'auto_number' => false,
+        ],
+        'credit_card_statement' => [
+            'label' => 'Credit Card Statement',
+            'direction' => 'inbound',
+            'prefix' => 'CCSTMT',
+            'default_status' => 'received',
+            'requires_due_date' => false,
+            'auto_number' => false,
+        ],
     ],
 
 ];

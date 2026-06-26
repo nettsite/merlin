@@ -13,6 +13,10 @@ trait HasDocumentNumber
                 return;
             }
 
+            if (config("documents.types.{$document->document_type}.auto_number") === false) {
+                return;
+            }
+
             $attempts = 0;
 
             do {

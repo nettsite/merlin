@@ -2,7 +2,7 @@
 
 namespace App\Console\Commands;
 
-use App\Modules\Purchasing\Services\ModelHealthService;
+use App\Modules\Core\Services\ModelHealthService;
 use Illuminate\Console\Command;
 
 class CheckModelHealthCommand extends Command

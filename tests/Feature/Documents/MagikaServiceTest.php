@@ -1,7 +1,7 @@
 <?php
 
 use App\Exceptions\InvalidFileTypeException;
-use App\Modules\Purchasing\Services\Pdf\MagikaService;
+use App\Modules\Core\Services\Pdf\MagikaService;
 use Symfony\Component\Process\Process;
 
 it('detects a PDF by magic bytes when magika is not installed', function (): void {

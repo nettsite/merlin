@@ -331,7 +331,7 @@ it('imports payment document with correct total and reference', function (): voi
     expect((float) $paymentDoc->total)->toBe(2800.0);
     expect($paymentDoc->reference)->toBe('PAY-0201');
     expect($paymentDoc->status)->toBe('posted');
-    expect($paymentDoc->bank_account_id)->toBe(Account::where('code', '1000')->value('id'));
+    expect($paymentDoc->contra_account_id)->toBe(Account::where('code', '1000')->value('id'));
 });
 
 it('links payment to invoice via DocumentRelationship', function (): void {

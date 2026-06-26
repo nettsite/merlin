@@ -3,8 +3,8 @@
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Core\Models\Document;
 use App\Modules\Core\Models\User;
+use App\Modules\Core\Services\Pdf\MagikaService;
 use App\Modules\Purchasing\Services\InvoiceProcessingService;
-use App\Modules\Purchasing\Services\Pdf\MagikaService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;

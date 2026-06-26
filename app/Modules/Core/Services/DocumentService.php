@@ -126,6 +126,47 @@ class DocumentService
         $this->transition($doc, 'posted', $by, 'Posted to the general ledger.');
     }
 
+    /**
+     * Post a bank/credit-card statement and settle any invoice-linked lines.
+     *
+     * For each credit line with a linked_document_id, calls recordPayment()
+     * on the linked sales invoice and creates a DocumentRelationship so the
+     * invoice's payment history shows this statement as the source.
+     */
+    public function postBankStatement(Document $doc, User $by): void
+    {
+        DB::transaction(function () use ($doc, $by) {
+            $this->transition($doc, 'posted', $by, 'Posted to the general ledger.');
+
+            foreach ($doc->lines()->with('linkedDocument')->get() as $line) {
+                if ($line->linked_document_id === null) {
+                    continue;
+                }
+
+                $invoice = $line->linkedDocument;
+
+                if ($invoice === null || ! in_array($invoice->status, ['sent', 'partially_paid'])) {
+                    continue;
+                }
+
+                $amount = abs((float) $line->unit_price);
+
+                if ($amount <= 0) {
+                    continue;
+                }
+
+                $this->recordPayment(
+                    doc: $invoice,
+                    amount: $amount,
+                    date: $doc->issue_date ?? now(),
+                    reference: $doc->reference,
+                );
+
+                $this->linkDocuments($doc, $invoice, 'payment_for');
+            }
+        });
+    }
+
     public function dispute(Document $doc, User $by, string $reason): void
     {
         $this->transition($doc, 'disputed', $by, "Disputed: {$reason}");
@@ -420,6 +461,16 @@ class DocumentService
                 'issued' => ['applied', 'voided'],
                 'applied' => [],
                 'voided' => [],
+            ],
+            'bank_statement' => [
+                'received' => ['reviewed', 'posted'],
+                'reviewed' => ['posted'],
+                'posted' => [],
+            ],
+            'credit_card_statement' => [
+                'received' => ['reviewed', 'posted'],
+                'reviewed' => ['posted'],
+                'posted' => [],
             ],
         ];
     }

@@ -1,12 +1,14 @@
 <?php
 
-namespace App\Modules\Purchasing\Services;
+namespace App\Modules\Core\Services;
 
 use App\Exceptions\LlmApiException;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Core\DTO\ExtractedBankStatement;
+use App\Modules\Core\Models\Document;
+use App\Modules\Core\Models\LlmLog;
 use App\Modules\Core\Settings\CurrencySettings;
 use App\Modules\Purchasing\DTO\ExtractedInvoice;
-use App\Modules\Purchasing\Models\LlmLog;
 use App\Modules\Purchasing\Settings\PurchasingSettings;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Client\ConnectionException;
@@ -140,6 +142,108 @@ class LlmService
     }
 
     /**
+     * Extract structured bank statement data from raw text.
+     *
+     * Tries the fast model first; falls back to the strong model if the balance
+     * doesn't reconcile (net movements ≠ closing − opening) or confidence is low.
+     */
+    public function extractBankStatement(string $statementText, ?string $layoutHints = null, ?Model $loggable = null): ExtractedBankStatement
+    {
+        $prompt = $this->buildBankStatementPrompt($statementText, $layoutHints);
+
+        $fast = null;
+        $fastReconciled = false;
+
+        try {
+            $fast = $this->extractBankStatementWith($prompt, config('services.anthropic.model_fast'), $loggable);
+            $fastReconciled = $fast->isBalanceReconciled();
+
+            if ($fastReconciled && $fast->confidence >= $this->purchasingSettings->fallback_confidence) {
+                return $fast;
+            }
+        } catch (LlmApiException|\RuntimeException) {
+            // Fall through to stronger model.
+        }
+
+        try {
+            $strong = $this->extractBankStatementWith($prompt, config('services.anthropic.model'), $loggable);
+        } catch (LlmApiException|\RuntimeException $e) {
+            if ($fast !== null) {
+                return $fast;
+            }
+
+            throw $e;
+        }
+
+        if ($fastReconciled && ! $strong->isBalanceReconciled()) {
+            return $fast;
+        }
+
+        return $strong;
+    }
+
+    private function extractBankStatementWith(string $prompt, string $model, ?Model $loggable): ExtractedBankStatement
+    {
+        $log = $this->callApi(
+            messages: [['role' => 'user', 'content' => $prompt]],
+            loggable: $loggable,
+            startNs: hrtime(true),
+            model: $model,
+        );
+
+        $extracted = ExtractedBankStatement::fromArray($this->parseJsonResponse($log->response_payload['text']));
+
+        $log->update(['confidence' => $extracted->confidence]);
+
+        return $extracted;
+    }
+
+    private function buildBankStatementPrompt(string $text, ?string $layoutHints): string
+    {
+        return view('prompts.bank-statement-extraction', [
+            'statement_text' => $text,
+            'chart_of_accounts' => $this->getCoaAllForPrompt(),
+            'outstanding_invoices' => $this->getOutstandingInvoicesForPrompt(),
+            'base_currency' => strtoupper($this->currencySettings->base_currency),
+            'layout_hints' => $layoutHints,
+        ])->render();
+    }
+
+    private function getCoaAllForPrompt(): string
+    {
+        return Account::active()->postable()
+            ->orderBy('code')
+            ->get()
+            ->map(fn (Account $a) => "{$a->code} — {$a->name}")
+            ->implode("\n");
+    }
+
+    private function getOutstandingInvoicesForPrompt(): string
+    {
+        $invoices = Document::salesInvoices()
+            ->whereIn('status', ['sent', 'partially_paid'])
+            ->with('party.business', 'party.person')
+            ->orderBy('issue_date')
+            ->get();
+
+        if ($invoices->isEmpty()) {
+            return '(none)';
+        }
+
+        return $invoices->map(function (Document $inv): string {
+            $client = $inv->party?->displayName ?? 'Unknown';
+
+            return implode(' | ', array_filter([
+                $inv->document_number,
+                $client,
+                "total {$inv->currency} {$inv->total}",
+                "balance_due {$inv->currency} {$inv->balance_due}",
+                "issued {$inv->issue_date?->toDateString()}",
+            ]));
+        })->implode("\n");
+    }
+
+    /**
      * Extract raw text from a scanned PDF using Claude's document vision.
      * Called by PdfExtractor when pdftotext yields insufficient text.
      */
@@ -200,7 +304,7 @@ class LlmService
      *
      * @param  array<int, array<string, mixed>>  $messages
      */
-    private function callApi(array $messages, ?Model $loggable, int $startNs, string $model): LlmLog
+    public function callApi(array $messages, ?Model $loggable, int $startNs, string $model): LlmLog
     {
         // Resolve the requested tier to its live escalation chain: the model
         // itself plus the fallback rungs below it, with any retired rung skipped.
@@ -286,7 +390,7 @@ class LlmService
     /**
      * @return array<string, mixed>
      */
-    private function parseJsonResponse(string $raw): array
+    public function parseJsonResponse(string $raw): array
     {
         // Strip markdown code fences the LLM sometimes wraps around JSON output.
         $clean = preg_replace('/^```(?:json)?\s*/i', '', trim($raw));

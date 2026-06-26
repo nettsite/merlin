@@ -118,7 +118,7 @@ class BillingService
      * Creates a payment Document, links it to the invoice via DocumentRelationship,
      * then delegates amount/balance updates to DocumentService::recordPayment().
      *
-     * @param  array{amount: float, date: string, reference?: string|null, bank_account_id?: string|null}  $data
+     * @param  array{amount: float, date: string, reference?: string|null, contra_account_id?: string|null}  $data
      */
     public function recordPayment(Document $invoice, array $data, ?User $by): Document
     {
@@ -129,7 +129,7 @@ class BillingService
         $amount = (float) $data['amount'];
         $date = Carbon::parse($data['date']);
         $reference = $data['reference'] ?? null;
-        $bankAccountId = $data['bank_account_id'] ?? $this->billingSettings->default_bank_account_id;
+        $bankAccountId = $data['contra_account_id'] ?? $this->billingSettings->default_contra_account_id;
 
         // Transactional so a rejected payment (e.g. overpayment guard in
         // DocumentService) doesn't leave an orphaned payment document behind.
@@ -145,7 +145,7 @@ class BillingService
                 'subtotal' => $amount,
                 'tax_total' => 0,
                 'total' => $amount,
-                'bank_account_id' => $bankAccountId,
+                'contra_account_id' => $bankAccountId,
                 'source' => 'manual',
                 'reference' => $reference,
             ]);

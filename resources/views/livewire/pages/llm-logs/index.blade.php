@@ -1,6 +1,6 @@
 <?php
 
-use App\Modules\Purchasing\Models\LlmLog;
+use App\Modules\Core\Models\LlmLog;
 use Livewire\Attributes\Layout;
 use Livewire\Volt\Component;
 use Livewire\WithPagination;

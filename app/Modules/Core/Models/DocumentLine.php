@@ -15,6 +15,7 @@ class DocumentLine extends Model
 
     protected $fillable = [
         'document_id',
+        'linked_document_id',
         'line_number',
         'type',
         'description',
@@ -100,6 +101,12 @@ class DocumentLine extends Model
     public function account(): BelongsTo
     {
         return $this->belongsTo(Account::class);
+    }
+
+    /** @return BelongsTo<Document, $this> */
+    public function linkedDocument(): BelongsTo
+    {
+        return $this->belongsTo(Document::class, 'linked_document_id');
     }
 
     /** @return BelongsTo<Account, $this> */

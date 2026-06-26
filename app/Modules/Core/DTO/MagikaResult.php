@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Modules\Purchasing\DTO;
+namespace App\Modules\Core\DTO;
 
 class MagikaResult
 {

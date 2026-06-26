@@ -91,13 +91,13 @@ new #[Layout('components.layout.app')] class extends Component
             Document::query()
                 ->where('document_type', 'payment')
                 ->whereNull('deleted_at')
-                ->whereNotNull('bank_account_id')
+                ->whereNotNull('contra_account_id')
                 ->when($from, fn ($q) => $q->whereDate('issue_date', '>=', $from))
                 ->when($to, fn ($q) => $q->whereDate('issue_date', '<=', $to))
-                ->selectRaw('bank_account_id, SUM(total) as total')
-                ->groupBy('bank_account_id')
+                ->selectRaw('contra_account_id, SUM(total) as total')
+                ->groupBy('contra_account_id')
                 ->get()
-                ->each(fn ($r) => $add($r->bank_account_id, (float) $r->total, 0.0));
+                ->each(fn ($r) => $add($r->contra_account_id, (float) $r->total, 0.0));
 
             return $acc;
         };

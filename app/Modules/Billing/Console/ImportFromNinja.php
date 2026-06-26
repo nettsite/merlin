@@ -586,7 +586,7 @@ class ImportFromNinja extends Command
                         'total' => $amount,
                         'amount_paid' => 0,
                         'balance_due' => 0,
-                        'bank_account_id' => $this->bankAccountId,
+                        'contra_account_id' => $this->bankAccountId,
                         'receivable_account_id' => $this->receivableAccountId,
                         'source' => 'import',
                         'metadata' => ['ninja_id' => $payment->id],

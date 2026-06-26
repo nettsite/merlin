@@ -84,12 +84,12 @@ new #[Layout('components.layout.app')] class extends Component
         Document::query()
             ->where('document_type', 'payment')
             ->whereNull('deleted_at')
-            ->whereNotNull('bank_account_id')
+            ->whereNotNull('contra_account_id')
             ->when($asAt, fn ($q) => $q->whereDate('issue_date', '<=', $asAt))
-            ->selectRaw('bank_account_id, SUM(total) as total')
-            ->groupBy('bank_account_id')
+            ->selectRaw('contra_account_id, SUM(total) as total')
+            ->groupBy('contra_account_id')
             ->get()
-            ->each(fn ($r) => $add($r->bank_account_id, (float) $r->total, 0.0));
+            ->each(fn ($r) => $add($r->contra_account_id, (float) $r->total, 0.0));
 
         // Load accounts and compute net balances
         $accounts = empty($acc) ? collect() : Account::query()

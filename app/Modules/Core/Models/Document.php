@@ -69,11 +69,13 @@ class Document extends Model implements HasMedia
         'footer',
         'payable_account_id',
         'receivable_account_id',
-        'bank_account_id',
+        'contra_account_id',
         'payment_term_id',
         'source',
         'llm_confidence',
         'metadata',
+        'bank_template_id',
+        'requires_review',
     ];
 
     protected function casts(): array
@@ -96,6 +98,7 @@ class Document extends Model implements HasMedia
             'foreign_balance_due' => 'decimal:2',
             'llm_confidence' => 'decimal:4',
             'metadata' => 'array',
+            'requires_review' => 'boolean',
         ];
     }
 
@@ -118,6 +121,18 @@ class Document extends Model implements HasMedia
     public function contact(): BelongsTo
     {
         return $this->belongsTo(Person::class, 'contact_id');
+    }
+
+    /** @return BelongsTo<BankTemplate, $this> */
+    public function bankTemplate(): BelongsTo
+    {
+        return $this->belongsTo(BankTemplate::class);
+    }
+
+    /** @return BelongsTo<Account, $this> */
+    public function contraAccount(): BelongsTo
+    {
+        return $this->belongsTo(Account::class, 'contra_account_id');
     }
 
     /** @return BelongsTo<Account, $this> */
@@ -192,6 +207,16 @@ class Document extends Model implements HasMedia
     public function scopeCreditNotes(Builder $query): Builder
     {
         return $query->where('document_type', 'credit_note');
+    }
+
+    public function scopeBankStatements(Builder $query): Builder
+    {
+        return $query->where('document_type', 'bank_statement');
+    }
+
+    public function scopeCreditCardStatements(Builder $query): Builder
+    {
+        return $query->where('document_type', 'credit_card_statement');
     }
 
     public function scopeInbound(Builder $query): Builder

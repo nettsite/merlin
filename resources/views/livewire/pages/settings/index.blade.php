@@ -77,7 +77,7 @@ new #[Layout('components.layout.app')] class extends Component
     // ── Billing ────────────────────────────────────────────────────────────
     public ?string $defaultReceivableAccountId = null;
 
-    public ?string $defaultBankAccountId = null;
+    public ?string $defaultContraAccountId = null;
 
     public ?string $defaultPaymentTermId = null;
 
@@ -140,7 +140,7 @@ new #[Layout('components.layout.app')] class extends Component
 
         $billing = app(BillingSettings::class);
         $this->defaultReceivableAccountId = $billing->default_receivable_account_id;
-        $this->defaultBankAccountId = $billing->default_bank_account_id;
+        $this->defaultContraAccountId = $billing->default_contra_account_id;
         $this->defaultPaymentTermId = $billing->default_payment_term_id;
         $this->taxLiabilityAccountId = $billing->tax_liability_account_id;
         $this->billingPeriodDay = $billing->billing_period_day;
@@ -311,7 +311,7 @@ new #[Layout('components.layout.app')] class extends Component
     {
         $this->validate([
             'defaultReceivableAccountId' => 'nullable|uuid|exists:accounts,id',
-            'defaultBankAccountId' => 'nullable|uuid|exists:accounts,id',
+            'defaultContraAccountId' => 'nullable|uuid|exists:accounts,id',
             'defaultPaymentTermId' => 'nullable|uuid|exists:payment_terms,id',
             'taxLiabilityAccountId' => 'nullable|uuid|exists:accounts,id',
             'billingPeriodDay' => 'required|integer|min:1|max:28',
@@ -320,7 +320,7 @@ new #[Layout('components.layout.app')] class extends Component
 
         $settings = app(BillingSettings::class);
         $settings->default_receivable_account_id = $this->defaultReceivableAccountId ?: null;
-        $settings->default_bank_account_id = $this->defaultBankAccountId ?: null;
+        $settings->default_contra_account_id = $this->defaultContraAccountId ?: null;
         $settings->default_payment_term_id = $this->defaultPaymentTermId ?: null;
         $settings->tax_liability_account_id = $this->taxLiabilityAccountId ?: null;
         $settings->billing_period_day = $this->billingPeriodDay;
@@ -878,14 +878,14 @@ new #[Layout('components.layout.app')] class extends Component
 
                             <flux:field>
                                 <flux:label>Default Bank Account</flux:label>
-                                <flux:select wire:model="defaultBankAccountId">
+                                <flux:select wire:model="defaultContraAccountId">
                                     <flux:select.option value="">— None —</flux:select.option>
                                     @foreach ($assetAccounts as $account)
                                         <flux:select.option value="{{ $account->id }}">{{ $account->code }} — {{ $account->name }}</flux:select.option>
                                     @endforeach
                                 </flux:select>
                                 <flux:description>Pre-selected when recording payments</flux:description>
-                                <flux:error name="defaultBankAccountId" />
+                                <flux:error name="defaultContraAccountId" />
                             </flux:field>
                         </div>
 

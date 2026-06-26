@@ -2,8 +2,8 @@
 
 namespace App\Policies;
 
+use App\Modules\Core\Models\LlmLog;
 use App\Modules\Core\Models\User;
-use App\Modules\Purchasing\Models\LlmLog;
 
 class LlmLogPolicy
 {

@@ -1,9 +1,9 @@
 <?php
 
-namespace App\Modules\Purchasing\Services\Pdf;
+namespace App\Modules\Core\Services\Pdf;
 
 use App\Exceptions\PdfExtractionException;
-use App\Modules\Purchasing\Services\LlmService;
+use App\Modules\Core\Services\LlmService;
 use Illuminate\Database\Eloquent\Model;
 use Symfony\Component\Process\Process;
 
