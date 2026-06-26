@@ -20,7 +20,7 @@ class BankStatementProcessingService
      *
      * Callers must delete existing lines before calling this — it only appends.
      */
-    public function process(Document $document): void
+    public function process(Document $document, ?string $userHint = null): void
     {
         $media = $document->getFirstMedia('source_document');
 
@@ -32,7 +32,7 @@ class BankStatementProcessingService
 
         $layoutHints = $document->bankTemplate?->layout_hints;
 
-        $extracted = $this->llm->extractBankStatement($text, $layoutHints, $document);
+        $extracted = $this->llm->extractBankStatement($text, $layoutHints, $userHint, $document);
 
         $reference = $this->buildReference($extracted->bankName, $extracted->periodFrom, $extracted->periodTo);
 

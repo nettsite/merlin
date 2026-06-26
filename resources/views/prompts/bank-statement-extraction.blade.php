@@ -29,6 +29,11 @@ DEBITS (money paid out — negative amounts):
 {{ $layout_hints }}
 
 @endif
+@if($user_hint ?? null)
+## Additional Instructions from User
+{{ $user_hint }}
+
+@endif
 ## Statement Text
 {{ $statement_text }}
 

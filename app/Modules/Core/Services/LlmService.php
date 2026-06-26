@@ -149,9 +149,9 @@ class LlmService
      * Tries the fast model first; falls back to the strong model if the balance
      * doesn't reconcile (net movements ≠ closing − opening) or confidence is low.
      */
-    public function extractBankStatement(string $statementText, ?string $layoutHints = null, ?Model $loggable = null): ExtractedBankStatement
+    public function extractBankStatement(string $statementText, ?string $layoutHints = null, ?string $userHint = null, ?Model $loggable = null): ExtractedBankStatement
     {
-        $prompt = $this->buildBankStatementPrompt($statementText, $layoutHints);
+        $prompt = $this->buildBankStatementPrompt($statementText, $layoutHints, $userHint);
 
         $fast = null;
         $fastReconciled = false;
@@ -201,7 +201,7 @@ class LlmService
         return $extracted;
     }
 
-    private function buildBankStatementPrompt(string $text, ?string $layoutHints): string
+    private function buildBankStatementPrompt(string $text, ?string $layoutHints, ?string $userHint = null): string
     {
         return view('prompts.bank-statement-extraction', [
             'statement_text' => $text,
@@ -209,6 +209,7 @@ class LlmService
             'outstanding_invoices' => $this->getOutstandingInvoicesForPrompt(),
             'base_currency' => strtoupper($this->currencySettings->base_currency),
             'layout_hints' => $layoutHints,
+            'user_hint' => $userHint,
         ])->render();
     }
 

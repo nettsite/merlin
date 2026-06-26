@@ -16,14 +16,17 @@ class ProcessBankStatementDocument implements ShouldQueue
 
     public int $timeout = 120;
 
-    public function __construct(public readonly Document $document) {}
+    public function __construct(
+        public readonly Document $document,
+        public readonly ?string $userHint = null,
+    ) {}
 
     public function handle(BankStatementProcessingService $service): void
     {
         // process() appends lines; clear any from a previous failed attempt first.
         $this->document->lines()->delete();
 
-        $service->process($this->document);
+        $service->process($this->document, $this->userHint);
     }
 
     public function failed(\Throwable $e): void

@@ -40,6 +40,13 @@ new #[Layout('components.layout.app')] class extends Component
 
     public ?string $detailId = null;
 
+    // Reprocess modal
+    public bool $showReprocess = false;
+
+    public ?string $reprocessId = null;
+
+    public string $reprocessHint = '';
+
     // Inline line editing
     public ?string $editingLineId = null;
 
@@ -239,7 +246,7 @@ new #[Layout('components.layout.app')] class extends Component
         }
     }
 
-    public function reprocess(string $id): void
+    public function openReprocess(string $id): void
     {
         $doc = Document::findOrFail($id);
         $this->authorize('update', $doc);
@@ -250,14 +257,33 @@ new #[Layout('components.layout.app')] class extends Component
             return;
         }
 
+        $this->reprocessId = $id;
+        $this->reprocessHint = '';
+        $this->showReprocess = true;
+    }
+
+    public function confirmReprocess(): void
+    {
+        $doc = Document::findOrFail($this->reprocessId);
+        $this->authorize('update', $doc);
+
+        $hint = trim($this->reprocessHint) ?: null;
+
         $doc->lines()->delete();
-        $doc->update(['status' => 'received']);
+        $doc->update([
+            'status' => 'received',
+            'metadata' => array_merge($doc->metadata ?? [], array_filter(['user_hint' => $hint])),
+        ]);
         $doc->activities()->create([
             'activity_type' => 'reprocess_queued',
-            'description' => 'Statement queued for reprocessing.',
+            'description' => 'Statement queued for reprocessing.' . ($hint ? ' User hint provided.' : ''),
         ]);
 
-        ProcessBankStatementDocument::dispatch($doc);
+        ProcessBankStatementDocument::dispatch($doc, $hint);
+
+        $this->showReprocess = false;
+        $this->reprocessId = null;
+        $this->reprocessHint = '';
     }
 
     // -------------------------------------------------------------------------
@@ -487,6 +513,27 @@ new #[Layout('components.layout.app')] class extends Component
         @endif
     </flux:modal>
 
+    {{-- Reprocess modal --}}
+    <flux:modal wire:model="showReprocess" class="w-full max-w-lg">
+        <div class="space-y-4">
+            <flux:heading size="lg">Reprocess Statement</flux:heading>
+            <flux:text>Existing lines will be deleted and re-extracted by the LLM. Optionally add hints to guide the extraction.</flux:text>
+            <flux:field>
+                <flux:label>Hints for the LLM <flux:badge size="sm" variant="ghost">optional</flux:badge></flux:label>
+                <flux:textarea
+                    wire:model="reprocessHint"
+                    placeholder="e.g. The R3880 payments from Target are monthly retainer fees. Invoice R6478 was issued on 2026-01-22 and covers the January payment."
+                    rows="4"
+                />
+                <flux:description>Plain language notes about specific transactions, clients, or how to interpret ambiguous entries.</flux:description>
+            </flux:field>
+            <div class="flex justify-end gap-2">
+                <flux:button wire:click="$set('showReprocess', false)" variant="ghost">Cancel</flux:button>
+                <flux:button wire:click="confirmReprocess" variant="primary" icon="arrow-path">Reprocess</flux:button>
+            </div>
+        </div>
+    </flux:modal>
+
     {{-- Detail flyout --}}
     <flux:modal wire:model="showDetail" class="w-full max-w-4xl" variant="flyout">
         @if($detail)
@@ -517,8 +564,7 @@ new #[Layout('components.layout.app')] class extends Component
                         @can('update', $detail)
                             @if($detail->status !== 'posted')
                                 <flux:button
-                                    wire:click="reprocess('{{ $detail->id }}')"
-                                    wire:confirm="Reprocess this statement? Existing lines will be deleted and re-extracted."
+                                    wire:click="openReprocess('{{ $detail->id }}')"
                                     size="sm" variant="ghost" icon="arrow-path"
                                 >
                                     Reprocess
