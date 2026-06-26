@@ -16,22 +16,37 @@
         <main id="docs-content">
             <article>
                 <h1>Reports</h1>
-                <p>Merlin includes three built-in reports accessible from the Reports section of the navigation. All reports operate on posted purchase invoices and default to the current financial year as their date range. Navigating to <code>/reports</code> redirects automatically to the first report.</p>
+                <p>Merlin includes eight built-in reports under <strong>Reports</strong> in the navigation. <code>/reports</code> redirects to <code>/reports/income-statement</code>. Reports are split into two groups: ledger-centric financial statements (read from <code>document_lines</code> joined through <code>accounts</code> → <code>account_groups</code> → <code>account_types</code>) and operational reports (expense and AI metrics).</p>
+
+                <h2 id="income-statement">Income Statement</h2>
+                <p>Found at <code>/reports/income-statement</code>. Reads income (account type code <code>4</code>) and expense (type code <code>5</code>) document lines from posted documents. Shows two columns: month-to-date (start of current month → today) and financial year-to-date (FY start → today). Groups lines by <code>AccountGroup</code>. Net profit/loss is income minus expenses. Data source: <code>document_lines</code> joined to documents/accounts/account_groups/account_types.</p>
+
+                <h2 id="balance-sheet">Balance Sheet</h2>
+                <p>Found at <code>/reports/balance-sheet</code>. Shows assets (type code <code>1</code>), liabilities (type code <code>2</code>), and equity (type code <code>3</code>) account balances. Includes an accounting-equation validation: assets must equal liabilities plus equity. Any imbalance indicates a data issue. Groups by <code>AccountGroup</code>.</p>
+
+                <h2 id="trial-balance">Trial Balance</h2>
+                <p>Found at <code>/reports/trial-balance</code>. Aggregates debit and credit totals across all account types for the selected period. Uses a multi-source query that combines all posted document lines. Total debits must equal total credits.</p>
+
+                <h2 id="income-by-account">Income by Account</h2>
+                <p>Found at <code>/reports/income-by-account</code>. Ledger-centric: totals income document lines grouped by GL account for the period. Includes both sales invoices and any other income-type postings (e.g. imported InvoiceNinja invoices).</p>
+
+                <h2 id="income-by-client">Income by Client</h2>
+                <p>Found at <code>/reports/income-by-client</code>. Totals income grouped by the party on each document for the period. Shows which clients generated the most revenue.</p>
 
                 <h2 id="expenses-by-account">Expenses by Account</h2>
-                <p>Found at <code>/reports/expenses-by-account</code>. This report shows your total posted purchase invoice spend grouped by GL account over the selected date range. It answers the question: "How much did we spend on each expense category?" Use this report to understand cost allocation and prepare for budget reviews. NEEDS CONFIRMATION: exact grouping and filters available on this page (e.g. whether sub-accounts are rolled into parent accounts).</p>
+                <p>Found at <code>/reports/expenses-by-account</code>. Shows total posted purchase invoice spend grouped by GL account over the selected date range. Source: posted purchase invoices only (not the full ledger). Groups by <code>AccountGroup</code>.</p>
 
                 <h2 id="expenses-by-supplier">Expenses by Supplier</h2>
-                <p>Found at <code>/reports/expenses-by-supplier</code>. This report shows total posted purchase invoice spend grouped by supplier over the selected date range. It answers the question: "How much did we spend with each vendor?" Use it to identify your largest suppliers and review spending concentration. NEEDS CONFIRMATION: exact grouping and filters available on this page.</p>
+                <p>Found at <code>/reports/expenses-by-supplier</code>. Shows total posted purchase invoice spend grouped by supplier (party) over the selected date range.</p>
 
                 <h2 id="llm-performance">LLM Performance</h2>
-                <p>Found at <code>/reports/llm-performance</code>. This report provides aggregated metrics from the <code>llm_logs</code> table over the selected date range. Metrics include token usage totals, confidence score distribution, which model tier (fast/strong/backup) handled each invoice, and how frequently the strong-model fallback was triggered. Use this report to understand AI extraction quality over time and to estimate API usage costs. Viewing this report requires the <code>view-llm-summary</code> permission in addition to the base document permissions. For individual extraction details, see <a href="llm-logs.html">LLM Logs</a>.</p>
+                <p>Found at <code>/reports/llm-performance</code>. Aggregated metrics from the <code>llm_logs</code> table: token usage totals, confidence score distribution, model tier breakdown (fast/strong/backup), and fallback frequency. Requires the <code>view-llm-summary</code> permission. For individual extraction details see <a href="llm-logs.html">LLM Logs</a>.</p>
 
                 <h2 id="date-ranges-and-the-financial-year">Date ranges and the financial year</h2>
-                <p>All three reports default to the current financial year as their date range. The financial year boundaries are calculated by <code>FinancialYearService</code> using the <code>financial_year_start_month</code> setting from Settings &rsaquo; General. For example, if the financial year starts in March, the current financial year runs from 1 March to the last day of February the following year. You can change the date range on each report to any custom period. NEEDS CONFIRMATION: whether the default date range varies by report.</p>
+                <p>All reports default to the current financial year. Boundaries are calculated by <code>FinancialYearService</code> using <code>AccountingSettings::financial_year_start_month</code> (Settings &rsaquo; Accounting tab). For example, with a March start, the financial year runs 1 March → last day of February. Each report accepts a custom date range override.</p>
 
                 <h2 id="permissions">Permissions</h2>
-                <p>NEEDS CONFIRMATION: the exact permissions required to access each report page. The LLM Performance report additionally requires <code>view-llm-summary</code>. The expense reports likely require <code>documents-view-any</code>.</p>
+                <p>Financial statement reports (income statement, balance sheet, trial balance, income by account/client, expenses by account/supplier) require <code>documents-view-any</code>. LLM Performance additionally requires <code>view-llm-summary</code>.</p>
             </article>
         </main>
 

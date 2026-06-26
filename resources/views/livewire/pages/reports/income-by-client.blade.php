@@ -36,12 +36,12 @@ new #[Layout('components.layout.app')] class extends Component
                 SUM(documents.total) as total_incl,
                 SUM(documents.balance_due) as outstanding
             ')
-            ->where('documents.document_type', 'purchase_invoice')
-            ->whereIn('documents.status', Document::POSTED_STATUSES)
+            ->where('documents.document_type', 'sales_invoice')
+            ->whereNotIn('documents.status', ['draft', 'cancelled'])
             ->when($this->dateFrom, fn ($q) => $q->whereDate('documents.issue_date', '>=', $this->dateFrom))
             ->when($this->dateTo, fn ($q) => $q->whereDate('documents.issue_date', '<=', $this->dateTo))
             ->groupBy('documents.party_id', 'businesses.trading_name', 'businesses.legal_name')
-            ->orderByDesc('total_excl')
+            ->orderByDesc('total_incl')
             ->get();
 
         return [
@@ -59,8 +59,8 @@ new #[Layout('components.layout.app')] class extends Component
 @include('livewire.pages.reports._subnav')
 <div class="flex items-start justify-between px-6 py-5 border-b border-line">
     <div>
-        <h1 class="text-[17px] font-semibold tracking-tight text-ink">Expenses by Supplier</h1>
-        <p class="mt-0.5 text-sm text-ink-muted">Posted purchase invoices grouped by supplier</p>
+        <h1 class="text-[17px] font-semibold tracking-tight text-ink">Income by Client</h1>
+        <p class="mt-0.5 text-sm text-ink-muted">Sales invoices grouped by client</p>
     </div>
     <div class="flex items-center gap-3">
         <flux:input wire:model.live="dateFrom" type="date" size="sm" label="From" />
@@ -72,7 +72,7 @@ new #[Layout('components.layout.app')] class extends Component
     <table class="w-full text-sm">
         <thead>
             <tr class="bg-surface-alt border-b border-line">
-                <th class="px-4 py-3 text-left text-xs font-medium text-ink-muted uppercase tracking-wide">Supplier</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-ink-muted uppercase tracking-wide">Client</th>
                 <th class="px-4 py-3 text-right text-xs font-medium text-ink-muted uppercase tracking-wide">Invoices</th>
                 <th class="px-4 py-3 text-right text-xs font-medium text-ink-muted uppercase tracking-wide">Excl. VAT</th>
                 <th class="px-4 py-3 text-right text-xs font-medium text-ink-muted uppercase tracking-wide">VAT</th>

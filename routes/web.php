@@ -33,7 +33,12 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
     Volt::route('account-groups', 'pages.account-groups.index')->name('account-groups.index');
 
     // Reports
-    Route::redirect('reports', '/reports/expenses-by-account');
+    Route::redirect('reports', '/reports/income-statement');
+    Volt::route('reports/income-statement', 'pages.reports.income-statement')->name('reports.income-statement');
+    Volt::route('reports/trial-balance', 'pages.reports.trial-balance')->name('reports.trial-balance');
+    Volt::route('reports/balance-sheet', 'pages.reports.balance-sheet')->name('reports.balance-sheet');
+    Volt::route('reports/income-by-client', 'pages.reports.income-by-client')->name('reports.income-by-client');
+    Volt::route('reports/income-by-account', 'pages.reports.income-by-account')->name('reports.income-by-account');
     Volt::route('reports/expenses-by-account', 'pages.reports.expenses-by-account')->name('reports.expenses-by-account');
     Volt::route('reports/expenses-by-supplier', 'pages.reports.expenses-by-supplier')->name('reports.expenses-by-supplier');
     Volt::route('reports/llm-performance', 'pages.reports.llm-performance')->name('reports.llm-performance');

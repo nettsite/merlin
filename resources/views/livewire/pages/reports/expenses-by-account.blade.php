@@ -15,7 +15,9 @@ new #[Layout('components.layout.app')] class extends Component
 
     public function mount(): void
     {
-        $this->dateFrom = now()->startOfYear()->format('Y-m-d');
+        $fyService = app(\App\Modules\Accounting\Services\FinancialYearService::class);
+        [$fyStart] = $fyService->yearBounds($fyService->currentYearLabel());
+        $this->dateFrom = $fyStart->format('Y-m-d');
         $this->dateTo = now()->format('Y-m-d');
     }
 

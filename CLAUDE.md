@@ -26,6 +26,9 @@ php artisan db:seed --class=PaymentTermSeeder
 
 # Invoice watch folder (polls INVOICE_WATCH_DIR every INVOICE_WATCH_INTERVAL seconds)
 php artisan invoices:watch
+
+# InvoiceNinja v5 migration (path = Ninja install dir; prompts if omitted)
+php artisan ninja:import {path?} [--dry-run] [--only=clients|invoices|payments|credits|quotes|recurring] [--limit=N]
 ```
 
 ## Architecture
@@ -35,7 +38,8 @@ php artisan invoices:watch
 ```
 app/Modules/
 ├── Core/
-│   ├── Models/     — User, Role, Permission, Party, Person, Business, Address, ContactAssignment, PartyRelationship
+│   ├── Models/     — User, Role, Permission, Party, Person, Business, Address, ContactAssignment, PartyRelationship,
+│   │               — Document, DocumentLine, DocumentActivity, DocumentRelationship, PaymentTerm
 │   ├── Services/   — PartyService (create/approve suppliers, persons, businesses)
 │   ├── Settings/   — CurrencySettings (base_currency, locale), CompanySettings
 │   └── Policies/   — AllModulesPolicy (base; all domain policies extend this)
@@ -44,15 +48,15 @@ app/Modules/
 │   ├── Services/   — FinancialYearService (fiscal year bounds, month labels)
 │   └── Settings/   — AccountingSettings (financial_year_start_month)
 ├── Purchasing/
-│   ├── Models/     — Document, DocumentLine, DocumentActivity, DocumentRelationship, LlmLog, PostingRule
+│   ├── Models/     — LlmLog, PostingRule
 │   ├── Services/   — see "Invoice Processing Pipeline" below
 │   ├── Jobs/       — ProcessInvoiceDocument (queued)
 │   ├── DTO/        — ExtractedInvoice, ExtractedInvoiceLine, MagikaResult
 │   └── Settings/   — PurchasingSettings (autopost_confidence, tax_default_rate, etc.)
 └── Billing/
-    ├── Models/     — PaymentTerm, RecurringInvoice, RecurringInvoiceLine
+    ├── Models/     — RecurringInvoice, RecurringInvoiceLine, BillingEmailTemplate
     ├── Enums/      — PaymentTermRule, RecurringFrequency, RecurringInvoiceStatus
-    ├── Console/    — GenerateRecurringInvoices, SendReminders
+    ├── Console/    — GenerateRecurringInvoices, SendReminders, ImportFromNinja
     └── Services/   — BillingService (PDF generation), RecurringInvoiceService, DueDateCalculator, ProRataCalculator, WorkingDayCalculator (ZA public holidays), PortalInviteService
 
 app/Policies/       — 16 domain policies, all extend AllModulesPolicy
@@ -87,13 +91,19 @@ Routes use `Volt::route()` unless marked *view*. Any test that renders a view re
 | `/roles` | `roles/index.blade.php` | CRUD |
 | `/users` | `users/index.blade.php` | CRUD |
 | `/llm-logs` | `llm-logs/index.blade.php` | Read-only |
-| `/reports` | — | Redirects to `/reports/expenses-by-account` |
+| `/reports` | — | Redirects to `/reports/income-statement` |
+| `/reports/income-statement` | `reports/income-statement.blade.php` | Read-only; ledger-centric, uses FinancialYearService |
+| `/reports/trial-balance` | `reports/trial-balance.blade.php` | Read-only; multi-source account aggregation |
+| `/reports/balance-sheet` | `reports/balance-sheet.blade.php` | Read-only; accounting equation validation |
+| `/reports/income-by-account` | `reports/income-by-account.blade.php` | Read-only; ledger-centric |
+| `/reports/income-by-client` | `reports/income-by-client.blade.php` | Read-only |
 | `/reports/expenses-by-account` | `reports/expenses-by-account.blade.php` | Read-only |
 | `/reports/expenses-by-supplier` | `reports/expenses-by-supplier.blade.php` | Read-only |
 | `/reports/llm-performance` | `reports/llm-performance.blade.php` | Read-only |
 | `/settings/general` | `settings/general.blade.php` | Spatie settings form |
 | `/settings/purchasing` | `settings/purchasing.blade.php` | Spatie settings form |
 | `/settings/billing` | `settings/billing.blade.php` | Spatie settings form |
+| `/settings` | `settings/index.blade.php` | Multi-tab: General / Purchasing / Accounting / Billing |
 | `/portal/login` | `portal/auth/login.blade.php` | Guest-only, `auth:portal` guard |
 | `/portal/set-password/{token}` | `portal/auth/set-password.blade.php` | Invite accept / set password |
 

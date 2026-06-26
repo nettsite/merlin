@@ -83,7 +83,7 @@
 
         <flux:sidebar.item
             icon="chart-bar"
-            href="{{ route('reports.expenses-by-account') }}"
+            href="{{ route('reports.income-statement') }}"
             :current="request()->routeIs('reports.*')"
             wire:navigate
         >Reports</flux:sidebar.item>

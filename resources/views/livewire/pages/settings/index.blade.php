@@ -1,6 +1,7 @@
 <?php
 
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Settings\AccountingSettings;
 use App\Modules\Billing\Models\BillingEmailTemplate;
 use App\Modules\Core\Models\PaymentTerm;
 use App\Modules\Billing\Services\InvoiceEmailTemplateService;
@@ -70,6 +71,9 @@ new #[Layout('components.layout.app')] class extends Component
 
     public float|string $descriptionSimilarity = 60.0;
 
+    // ── Accounting ─────────────────────────────────────────────────────────
+    public int $financialYearStartMonth = 3;
+
     // ── Billing ────────────────────────────────────────────────────────────
     public ?string $defaultReceivableAccountId = null;
 
@@ -131,6 +135,9 @@ new #[Layout('components.layout.app')] class extends Component
         $this->amountTolerance = $purchasing->amount_tolerance;
         $this->descriptionSimilarity = $purchasing->description_similarity;
 
+        $accounting = app(AccountingSettings::class);
+        $this->financialYearStartMonth = $accounting->financial_year_start_month;
+
         $billing = app(BillingSettings::class);
         $this->defaultReceivableAccountId = $billing->default_receivable_account_id;
         $this->defaultBankAccountId = $billing->default_bank_account_id;
@@ -188,6 +195,7 @@ new #[Layout('components.layout.app')] class extends Component
         match ($this->tab) {
             'general' => $this->saveGeneral(),
             'purchasing' => $this->savePurchasing(),
+            'accounting' => $this->saveAccounting(),
             'billing' => $this->saveBilling(),
             'templates' => $this->saveTemplate(),
             default => null,
@@ -281,6 +289,19 @@ new #[Layout('components.layout.app')] class extends Component
         $settings->fallback_confidence = (float) $this->fallbackConfidence;
         $settings->amount_tolerance = (float) $this->amountTolerance;
         $settings->description_similarity = (float) $this->descriptionSimilarity;
+        $settings->save();
+
+        $this->saved = true;
+    }
+
+    private function saveAccounting(): void
+    {
+        $this->validate([
+            'financialYearStartMonth' => 'required|integer|min:1|max:12',
+        ]);
+
+        $settings = app(AccountingSettings::class);
+        $settings->financial_year_start_month = $this->financialYearStartMonth;
         $settings->save();
 
         $this->saved = true;
@@ -402,7 +423,7 @@ new #[Layout('components.layout.app')] class extends Component
 
         {{-- Tab bar --}}
         <div class="flex gap-0 px-6">
-            @foreach(['general' => 'General', 'purchasing' => 'Purchasing', 'billing' => 'Billing', 'roles' => 'Roles', 'templates' => 'Email Templates'] as $key => $label)
+            @foreach(['general' => 'General', 'purchasing' => 'Purchasing', 'accounting' => 'Accounting', 'billing' => 'Billing', 'roles' => 'Roles', 'templates' => 'Email Templates'] as $key => $label)
                 <button
                     type="button"
                     wire:click="$set('tab', '{{ $key }}')"
@@ -736,6 +757,28 @@ new #[Layout('components.layout.app')] class extends Component
                                 <flux:error name="locale" />
                             </flux:field>
                         </div>
+                    </div>
+                </div>
+
+            {{-- ── ACCOUNTING TAB ──────────────────────────────── --}}
+            @elseif($tab === 'accounting')
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-8 py-8">
+                    <div>
+                        <h3 class="text-sm font-semibold text-ink">Financial Year</h3>
+                        <p class="mt-1 text-sm text-ink-muted">Sets the start month of the financial year. All reports default to the current financial year period.</p>
+                    </div>
+                    <div class="col-span-2">
+                        <flux:field class="max-w-xs">
+                            <flux:label>Financial Year Start Month <span class="text-danger">*</span></flux:label>
+                            <flux:select wire:model="financialYearStartMonth">
+                                @foreach(['1' => 'January', '2' => 'February', '3' => 'March', '4' => 'April', '5' => 'May', '6' => 'June', '7' => 'July', '8' => 'August', '9' => 'September', '10' => 'October', '11' => 'November', '12' => 'December'] as $num => $name)
+                                    <flux:select.option value="{{ $num }}">{{ $name }}</flux:select.option>
+                                @endforeach
+                            </flux:select>
+                            <flux:description>Default: March (FY runs March – end of February)</flux:description>
+                            <flux:error name="financialYearStartMonth" />
+                        </flux:field>
                     </div>
                 </div>
 

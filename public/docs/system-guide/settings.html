@@ -37,8 +37,9 @@
                 <h2 id="editing-settings">Editing settings</h2>
                 <p>All in-app settings are on a single page at <code>/settings</code> with five tabs. The old per-section URLs (<code>/settings/general</code>, <code>/settings/purchasing</code>, <code>/settings/billing</code>) redirect to the corresponding tab and are preserved for backwards compatibility.</p>
                 <ul>
-                    <li><strong><a href="general-settings.html">General</a></strong> — company details, currency and locale, and financial year start month</li>
+                    <li><strong><a href="general-settings.html">General</a></strong> — company details, currency and locale</li>
                     <li><strong><a href="purchasing-settings.html">Purchasing</a></strong> — tax rate and label, default payable account, confidence thresholds, and matching tolerances</li>
+                    <li><strong>Accounting</strong> — financial year start month (controls report date ranges and <code>FinancialYearService</code>)</li>
                     <li><strong><a href="billing-settings.html">Billing</a></strong> — default GL accounts, billing period day, default payment term, and base email wrapper template</li>
                     <li><strong>Roles</strong> — embeds the roles management page inline</li>
                     <li><strong>Email Templates</strong> — manage <code>BillingEmailTemplate</code> records (invoice and reminder templates) using the built-in Quill editor; see <a href="billing-settings.html">Billing Settings</a></li>
@@ -65,7 +66,7 @@
                         <tr><td><code>base_currency</code></td><td>string</td><td><code>ZAR</code></td><td>General</td></tr>
                         <tr><td><code>locale</code></td><td>string</td><td><code>en_ZA</code></td><td>General</td></tr>
                         <tr><td colspan="4"><em>Accounting</em></td></tr>
-                        <tr><td><code>financial_year_start_month</code></td><td>integer (1–12)</td><td>NEEDS CONFIRMATION: no default in class</td><td>General</td></tr>
+                        <tr><td><code>financial_year_start_month</code></td><td>integer (1–12)</td><td>set by migration (no class default)</td><td>Accounting</td></tr>
                         <tr><td colspan="4"><em>Purchasing</em></td></tr>
                         <tr><td><code>default_payable_account</code></td><td>string (account code)</td><td><code>2000</code></td><td>Purchasing</td></tr>
                         <tr><td><code>tax_default_rate</code></td><td>float (%)</td><td><code>15.00</code></td><td>Purchasing</td></tr>

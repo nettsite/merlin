@@ -1,8 +1,13 @@
 <div class="flex items-center gap-1 px-6 border-b border-line overflow-x-auto">
     @php
         $links = [
-            ['route' => 'reports.expenses-by-account', 'label' => 'By Account'],
-            ['route' => 'reports.expenses-by-supplier', 'label' => 'By Supplier'],
+            ['route' => 'reports.income-statement', 'label' => 'Income Statement'],
+            ['route' => 'reports.trial-balance', 'label' => 'Trial Balance'],
+            ['route' => 'reports.balance-sheet', 'label' => 'Balance Sheet'],
+            ['route' => 'reports.income-by-client', 'label' => 'Income by Client'],
+            ['route' => 'reports.income-by-account', 'label' => 'Income by Account'],
+            ['route' => 'reports.expenses-by-account', 'label' => 'Expenses by Account'],
+            ['route' => 'reports.expenses-by-supplier', 'label' => 'Expenses by Supplier'],
             ['route' => 'reports.llm-performance', 'label' => 'LLM Performance'],
         ];
     @endphp
