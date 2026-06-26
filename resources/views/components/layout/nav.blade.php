@@ -31,6 +31,13 @@
         >Clients</flux:sidebar.item>
 
         <flux:sidebar.item
+            icon="identification"
+            href="{{ route('contacts.index') }}"
+            :current="request()->routeIs('contacts.*')"
+            wire:navigate
+        >Contacts</flux:sidebar.item>
+
+        <flux:sidebar.item
             icon="document-text"
             href="{{ route('sales-invoices.index') }}"
             :current="request()->routeIs('sales-invoices.*')"
