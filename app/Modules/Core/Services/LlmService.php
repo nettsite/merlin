@@ -226,8 +226,9 @@ class LlmService
     {
         $invoices = Document::salesInvoices()
             ->whereIn('status', ['sent', 'partially_paid'])
+            ->where('balance_due', '>', 0)
             ->with('party.business', 'party.person')
-            ->orderBy('issue_date')
+            ->orderByDesc('issue_date')
             ->get();
 
         if ($invoices->isEmpty()) {
