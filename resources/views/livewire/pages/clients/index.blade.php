@@ -369,7 +369,9 @@ new #[Layout('components.layout.app')] class extends Component
             @forelse($rows as $party)
                 <tr class="border-t border-line hover:bg-surface-alt group">
                     <td class="px-4 py-3 font-medium text-ink">
-                        {{ $party->business?->display_name ?? '—' }}
+                        <a href="{{ route('clients.show', $party->id) }}" wire:navigate class="hover:text-accent hover:underline">
+                            {{ $party->business?->display_name ?? '—' }}
+                        </a>
                     </td>
                     <td class="px-4 py-3 text-ink-soft tabular-nums">
                         {{ $party->primary_email ?? '—' }}
@@ -389,6 +391,9 @@ new #[Layout('components.layout.app')] class extends Component
                     </td>
                     <td class="px-4 py-3 text-right">
                         <div class="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            @can('view', $party)
+                                <flux:button href="{{ route('clients.show', $party->id) }}" wire:navigate size="sm" variant="ghost" icon="eye" />
+                            @endcan
                             @can('update', $party)
                                 @php $isSupplier = $party->relationships->firstWhere('relationship_type', 'supplier') !== null @endphp
                                 <flux:button
