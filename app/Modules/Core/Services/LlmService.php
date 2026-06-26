@@ -28,6 +28,8 @@ class LlmService
 
     private const MAX_TOKENS = 4096;
 
+    private const MAX_TOKENS_BANK_STATEMENT = 8192;
+
     /**
      * Extract structured invoice data from raw PDF text.
      *
@@ -189,6 +191,7 @@ class LlmService
             loggable: $loggable,
             startNs: hrtime(true),
             model: $model,
+            maxTokens: self::MAX_TOKENS_BANK_STATEMENT,
         );
 
         $extracted = ExtractedBankStatement::fromArray($this->parseJsonResponse($log->response_payload['text']));
@@ -304,7 +307,7 @@ class LlmService
      *
      * @param  array<int, array<string, mixed>>  $messages
      */
-    public function callApi(array $messages, ?Model $loggable, int $startNs, string $model): LlmLog
+    public function callApi(array $messages, ?Model $loggable, int $startNs, string $model, int $maxTokens = self::MAX_TOKENS): LlmLog
     {
         // Resolve the requested tier to its live escalation chain: the model
         // itself plus the fallback rungs below it, with any retired rung skipped.
@@ -314,7 +317,7 @@ class LlmService
         foreach ($candidates as $candidate) {
             $body = [
                 'model' => $candidate,
-                'max_tokens' => self::MAX_TOKENS,
+                'max_tokens' => $maxTokens,
                 'messages' => $messages,
             ];
 
