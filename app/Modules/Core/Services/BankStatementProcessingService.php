@@ -65,18 +65,29 @@ class BankStatementProcessingService
             ->whereNotNull('document_number')
             ->pluck('id', 'document_number');
 
+        $advanceAccountId = Account::where('code', '1300')->value('id');
+
+        // Pre-index all account codes to avoid N+1 per transaction.
+        $accountCodeIndex = Account::pluck('id', 'code');
+
         DocumentLine::$recalculatesDocumentTotals = false;
 
         try {
             foreach ($extracted->transactions as $i => $transaction) {
                 $accountId = $transaction->suggestedAccountCode
-                    ? Account::where('code', $transaction->suggestedAccountCode)->value('id')
+                    ? ($accountCodeIndex->get($transaction->suggestedAccountCode) ?? null)
                     : null;
 
                 $linkedDocumentId = null;
 
                 if ($transaction->suggestedInvoiceNumber !== null) {
                     $linkedDocumentId = $invoiceIndex->get($transaction->suggestedInvoiceNumber);
+                }
+
+                // Unmatched credits belong to Over and Advance Payments (1300), not AR.
+                // AR is correct only when clearing a debtor on a matched invoice.
+                if ($transaction->signedAmount() > 0 && $linkedDocumentId === null && $advanceAccountId !== null) {
+                    $accountId = $advanceAccountId;
                 }
 
                 $document->lines()->create([

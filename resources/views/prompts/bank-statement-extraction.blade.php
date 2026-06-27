@@ -9,8 +9,9 @@ This is the business's PRIMARY TRADING BANK ACCOUNT. The business issues sales i
 CREDITS (money received — positive amounts):
 - These are almost always PAYMENTS FROM CLIENTS against outstanding sales invoices.
 - The income was already recognised when the invoice was raised (Dr Debtors, Cr Income).
-- The bank receipt CLEARS THE DEBTOR, not income: Dr Bank / Cr Debtors (Accounts Receivable).
-- NEVER suggest an income account for a credit. Suggest the Debtors / Accounts Receivable account.
+- If you can match the credit to a specific invoice (via suggested_invoice_number): the bank receipt CLEARS THE DEBTOR — suggest the Debtors / Accounts Receivable account.
+- If you CANNOT match the credit to any invoice: suggest the Over and Advance Payments account (code 1300). Do NOT suggest AR for unmatched credits.
+- NEVER suggest an income account for a credit.
 - The description often contains the client name and sometimes the invoice number or amount (e.g. "Magtape Credit Medhold R6480" = payment from client Medhold, likely for invoice ~R6480).
 
 DEBITS (money paid out — negative amounts):
@@ -45,7 +46,7 @@ DEBITS (money paid out — negative amounts):
   - "debit": the debit amount as a positive number, or null if this row is a credit
   - "credit": the credit amount as a positive number, or null if this row is a debit
   - "running_balance": the running/closing balance for that row, or null if not shown
-  - "suggested_account_code": the most appropriate account code per the rules above, or null if genuinely unclear. For matched invoice credits, use the Debtors / Accounts Receivable account code.
+  - "suggested_account_code": the most appropriate account code per the rules above, or null if genuinely unclear. For matched invoice credits use the Debtors / Accounts Receivable account code; for unmatched credits use account code 1300 (Over and Advance Payments).
   - "account_confidence": float 0–1 indicating confidence in the account suggestion
   - "account_reason": one-line explanation (e.g. "Client payment — clears debtor" or "Transfer to personal account — drawings")
   - "suggested_invoice_number": for CREDIT transactions only — the invoice number from the Outstanding Sales Invoices list that this payment most likely settles, or null if no match. Matching priority (apply in order, stop at first match):
