@@ -139,14 +139,33 @@ class DocumentService
             $this->transition($doc, 'posted', $by, 'Posted to the general ledger.');
 
             foreach ($doc->lines()->with('linkedDocument')->get() as $line) {
-                if ($line->linked_document_id === null) {
+                // Only process credits (money received into the bank account).
+                if ((float) $line->unit_price <= 0) {
                     continue;
                 }
 
                 $invoice = $line->linkedDocument;
 
+                // If no explicit link or the linked invoice is already settled,
+                // fall back to the newest outstanding invoice predating this transaction.
                 if ($invoice === null || ! in_array($invoice->status, ['sent', 'partially_paid'])) {
-                    continue;
+                    $txDate = isset($line->metadata['transaction_date'])
+                        ? Carbon::parse($line->metadata['transaction_date'])
+                        : ($doc->issue_date ?? now());
+
+                    $invoice = Document::salesInvoices()
+                        ->whereIn('status', ['sent', 'partially_paid'])
+                        ->where('balance_due', '>', 0)
+                        ->whereDate('issue_date', '<=', $txDate)
+                        ->orderByDesc('issue_date')
+                        ->first();
+
+                    if ($invoice === null) {
+                        continue;
+                    }
+
+                    $line->linked_document_id = $invoice->id;
+                    $line->saveQuietly();
                 }
 
                 $amount = abs((float) $line->unit_price);
