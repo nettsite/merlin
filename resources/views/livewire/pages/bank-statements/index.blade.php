@@ -322,7 +322,11 @@ new #[Layout('components.layout.app')] class extends Component
         return [
             'rows'               => $rows,
             'detail'             => $detail,
-            'bankAccounts'       => Account::active()->postable()->orderBy('code')->get(),
+            'bankAccounts'       => Account::active()->postable()
+                ->where(fn ($q) => $q->where('name', 'like', '%Bank%')
+                    ->orWhere('name', 'like', '%Credit Card%')
+                    ->orWhere('name', 'like', '%Cash%'))
+                ->orderBy('code')->get(),
             'allAccounts'        => Account::active()->postable()->orderBy('code')->get(),
             'bankTemplates'      => BankTemplate::active()->orderBy('name')->get(),
             'outstandingInvoices' => $outstandingInvoices,
