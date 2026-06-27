@@ -17,6 +17,7 @@ const NAV = [
             { file: 'suppliers.html', title: 'Suppliers' },
             { file: 'purchase-invoices.html', title: 'Purchase Invoices' },
             { file: 'posting-rules.html', title: 'Automatic Posting' },
+            { file: 'bank-statements.html', title: 'Bank Statements' },
         ],
     },
     {

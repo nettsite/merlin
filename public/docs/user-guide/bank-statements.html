@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Bank Statements — Merlin User Guide</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/docs.css">
+</head>
+<body>
+    <div id="docs-shell">
+        <aside id="docs-sidebar"></aside>
+
+        <main id="docs-content">
+            <article>
+                <h1>Bank Statements</h1>
+                <p>Bank Statements lets you upload your bank or credit card statement PDFs and have Merlin read the transactions automatically. Each transaction is listed as a line, with a suggested account code and — where Merlin spots a match — a link to one of your outstanding sales invoices.</p>
+
+                <h2 id="uploading-a-statement">Uploading a statement</h2>
+                <ol>
+                    <li>Go to <strong>Bank Statements</strong> in the navigation.</li>
+                    <li>Click <strong>Upload Statement</strong>.</li>
+                    <li>Select one or more PDF statement files.</li>
+                    <li>Choose the <strong>bank account</strong> this statement belongs to — this is the account in your chart of accounts that represents the bank or credit card (e.g. <em>Business Current Account</em>).</li>
+                    <li>Optionally select a <strong>bank template</strong> if one has been set up for your bank — this helps Merlin read your statement's layout more accurately.</li>
+                    <li>Click <strong>Upload</strong>. Merlin queues the files for processing.</li>
+                </ol>
+
+                <h2 id="reviewing-transactions">Reviewing transactions</h2>
+                <p>Once processed, click any statement in the list to open the detail panel. You will see:</p>
+                <ul>
+                    <li>Statement header information — bank name, account, period, opening and closing balances, and whether the balance reconciles.</li>
+                    <li>A line per transaction — description, date, amount, and the account Merlin suggested.</li>
+                    <li>Any transactions Merlin matched to an outstanding sales invoice are highlighted with the invoice number.</li>
+                </ul>
+                <p>You can edit the account on any line directly in the panel if Merlin got it wrong. Click the account field on the line to change it.</p>
+
+                <h2 id="reprocessing">Reprocessing</h2>
+                <p>If the extraction wasn't right — for example, Merlin misclassified a category of transactions — you can reprocess the statement. Click <strong>Reprocess</strong> in the detail panel. A window appears where you can type an optional hint to guide Merlin (for example: <em>Monthly debit order rows are insurance premiums, not bank charges</em>). Merlin will re-read the statement and replace the existing transactions with a fresh extraction.</p>
+
+                <h2 id="balance-reconciliation">Balance reconciliation</h2>
+                <p>Merlin checks whether the sum of extracted transactions matches the difference between the opening and closing balance shown on the statement. If they don't match, the statement is flagged as not reconciled — this usually means Merlin missed some transactions or misread an amount. Review the lines and reprocess with a hint if needed.</p>
+            </article>
+        </main>
+
+        <nav id="docs-toc"></nav>
+    </div>
+
+    <script src="assets/nav.js"></script>
+</body>
+</html>

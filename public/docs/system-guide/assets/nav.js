@@ -42,6 +42,7 @@ const NAV = [
             { file: 'invoice-pipeline.html', title: 'The Invoice Pipeline' },
             { file: 'document-lifecycle.html', title: 'Document Lifecycle' },
             { file: 'posting-rules.html', title: 'Posting Rules' },
+            { file: 'bank-statements.html', title: 'Bank Statements' },
             { file: 'llm-logs.html', title: 'LLM Logs' },
         ],
     },

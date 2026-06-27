@@ -23,22 +23,29 @@
                 <pre><code>app/Modules/
 ├── Core/
 │   ├── Models/     — User, Party, Person, Business, Address,
-│   │                 ContactAssignment, PartyRelationship
-│   ├── Services/   — PartyService
+│   │                 ContactAssignment, PartyRelationship,
+│   │                 Document, DocumentLine, DocumentActivity,
+│   │                 DocumentRelationship, PaymentTerm,
+│   │                 BankTemplate, LlmLog
+│   ├── Services/   — PartyService, DocumentService, LlmService,
+│   │                 ModelHealthService, BankStatementProcessingService,
+│   │                 DocumentTextExtractor,
+│   │                 Pdf/MagikaService, Pdf/PdfExtractor
+│   ├── Jobs/       — ProcessBankStatementDocument
+│   ├── DTO/        — ExtractedBankStatement, ExtractedBankTransaction,
+│   │                 MagikaResult
 │   └── Settings/   — CompanySettings, CurrencySettings
 ├── Accounting/
 │   ├── Models/     — Account, AccountGroup, AccountType
 │   ├── Services/   — FinancialYearService
 │   └── Settings/   — AccountingSettings
 ├── Purchasing/
-│   ├── Models/     — Document, DocumentLine, DocumentActivity,
-│   │                 DocumentRelationship, LlmLog, PostingRule
-│   ├── Services/   — InvoiceProcessingService, DocumentService,
-│   │                 LlmService, MagikaService, SupplierResolver,
+│   ├── Models/     — PostingRule
+│   ├── Services/   — InvoiceProcessingService, SupplierResolver,
 │   │                 AccountResolver, ExchangeRateService,
-│   │                 PostingRuleService, ModelHealthService
+│   │                 PostingRuleService
 │   ├── Jobs/       — ProcessInvoiceDocument
-│   ├── DTO/        — ExtractedInvoice, ExtractedInvoiceLine, MagikaResult
+│   ├── DTO/        — ExtractedInvoice, ExtractedInvoiceLine
 │   └── Settings/   — PurchasingSettings
 └── Billing/
     ├── Models/     — PaymentTerm, RecurringInvoice, RecurringInvoiceLine
@@ -50,9 +57,9 @@
                 <table>
                     <thead><tr><th>Module</th><th>Responsibility</th><th>Key models</th></tr></thead>
                     <tbody>
-                        <tr><td>Core</td><td>Users, contacts, and the shared party directory used by all other modules</td><td>User, Party, Person, Business, Address, ContactAssignment, PartyRelationship</td></tr>
+                        <tr><td>Core</td><td>Users, contacts, shared party directory, the document model and LLM infrastructure used by all other modules</td><td>User, Party, Person, Business, Document, DocumentLine, LlmLog, BankTemplate</td></tr>
                         <tr><td>Accounting</td><td>General ledger structure</td><td>Account, AccountGroup, AccountType</td></tr>
-                        <tr><td>Purchasing</td><td>Supplier invoice ingestion, LLM processing, and the full document lifecycle</td><td>Document, DocumentLine, LlmLog, PostingRule</td></tr>
+                        <tr><td>Purchasing</td><td>Supplier invoice ingestion pipeline and posting rules; delegates LLM and document services to Core</td><td>PostingRule, ExtractedInvoice</td></tr>
                         <tr><td>Billing</td><td>Sales invoices, recurring billing, and payment terms</td><td>PaymentTerm, RecurringInvoice</td></tr>
                     </tbody>
                 </table>
@@ -77,12 +84,17 @@
 
                 <h2 id="services-and-the-pipeline">Services and the pipeline</h2>
                 <p>Domain logic lives in service classes, not in Livewire components or models. Components call services; services call other services and models.</p>
-                <p>The two most important services in the Purchasing module are:</p>
+                <p>Key services in the Core module:</p>
                 <ul>
-                    <li><code>InvoiceProcessingService</code> — orchestrates the full seven-step invoice pipeline (text extraction → Magika → LLM → supplier resolution → account resolution → exchange rates → posting rules). Its <code>process(Document $doc)</code> method only <em>appends</em> lines; it never deletes existing ones.</li>
-                    <li><code>DocumentService</code> — owns all document status transitions (reviewed, approved, posted, disputed, rejected, voided) and the <code>reprocess()</code> method. Reprocessing deletes existing lines before calling <code>InvoiceProcessingService::process()</code> again.</li>
+                    <li><code>LlmService</code> — calls the Claude API; used by both the invoice and bank statement pipelines. Implements the Haiku→Sonnet quality fallback and the <code>ModelHealthService</code> model-retirement circuit breaker.</li>
+                    <li><code>BankStatementProcessingService</code> — orchestrates bank statement extraction: text extraction → LLM → one <code>DocumentLine</code> per transaction, with suggested GL account and optional linked sales invoice. Its <code>process()</code> method only <em>appends</em> lines; callers must delete existing lines before reprocessing.</li>
+                    <li><code>DocumentService</code> (Core) — owns status transitions and reprocessing for bank statements.</li>
                 </ul>
-                <p>See <a href="invoice-pipeline.html">The Invoice Pipeline</a> for a full description of each pipeline step, and <a href="document-lifecycle.html">Document Lifecycle</a> for the status transition map.</p>
+                <p>Key services in the Purchasing module:</p>
+                <ul>
+                    <li><code>InvoiceProcessingService</code> — orchestrates the full seven-step invoice pipeline (text extraction → Magika → LLM → supplier resolution → account resolution → exchange rates → posting rules). Its <code>process(Document $doc)</code> method only <em>appends</em> lines.</li>
+                </ul>
+                <p>See <a href="invoice-pipeline.html">The Invoice Pipeline</a> for a full description of each pipeline step, <a href="bank-statements.html">Bank Statements</a> for the statement extraction pipeline, and <a href="document-lifecycle.html">Document Lifecycle</a> for the status transition map.</p>
             </article>
         </main>
 

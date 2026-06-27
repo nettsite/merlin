@@ -28,7 +28,7 @@ php artisan db:seed --class=PaymentTermSeeder
 php artisan invoices:watch
 
 # InvoiceNinja v5 migration (path = Ninja install dir; prompts if omitted)
-php artisan ninja:import {path?} [--dry-run] [--only=clients|invoices|payments|credits|quotes|recurring] [--limit=N]
+php artisan ninja:import {path?} [--dry-run] [--only=clients|contacts|invoices|quotes|credits|recurring] [--limit=N]
 ```
 
 ## Architecture
@@ -39,8 +39,12 @@ php artisan ninja:import {path?} [--dry-run] [--only=clients|invoices|payments|c
 app/Modules/
 ├── Core/
 │   ├── Models/     — User, Role, Permission, Party, Person, Business, Address, ContactAssignment, PartyRelationship,
-│   │               — Document, DocumentLine, DocumentActivity, DocumentRelationship, PaymentTerm
-│   ├── Services/   — PartyService (create/approve suppliers, persons, businesses)
+│   │               — Document, DocumentLine, DocumentActivity, DocumentRelationship, PaymentTerm, BankTemplate, LlmLog
+│   ├── Services/   — PartyService, DocumentService, LlmService, ModelHealthService,
+│   │               — BankStatementProcessingService, DocumentTextExtractor,
+│   │               — Pdf/MagikaService, Pdf/PdfExtractor
+│   ├── Jobs/       — ProcessBankStatementDocument (queued)
+│   ├── DTO/        — ExtractedBankStatement, ExtractedBankTransaction, MagikaResult
 │   ├── Settings/   — CurrencySettings (base_currency, locale), CompanySettings
 │   └── Policies/   — AllModulesPolicy (base; all domain policies extend this)
 ├── Accounting/
@@ -48,10 +52,11 @@ app/Modules/
 │   ├── Services/   — FinancialYearService (fiscal year bounds, month labels)
 │   └── Settings/   — AccountingSettings (financial_year_start_month)
 ├── Purchasing/
-│   ├── Models/     — LlmLog, PostingRule
-│   ├── Services/   — see "Invoice Processing Pipeline" below
+│   ├── Models/     — PostingRule
+│   ├── Services/   — InvoiceProcessingService, SupplierResolver, AccountResolver,
+│   │               — ExchangeRateService, PostingRuleService
 │   ├── Jobs/       — ProcessInvoiceDocument (queued)
-│   ├── DTO/        — ExtractedInvoice, ExtractedInvoiceLine, MagikaResult
+│   ├── DTO/        — ExtractedInvoice, ExtractedInvoiceLine
 │   └── Settings/   — PurchasingSettings (autopost_confidence, tax_default_rate, etc.)
 └── Billing/
     ├── Models/     — RecurringInvoice, RecurringInvoiceLine, BillingEmailTemplate
@@ -79,8 +84,11 @@ Routes use `Volt::route()` unless marked *view*. Any test that renders a view re
 | `/suppliers` | `suppliers/index.blade.php` | CRUD |
 | `/suppliers/{id}` | `suppliers/show.blade.php` | Read-only detail |
 | `/purchase-invoices` | `purchase-invoices/index.blade.php` | **Fully custom** — file upload, LLM pipeline, inline line editing, status machine |
+| `/bank-statements` | `bank-statements/index.blade.php` | **Fully custom** — upload PDF statements, LLM extraction, inline account assignment, reprocess with hint |
 | `/posting-rules` | `posting-rules/index.blade.php` | CRUD |
+| `/contacts` | `contacts/index.blade.php` | Read-only list of persons with active contact assignments |
 | `/clients` | `clients/index.blade.php` | CRUD |
+| `/clients/{id}` | `clients/show.blade.php` | Read-only detail with sales invoice transaction history |
 | `/sales-invoices` | `sales-invoices/index.blade.php` | CRUD |
 | `/quotes` | `quotes/index.blade.php` | CRUD (uses Document model, type=quote) |
 | `/credit-notes` | `credit-notes/index.blade.php` | CRUD (uses Document model, type=credit_note) |
