@@ -3,6 +3,7 @@
 namespace App\Modules\Core\Services;
 
 use App\Exceptions\InvalidDocumentStateException;
+use App\Modules\Accounting\Models\Account;
 use App\Modules\Core\Models\Document;
 use App\Modules\Core\Models\DocumentActivity;
 use App\Modules\Core\Models\DocumentRelationship;
@@ -138,6 +139,8 @@ class DocumentService
         DB::transaction(function () use ($doc, $by) {
             $this->transition($doc, 'posted', $by, 'Posted to the general ledger.');
 
+            $advanceAccountId = Account::where('code', '1300')->value('id');
+
             foreach ($doc->lines()->with('linkedDocument')->get() as $line) {
                 // Only process credits (money received into the bank account).
                 if ((float) $line->unit_price <= 0) {
@@ -161,6 +164,10 @@ class DocumentService
                         ->first();
 
                     if ($invoice === null) {
+                        // No invoice to match — post to Over and Advance Payments.
+                        $line->account_id = $advanceAccountId;
+                        $line->saveQuietly();
+
                         continue;
                     }
 
@@ -208,7 +215,7 @@ class DocumentService
                         'line_total' => $excess,
                         'tax_rate' => null,
                         'tax_amount' => 0,
-                        'account_id' => null,
+                        'account_id' => $advanceAccountId,
                         'linked_document_id' => null,
                         'metadata' => [
                             'unallocated_receipt' => true,
