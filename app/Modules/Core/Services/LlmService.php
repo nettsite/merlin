@@ -249,6 +249,56 @@ class LlmService
     }
 
     /**
+     * Generate plain-text layout hints for a bank template from a successful extraction.
+     * Returns the raw text from the LLM (not JSON). Empty string on failure.
+     */
+    public function generateBankTemplateHints(
+        string $bankName,
+        string $statementText,
+        ExtractedBankStatement $extracted,
+        ?string $existingHints,
+        ?string $userHint,
+        ?Model $loggable = null,
+    ): string {
+        $sampleTransactions = array_slice(
+            array_map(fn ($t) => [
+                'transaction_date' => $t->transactionDate,
+                'description' => $t->description,
+                'debit' => $t->debit,
+                'credit' => $t->credit,
+                'running_balance' => $t->runningBalance,
+            ], $extracted->transactions),
+            0,
+            10,
+        );
+
+        $prompt = view('prompts.bank-template-hints', [
+            'bank_name' => $bankName,
+            'existing_hints' => $existingHints,
+            'user_hint' => $userHint,
+            'balance_reconciled' => $extracted->isBalanceReconciled(),
+            'transaction_count' => count($extracted->transactions),
+            'period_from' => $extracted->periodFrom,
+            'period_to' => $extracted->periodTo,
+            'sample_transactions' => $sampleTransactions,
+            'statement_excerpt' => mb_substr($statementText, 0, 3000),
+        ])->render();
+
+        try {
+            $log = $this->callApi(
+                messages: [['role' => 'user', 'content' => $prompt]],
+                loggable: $loggable,
+                startNs: hrtime(true),
+                model: config('services.anthropic.model'),
+            );
+
+            return $log->response_payload['text'] ?? '';
+        } catch (\Throwable) {
+            return '';
+        }
+    }
+
+    /**
      * Extract raw text from a scanned PDF using Claude's document vision.
      * Called by PdfExtractor when pdftotext yields insufficient text.
      */

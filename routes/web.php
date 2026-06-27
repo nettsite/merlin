@@ -32,6 +32,7 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
 
     // Accounting
     Volt::route('bank-statements', 'pages.bank-statements.index')->name('bank-statements.index');
+    Volt::route('bank-templates', 'pages.bank-templates.index')->name('bank-templates.index');
     Volt::route('accounts', 'pages.accounts.index')->name('accounts.index');
     Volt::route('account-groups', 'pages.account-groups.index')->name('account-groups.index');
 

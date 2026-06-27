@@ -82,6 +82,13 @@
         >Bank Statements</flux:sidebar.item>
 
         <flux:sidebar.item
+            icon="document-text"
+            href="{{ route('bank-templates.index') }}"
+            :current="request()->routeIs('bank-templates.*')"
+            wire:navigate
+        >Bank Templates</flux:sidebar.item>
+
+        <flux:sidebar.item
             icon="banknotes"
             href="{{ route('accounts.index') }}"
             :current="request()->routeIs('accounts.*')"

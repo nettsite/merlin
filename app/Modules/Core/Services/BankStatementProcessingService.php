@@ -3,6 +3,8 @@
 namespace App\Modules\Core\Services;
 
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Core\Jobs\GenerateBankTemplateHints;
+use App\Modules\Core\Models\BankTemplate;
 use App\Modules\Core\Models\Document;
 use App\Modules\Core\Models\DocumentLine;
 use Illuminate\Support\Collection;
@@ -120,6 +122,37 @@ class BankStatementProcessingService
                 'warnings' => $extracted->warnings,
             ],
         ]);
+
+        $template = $this->resolveTemplate($document, $extracted->bankName);
+
+        if ($template) {
+            GenerateBankTemplateHints::dispatch($template, $text, $extracted, $userHint);
+        }
+    }
+
+    /**
+     * Find or create a BankTemplate for the extracted bank name, linking it to the
+     * document if it wasn't already set at upload time.
+     */
+    private function resolveTemplate(Document $document, ?string $bankName): ?BankTemplate
+    {
+        if ($document->bank_template_id) {
+            return $document->bankTemplate;
+        }
+
+        if (! $bankName) {
+            return null;
+        }
+
+        $template = BankTemplate::firstOrCreate(
+            ['bank_name' => $bankName],
+            ['name' => $bankName, 'is_active' => true],
+        );
+
+        $document->update(['bank_template_id' => $template->id]);
+        $document->setRelation('bankTemplate', $template);
+
+        return $template;
     }
 
     private function buildReference(?string $bankName, ?string $from, ?string $to): string
