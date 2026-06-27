@@ -510,6 +510,7 @@ class DocumentService
     {
         return [
             'purchase_invoice' => [
+                'queued' => ['received', 'rejected'],
                 'received' => ['reviewed', 'approved', 'posted', 'disputed', 'rejected'],
                 'reviewed' => ['approved', 'posted', 'disputed'],
                 'approved' => ['posted', 'disputed'],

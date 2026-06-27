@@ -1,5 +1,6 @@
 @php
     $classes = match($status) {
+        'queued'         => 'bg-surface-alt text-ink-muted',
         'received'       => 'bg-blue-50 text-blue-700',
         'reviewed'       => 'bg-yellow-50 text-yellow-700',
         'approved'       => 'bg-green-50 text-green-700',

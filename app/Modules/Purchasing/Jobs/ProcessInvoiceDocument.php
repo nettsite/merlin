@@ -37,6 +37,12 @@ class ProcessInvoiceDocument implements ShouldQueue
             $service->process($this->document);
         } catch (LlmCreditExhaustedException $e) {
             $this->fail($e);
+
+            return;
+        }
+
+        if ($this->document->status === 'queued') {
+            $this->document->update(['status' => 'received']);
         }
     }
 
@@ -50,6 +56,7 @@ class ProcessInvoiceDocument implements ShouldQueue
         // Flag the document so the UI can distinguish "extraction failed"
         // from "still processing". Cleared on the next successful run.
         $this->document->update([
+            'status' => 'received',
             'metadata' => array_merge($this->document->metadata ?? [], [
                 'extraction_failed' => true,
             ]),

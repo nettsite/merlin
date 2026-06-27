@@ -641,6 +641,7 @@ new #[Layout('components.layout.app')] class extends Component
     @php
         $tabs = [
             '' => 'All',
+            'queued' => 'Queued',
             'received' => 'Received',
             'reviewed' => 'Reviewed',
             'approved' => 'Approved',

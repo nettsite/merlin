@@ -55,7 +55,7 @@ class DocumentService extends BaseDocumentService
         $document = Document::create([
             'document_type' => 'purchase_invoice',
             'direction' => 'inbound',
-            'status' => 'received',
+            'status' => 'queued',
             'currency' => $currency,
             'exchange_rate' => 1.0,
             'party_id' => $data['party_id'] ?? null,
@@ -75,14 +75,14 @@ class DocumentService extends BaseDocumentService
 
     public function reprocess(Document $doc, User $by): void
     {
-        if (! in_array($doc->status, ['received', 'reviewed', 'rejected', 'disputed'])) {
+        if (! in_array($doc->status, ['queued', 'received', 'reviewed', 'rejected', 'disputed'])) {
             throw new \InvalidArgumentException("Cannot reprocess a {$doc->status} invoice.");
         }
 
         DB::transaction(function () use ($doc, $by) {
             $doc->lines()->delete();
 
-            $doc->status = 'received';
+            $doc->status = 'queued';
             $doc->saveQuietly();
 
             $this->recordActivity($doc, $by, 'reprocess_queued', 'Invoice queued for reprocessing.');
