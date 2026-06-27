@@ -169,11 +169,41 @@ class DocumentService
                 $this->linkDocuments($doc, $invoice, 'payment_for');
 
                 if ($excess > 0.01) {
+                    // Shrink the matched line to the applied amount so the AR
+                    // account is only credited by what was actually cleared.
+                    $line->unit_price = $applyAmount;
+                    $line->line_total = $applyAmount;
+                    $line->saveQuietly();
+
+                    // Create an unallocated-receipt line for the excess. No
+                    // account assigned — user must allocate manually. Both lines
+                    // together still sum to the original bank credit, so the
+                    // bank account reconciles.
+                    $nextLineNumber = $doc->lines()->max('line_number') + 1;
+                    $doc->lines()->create([
+                        'line_number' => $nextLineNumber,
+                        'type' => 'service',
+                        'description' => "Unallocated receipt — excess over invoice {$invoice->document_number}",
+                        'quantity' => 1,
+                        'unit_price' => $excess,
+                        'line_total' => $excess,
+                        'tax_rate' => null,
+                        'tax_amount' => 0,
+                        'account_id' => null,
+                        'linked_document_id' => null,
+                        'metadata' => [
+                            'unallocated_receipt' => true,
+                            'source_invoice_id' => $invoice->id,
+                            'source_invoice_number' => $invoice->document_number,
+                            'original_credit_amount' => $amount,
+                        ],
+                    ]);
+
                     $currency = $doc->currency ?? $this->currencySettings->base_currency;
                     $this->recordActivity(
                         $doc, null, 'overpayment_noted',
                         sprintf(
-                            'Credit of %s %.2f against invoice %s (balance due %.2f): %.2f applied, %.2f unallocated.',
+                            '%s %.2f received against invoice %s (balance due %.2f): %.2f applied, %.2f split to unallocated receipt line.',
                             $currency, $amount, $invoice->document_number ?? $invoice->id,
                             $balanceDue, $applyAmount, $excess,
                         ),
