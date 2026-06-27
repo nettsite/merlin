@@ -150,19 +150,43 @@ class DocumentService
                 }
 
                 $amount = abs((float) $line->unit_price);
+                $balanceDue = (float) $invoice->balance_due;
 
-                if ($amount <= 0) {
+                if ($amount <= 0 || $balanceDue <= 0) {
                     continue;
                 }
 
+                $excess = max(0.0, $amount - $balanceDue);
+                $applyAmount = $excess > 0.01 ? $balanceDue : $amount;
+
                 $this->recordPayment(
                     doc: $invoice,
-                    amount: $amount,
+                    amount: $applyAmount,
                     date: $doc->issue_date ?? now(),
                     reference: $doc->reference,
                 );
 
                 $this->linkDocuments($doc, $invoice, 'payment_for');
+
+                if ($excess > 0.01) {
+                    $currency = $doc->currency ?? $this->currencySettings->base_currency;
+                    $this->recordActivity(
+                        $doc, null, 'overpayment_noted',
+                        sprintf(
+                            'Credit of %s %.2f against invoice %s (balance due %.2f): %.2f applied, %.2f unallocated.',
+                            $currency, $amount, $invoice->document_number ?? $invoice->id,
+                            $balanceDue, $applyAmount, $excess,
+                        ),
+                        [
+                            'invoice_id' => $invoice->id,
+                            'invoice_number' => $invoice->document_number,
+                            'credit_amount' => $amount,
+                            'applied_amount' => $applyAmount,
+                            'unallocated_amount' => $excess,
+                            'currency' => $currency,
+                        ],
+                    );
+                }
             }
         });
     }
