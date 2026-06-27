@@ -165,6 +165,7 @@ new #[Layout('components.layout.app')] class extends Component
                     </td>
                     <td class="px-4 py-3 text-right">
                         <div class="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <flux:button href="{{ route('accounts.show', $account->id) }}" wire:navigate size="sm" variant="ghost" icon="eye" />
                             @can('update', $account)
                                 <flux:button wire:click="edit('{{ $account->id }}')" size="sm" variant="ghost" icon="pencil" />
                             @endcan
