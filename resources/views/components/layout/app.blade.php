@@ -55,6 +55,8 @@
         </flux:dropdown>
     </flux:header>
 
+    <livewire:system-alerts />
+
     <flux:main class="bg-white p-0">
         {{ $slot }}
     </flux:main>

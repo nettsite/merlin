@@ -3,6 +3,7 @@
 namespace App\Modules\Core\Services;
 
 use App\Exceptions\LlmApiException;
+use App\Exceptions\LlmCreditExhaustedException;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Core\DTO\ExtractedBankStatement;
 use App\Modules\Core\Models\Document;
@@ -12,6 +13,7 @@ use App\Modules\Purchasing\DTO\ExtractedInvoice;
 use App\Modules\Purchasing\Settings\PurchasingSettings;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
@@ -400,6 +402,8 @@ class LlmService
             if ($response->successful() && isset($data['content'][0]['text'])) {
                 $usage = $data['usage'] ?? [];
 
+                Cache::forget('anthropic:credit_exhausted');
+
                 return $this->log(
                     loggable: $loggable,
                     requestBody: $body,
@@ -418,6 +422,22 @@ class LlmService
                 $lastError = $error;
 
                 continue;
+            }
+
+            // Credit exhausted — stop all processing until credits are added.
+            if (str_contains($error, 'credit balance is too low')) {
+                Cache::forever('anthropic:credit_exhausted', [
+                    'message' => $error,
+                    'detected_at' => now()->toIso8601String(),
+                ]);
+                $this->log(
+                    loggable: $loggable,
+                    requestBody: $body,
+                    rawResponse: '',
+                    startNs: $startNs,
+                    error: $error,
+                );
+                throw new LlmCreditExhaustedException("Anthropic credit exhausted: {$error}");
             }
 
             // Any other error (rate limit, server, bad request) is not a

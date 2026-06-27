@@ -2,10 +2,12 @@
 
 namespace App\Modules\Core\Jobs;
 
+use App\Exceptions\LlmCreditExhaustedException;
 use App\Modules\Core\Models\Document;
 use App\Modules\Core\Services\BankStatementProcessingService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 class ProcessBankStatementDocument implements ShouldQueue
@@ -23,10 +25,20 @@ class ProcessBankStatementDocument implements ShouldQueue
 
     public function handle(BankStatementProcessingService $service): void
     {
+        if (Cache::has('anthropic:credit_exhausted')) {
+            $this->fail(new LlmCreditExhaustedException('Anthropic credit exhausted; processing paused.'));
+
+            return;
+        }
+
         // process() appends lines; clear any from a previous failed attempt first.
         $this->document->lines()->delete();
 
-        $service->process($this->document, $this->userHint);
+        try {
+            $service->process($this->document, $this->userHint);
+        } catch (LlmCreditExhaustedException $e) {
+            $this->fail($e);
+        }
     }
 
     public function failed(\Throwable $e): void

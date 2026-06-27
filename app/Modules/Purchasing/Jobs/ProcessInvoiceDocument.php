@@ -2,10 +2,12 @@
 
 namespace App\Modules\Purchasing\Jobs;
 
+use App\Exceptions\LlmCreditExhaustedException;
 use App\Modules\Core\Models\Document;
 use App\Modules\Purchasing\Services\InvoiceProcessingService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
 class ProcessInvoiceDocument implements ShouldQueue
@@ -20,12 +22,22 @@ class ProcessInvoiceDocument implements ShouldQueue
 
     public function handle(InvoiceProcessingService $service): void
     {
+        if (Cache::has('anthropic:credit_exhausted')) {
+            $this->fail(new LlmCreditExhaustedException('Anthropic credit exhausted; processing paused.'));
+
+            return;
+        }
+
         // process() appends lines and never clears them. With $tries > 1 a
         // retry after a partial failure would duplicate every extracted line,
         // so drop any lines left behind by a previous attempt first.
         $this->document->lines()->delete();
 
-        $service->process($this->document);
+        try {
+            $service->process($this->document);
+        } catch (LlmCreditExhaustedException $e) {
+            $this->fail($e);
+        }
     }
 
     public function failed(\Throwable $e): void

@@ -8,6 +8,7 @@ use App\Modules\Core\Models\DocumentLine;
 use App\Modules\Core\Services\DocumentService;
 use App\Modules\Core\Services\Pdf\MagikaService;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Cache;
 use Livewire\Attributes\Layout;
 use Livewire\Volt\Component;
 use Livewire\WithFileUploads;
@@ -89,6 +90,19 @@ new #[Layout('components.layout.app')] class extends Component
             'uploadFiles.*'        => 'file|max:51200',
             'uploadContraAccountId' => 'required|uuid|exists:accounts,id',
         ]);
+
+        if (Cache::has('anthropic:credit_exhausted')) {
+            foreach ($this->uploadFiles as $file) {
+                $this->uploadResults[] = [
+                    'name'      => $file->getClientOriginalName(),
+                    'status'    => 'error',
+                    'reference' => null,
+                    'error'     => 'Anthropic credit exhausted. Add credits to your Anthropic account before uploading.',
+                ];
+            }
+
+            return;
+        }
 
         $magika = app(MagikaService::class);
 
@@ -309,7 +323,7 @@ new #[Layout('components.layout.app')] class extends Component
             ->paginate(25);
 
         $detail = $this->detailId
-            ? Document::with(['lines.account', 'lines.linkedDocument.party', 'contraAccount', 'bankTemplate'])
+            ? Document::with(['lines.account', 'lines.linkedDocument.party', 'contraAccount', 'bankTemplate', 'media'])
                 ->find($this->detailId)
             : null;
 
@@ -322,6 +336,7 @@ new #[Layout('components.layout.app')] class extends Component
         return [
             'rows'               => $rows,
             'detail'             => $detail,
+            'detailPdfUrl'       => $detail?->getFirstMedia('source_document')?->getUrl(),
             'bankAccounts'       => Account::active()->postable()
                 ->where(fn ($q) => $q->where('name', 'like', '%Bank%')
                     ->orWhere('name', 'like', '%Credit Card%')
@@ -564,6 +579,12 @@ new #[Layout('components.layout.app')] class extends Component
                         ])>
                             {{ ucfirst($detail->status) }}
                         </span>
+
+                        @if($detailPdfUrl)
+                            <flux:button href="{{ $detailPdfUrl }}" target="_blank" size="sm" variant="ghost" icon="document-text">
+                                View PDF
+                            </flux:button>
+                        @endif
 
                         @can('update', $detail)
                             @if($detail->status !== 'posted')
