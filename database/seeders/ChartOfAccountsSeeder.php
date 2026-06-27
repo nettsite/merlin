@@ -72,7 +72,7 @@ class ChartOfAccountsSeeder extends Seeder
             ['group' => '10', 'code' => '1010', 'name' => 'Bank — Savings Account'],
             ['group' => '10', 'code' => '1100', 'name' => 'Accounts Receivable'],
             ['group' => '10', 'code' => '1200', 'name' => 'GST Receivable'],
-            ['group' => '10', 'code' => '1300', 'name' => 'Over and Advance Payments'],
+            ['group' => '20', 'code' => '2400', 'name' => 'Over and Advance Payments'],
             ['group' => '15', 'code' => '1500', 'name' => 'Office Equipment'],
             ['group' => '15', 'code' => '1510', 'name' => 'Computer Equipment'],
 

@@ -65,7 +65,7 @@ class BankStatementProcessingService
             ->whereNotNull('document_number')
             ->pluck('id', 'document_number');
 
-        $advanceAccountId = Account::where('code', '1300')->value('id');
+        $advanceAccountId = Account::where('code', '2400')->value('id');
 
         // Pre-index all account codes to avoid N+1 per transaction.
         $accountCodeIndex = Account::pluck('id', 'code');

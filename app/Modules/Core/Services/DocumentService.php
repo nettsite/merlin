@@ -139,7 +139,7 @@ class DocumentService
         DB::transaction(function () use ($doc, $by) {
             $this->transition($doc, 'posted', $by, 'Posted to the general ledger.');
 
-            $advanceAccountId = Account::where('code', '1300')->value('id');
+            $advanceAccountId = Account::where('code', '2400')->value('id');
 
             foreach ($doc->lines()->with('linkedDocument')->get() as $line) {
                 // Only process credits (money received into the bank account).
