@@ -544,11 +544,13 @@ class DocumentService
                 'voided' => [],
             ],
             'bank_statement' => [
+                'queued' => ['received'],
                 'received' => ['reviewed', 'posted'],
                 'reviewed' => ['posted'],
                 'posted' => [],
             ],
             'credit_card_statement' => [
+                'queued' => ['received'],
                 'received' => ['reviewed', 'posted'],
                 'reviewed' => ['posted'],
                 'posted' => [],

@@ -38,6 +38,12 @@ class ProcessBankStatementDocument implements ShouldQueue
             $service->process($this->document, $this->userHint);
         } catch (LlmCreditExhaustedException $e) {
             $this->fail($e);
+
+            return;
+        }
+
+        if ($this->document->status === 'queued') {
+            $this->document->update(['status' => 'received']);
         }
     }
 
@@ -49,6 +55,7 @@ class ProcessBankStatementDocument implements ShouldQueue
         ]);
 
         $this->document->update([
+            'status' => 'received',
             'metadata' => array_merge($this->document->metadata ?? [], [
                 'extraction_failed' => true,
             ]),

@@ -136,7 +136,7 @@ new #[Layout('components.layout.app')] class extends Component
                 $doc = Document::create([
                     'document_type'      => 'bank_statement',
                     'direction'          => 'inbound',
-                    'status'             => 'received',
+                    'status'             => 'queued',
                     'contra_account_id'  => $this->uploadContraAccountId,
                     'bank_template_id'   => $templateId,
                     'requires_review'    => $templateId === null,
@@ -285,7 +285,7 @@ new #[Layout('components.layout.app')] class extends Component
 
         $doc->lines()->delete();
         $doc->update([
-            'status' => 'received',
+            'status' => 'queued',
             'metadata' => array_merge($doc->metadata ?? [], array_filter(['user_hint' => $hint])),
         ]);
         $doc->activities()->create([
@@ -345,7 +345,7 @@ new #[Layout('components.layout.app')] class extends Component
             'allAccounts'        => Account::active()->postable()->orderBy('code')->get(),
             'bankTemplates'      => BankTemplate::active()->orderBy('name')->get(),
             'outstandingInvoices' => $outstandingInvoices,
-            'statuses'           => ['received', 'reviewed', 'posted'],
+            'statuses'           => ['queued', 'received', 'reviewed', 'posted'],
         ];
     }
 }; ?>
@@ -357,6 +357,7 @@ new #[Layout('components.layout.app')] class extends Component
             <flux:input wire:model.live.debounce.300ms="search" placeholder="Search statements…" icon="magnifying-glass" size="sm" class="w-64" />
             <flux:select wire:model.live="statusFilter" size="sm" class="w-40">
                 <option value="">All statuses</option>
+                <option value="queued">Queued</option>
                 <option value="received">Received</option>
                 <option value="reviewed">Reviewed</option>
                 <option value="posted">Posted</option>
@@ -414,6 +415,7 @@ new #[Layout('components.layout.app')] class extends Component
                         <td class="px-4 py-3">
                             <span @class([
                                 'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
+                                'bg-surface-alt text-ink-muted' => $stmt->status === 'queued',
                                 'bg-warning/10 text-warning-600' => $stmt->status === 'received',
                                 'bg-info/10 text-info-600' => $stmt->status === 'reviewed',
                                 'bg-success/10 text-success-600' => $stmt->status === 'posted',
@@ -573,6 +575,7 @@ new #[Layout('components.layout.app')] class extends Component
                     <div class="flex items-center gap-2 shrink-0">
                         <span @class([
                             'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
+                            'bg-surface-alt text-ink-muted' => $detail->status === 'queued',
                             'bg-warning/10 text-warning-600' => $detail->status === 'received',
                             'bg-info/10 text-info-600' => $detail->status === 'reviewed',
                             'bg-success/10 text-success-600' => $detail->status === 'posted',
