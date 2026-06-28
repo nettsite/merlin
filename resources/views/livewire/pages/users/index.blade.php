@@ -51,10 +51,13 @@ new #[Layout('components.layout.app')] class extends Component
 
     protected function store(): void
     {
+        $this->authorize('create', User::class);
+
         $this->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|email|max:255|unique:users,email',
             'password' => 'required|string|min:8|same:passwordConfirmation',
+            'selectedRole' => 'nullable|string|exists:roles,name',
         ]);
 
         $user = User::create([
@@ -70,9 +73,13 @@ new #[Layout('components.layout.app')] class extends Component
 
     protected function update(): void
     {
+        $user = User::findOrFail($this->editingId);
+        $this->authorize('update', $user);
+
         $rules = [
             'name' => 'required|string|max:255',
             'email' => "required|email|max:255|unique:users,email,{$this->editingId}",
+            'selectedRole' => 'nullable|string|exists:roles,name',
         ];
 
         if ($this->password !== '') {
@@ -81,7 +88,6 @@ new #[Layout('components.layout.app')] class extends Component
 
         $this->validate($rules);
 
-        $user = User::findOrFail($this->editingId);
         $data = ['name' => $this->name, 'email' => $this->email];
 
         if ($this->password !== '') {

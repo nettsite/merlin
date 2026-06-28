@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Laravel business management app for small businesses. Core feature: LLM-assisted supplier invoice processing (PDFs/DOCX/XLSX/CSV → GL transactions). Previous Filament-based version at `~/Projects/merlin` is **read-only spec** — do not copy Filament files from it.
 
-**Stack:** Laravel 13, Livewire 3, Flux UI (livewire/flux), Volt (single-file components), Alpine.js, Tailwind CSS 3, Pest + PHPUnit 12, Laravel Breeze (Livewire stack) for auth.
+**Stack:** Laravel 13, Livewire 4, Flux UI (livewire/flux), Volt (single-file components), Alpine.js, Tailwind CSS 3, Pest + PHPUnit 12, Laravel Breeze (Livewire stack) for auth.
 
 ## Commands
 
@@ -212,6 +212,10 @@ Current metadata shapes:
 - **Source documents** are stored via Spatie MediaLibrary on the `source_document` collection of `Document`. Access the file URL with `$document->getFirstMedia('source_document')?->getUrl()`. Always eager-load `'media'` when listing documents to avoid N+1.
 - **Flux icons:** `<flux:icon.document-text class="size-4" />` — not `<x-flux::icon>` or `<flux:icon name="...">`.
 - **`$user->can()` not `$user->hasRole()`** — roles are user-configurable; permissions are the stable contract.
+- **Livewire public properties are client-writable by default.** Any plain scalar (`string`, `int`, `bool`, `array`) public property can be tampered in the request payload. Two mitigations — use both where appropriate:
+  1. `#[Locked]` — prevents the client from modifying the property at all. Required on any ID, session key, or security-boundary value that the server sets and the client must not change (e.g. `$sessionId`, `$editingId`). Typed Eloquent model properties (`public Post $post`) are locked automatically; plain scalars are not.
+  2. `$this->authorize()` inside every mutating action method — `mount()` authorization only gates initial render; subsequent wire calls bypass it. Each public action that writes data must re-check authorization independently, regardless of what `create()` / `edit()` checked before it (e.g. `save()` must authorize, not just `create()`).
+- **Zip uploads: sanitize entry names before `extractTo()`.** PHP's `ZipArchive::extractTo()` does not protect against Zip Slip on Linux. Reject any entry whose name contains `..` or starts with `/` before extracting.
 
 ---
 

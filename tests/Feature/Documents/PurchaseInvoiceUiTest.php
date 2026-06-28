@@ -219,7 +219,7 @@ it('confirmReprocess dispatches the job and resets status', function (): void {
         ->assertHasNoErrors();
 
     // Status reset + lines cleared (reprocess invariant).
-    expect($doc->fresh()->status)->toBe('received')
+    expect($doc->fresh()->status)->toBe('queued')
         ->and($doc->fresh()->lines()->count())->toBe(0);
 });
 

@@ -2,6 +2,7 @@
 
 use App\Modules\Core\Models\Role;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Locked;
 use Livewire\Attributes\Validate;
 use Livewire\Volt\Component;
 use Livewire\WithPagination;
@@ -15,6 +16,7 @@ new #[Layout('components.layout.app')] class extends Component
 
     public bool $showForm = false;
 
+    #[Locked]
     public ?string $editingId = null;
 
     #[Validate('required|string|max:255')]
@@ -56,6 +58,7 @@ new #[Layout('components.layout.app')] class extends Component
 
     public function save(): void
     {
+        $this->authorize($this->editingId ? 'update' : 'create', \App\Modules\Core\Models\User::class);
         $this->validate();
 
         $permissions = array_keys(array_filter($this->selectedPermissions));

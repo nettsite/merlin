@@ -210,14 +210,14 @@ it('reprocess deletes existing lines before re-running the pipeline', function (
     expect($doc->fresh()->lines()->count())->toBe(0);
 });
 
-it('reprocess resets status to received and records activity', function (): void {
+it('reprocess resets status to queued and records activity', function (): void {
     Queue::fake();
 
     $doc = Document::factory()->purchaseInvoice()->create(['status' => 'disputed']);
 
     $this->service->reprocess($doc, $this->user);
 
-    expect($doc->fresh()->status)->toBe('received');
+    expect($doc->fresh()->status)->toBe('queued');
     expect($doc->activities()->where('activity_type', 'reprocess_queued')->count())->toBe(1);
 });
 

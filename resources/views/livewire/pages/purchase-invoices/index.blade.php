@@ -142,6 +142,17 @@ new #[Layout('components.layout.app')] class extends Component
                 $zip = new \ZipArchive();
 
                 if ($zip->open($file->getRealPath()) === true) {
+                    // Reject Zip Slip: entry names with ../ or absolute paths
+                    // would escape the target directory on extractTo().
+                    for ($i = 0; $i < $zip->numFiles; $i++) {
+                        $entryName = $zip->getNameIndex($i);
+                        if ($entryName !== false && (str_contains($entryName, '..') || str_starts_with($entryName, '/'))) {
+                            $zip->close();
+                            $this->addError('uploadFiles', 'ZIP contains unsafe file paths and was rejected.');
+                            return;
+                        }
+                    }
+
                     $dir = sys_get_temp_dir().'/merlin-zip-'.uniqid();
                     mkdir($dir, 0700, true);
                     $zip->extractTo($dir);

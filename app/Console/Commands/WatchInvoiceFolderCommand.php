@@ -149,12 +149,17 @@ class WatchInvoiceFolderCommand extends Command
 
         $logContent = match ($type) {
             'already-processed' => "File has already been imported into the system.\nSHA256: ".hash_file('sha256', $destination),
-            default => $e
-                ? $e->getMessage()."\n\n".$e->getTraceAsString()
-                : 'Unknown error',
+            default => $e ? $e->getMessage() : 'Unknown error',
         };
 
         file_put_contents($failedDir.'/'.$stem.'.'.$type.'.log', $logContent);
+
+        if ($e && $type !== 'already-processed') {
+            Log::error('invoices:watch — '.$type, [
+                'file' => $basename,
+                'exception' => $e,
+            ]);
+        }
     }
 
     /**

@@ -2,10 +2,13 @@
 
 namespace App\Livewire\Concerns;
 
+use Livewire\Attributes\Locked;
+
 trait HasCrudForm
 {
     public bool $showForm = false;
 
+    #[Locked]
     public ?string $editingId = null;
 
     abstract protected function fillForm(string $id): void;

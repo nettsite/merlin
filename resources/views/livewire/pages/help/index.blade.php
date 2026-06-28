@@ -7,10 +7,12 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Locked;
 use Livewire\Volt\Component;
 
 new #[Layout('components.layout.app')] class extends Component
 {
+    #[Locked]
     public string $sessionId = '';
 
     public string $input = '';

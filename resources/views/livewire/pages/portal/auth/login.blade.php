@@ -1,7 +1,9 @@
 <?php
 
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Session;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Layout;
 use Livewire\Volt\Component;
@@ -12,6 +14,11 @@ new #[Layout('layouts.guest')] class extends Component
     public string $password = '';
     public bool $remember = false;
 
+    private function throttleKey(): string
+    {
+        return Str::lower($this->email).'|'.request()->ip();
+    }
+
     public function login(): void
     {
         $this->validate([
@@ -19,12 +26,28 @@ new #[Layout('layouts.guest')] class extends Component
             'password' => ['required', 'string'],
         ]);
 
+        $key = $this->throttleKey();
+
+        if (RateLimiter::tooManyAttempts($key, 5)) {
+            $seconds = RateLimiter::availableIn($key);
+
+            throw ValidationException::withMessages([
+                'email' => trans('auth.throttle', [
+                    'seconds' => $seconds,
+                    'minutes' => ceil($seconds / 60),
+                ]),
+            ]);
+        }
+
         if (! Auth::guard('portal')->attempt(['email' => $this->email, 'password' => $this->password], $this->remember)) {
+            RateLimiter::hit($key);
+
             throw ValidationException::withMessages([
                 'email' => __('auth.failed'),
             ]);
         }
 
+        RateLimiter::clear($key);
         Session::regenerate();
 
         // Phase C3: redirect to portal invoice list once it exists
