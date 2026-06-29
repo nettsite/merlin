@@ -5,7 +5,7 @@ use App\Modules\Core\Models\PaymentTerm;
 use App\Modules\Billing\Settings\BillingSettings;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Validate;
-use Livewire\Volt\Component;
+use Livewire\Component;
 
 new #[Layout('components.layout.app')] class extends Component
 {

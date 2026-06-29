@@ -3,7 +3,7 @@
 use App\Modules\Core\Settings\CurrencySettings;
 use App\Modules\Core\Models\Document;
 use Livewire\Attributes\Layout;
-use Livewire\Volt\Component;
+use Livewire\Component;
 
 new #[Layout('components.layout.app')] class extends Component
 {

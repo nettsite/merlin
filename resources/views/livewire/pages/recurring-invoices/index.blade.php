@@ -14,7 +14,7 @@ use App\Modules\Purchasing\Services\ExchangeRateService;
 use App\Modules\Core\Settings\CurrencySettings;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Validate;
-use Livewire\Volt\Component;
+use Livewire\Component;
 
 new #[Layout('components.layout.app')] class extends Component
 {

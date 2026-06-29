@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Locked;
-use Livewire\Volt\Component;
+use Livewire\Component;
 
 new #[Layout('components.layout.app')] class extends Component
 {

@@ -8,7 +8,7 @@ use App\Modules\Core\Models\Party;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Services\PartyService;
 use Illuminate\Support\Facades\Mail;
-use Livewire\Volt\Volt;
+use Livewire\Livewire;
 
 beforeEach(function (): void {
     BillingEmailTemplate::firstOrCreate(
@@ -204,7 +204,7 @@ it('openSendModal resolves recipients into component state', function (): void {
 
     $this->actingAs(sendUserWith(['documents-view-any', 'documents-view', 'can-send-sales-invoices']));
 
-    $component = Volt::test('pages.sales-invoices.index')
+    $component = Livewire::test('pages.sales-invoices.index')
         ->call('openDetail', $doc->id)
         ->call('openSendModal')
         ->assertSet('showSendModal', true);
@@ -224,7 +224,7 @@ it('confirmSend sends mail and marks doc sent', function (): void {
 
     $this->actingAs(sendUserWith(['documents-view-any', 'documents-view', 'can-send-sales-invoices']));
 
-    Volt::test('pages.sales-invoices.index')
+    Livewire::test('pages.sales-invoices.index')
         ->call('openDetail', $doc->id)
         ->call('openSendModal')
         ->call('confirmSend');

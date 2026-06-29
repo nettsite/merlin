@@ -4,7 +4,7 @@ use App\Modules\Core\Models\Document;
 use App\Modules\Core\Models\Party;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Services\PartyService;
-use Livewire\Volt\Volt;
+use Livewire\Livewire;
 
 function supplierUserWith(array $permissions): User
 {
@@ -31,13 +31,13 @@ it('redirects unauthenticated users to login', function (): void {
 it('forbids users without parties-view-any', function (): void {
     $this->actingAs(User::factory()->create());
 
-    Volt::test('pages.suppliers.index')->assertForbidden();
+    Livewire::test('pages.suppliers.index')->assertForbidden();
 });
 
 it('renders the suppliers page for permitted users', function (): void {
     $this->actingAs(supplierUserWith(['parties-view-any']));
 
-    Volt::test('pages.suppliers.index')
+    Livewire::test('pages.suppliers.index')
         ->assertOk()
         ->assertSee('Suppliers');
 });
@@ -46,14 +46,14 @@ it('lists existing suppliers', function (): void {
     makeSupplier(['legal_name' => 'Visible Supplier Ltd']);
     $this->actingAs(supplierUserWith(['parties-view-any']));
 
-    Volt::test('pages.suppliers.index')
+    Livewire::test('pages.suppliers.index')
         ->assertSee('Visible Supplier Ltd');
 });
 
 it('creates a supplier', function (): void {
     $this->actingAs(supplierUserWith(['parties-view-any', 'parties-create']));
 
-    Volt::test('pages.suppliers.index')
+    Livewire::test('pages.suppliers.index')
         ->call('create')
         ->assertSet('showForm', true)
         ->set('legalName', 'New Supplier Pty Ltd')
@@ -69,7 +69,7 @@ it('creates a supplier', function (): void {
 it('requires legalName on create', function (): void {
     $this->actingAs(supplierUserWith(['parties-view-any', 'parties-create']));
 
-    Volt::test('pages.suppliers.index')
+    Livewire::test('pages.suppliers.index')
         ->call('create')
         ->set('legalName', '')
         ->call('save')
@@ -80,7 +80,7 @@ it('edits a supplier', function (): void {
     $party = makeSupplier(['legal_name' => 'Original Name Pty Ltd']);
     $this->actingAs(supplierUserWith(['parties-view-any', 'parties-update']));
 
-    Volt::test('pages.suppliers.index')
+    Livewire::test('pages.suppliers.index')
         ->call('edit', $party->id)
         ->assertSet('showForm', true)
         ->assertSet('legalName', 'Original Name Pty Ltd')
@@ -99,7 +99,7 @@ it('soft-deletes a supplier', function (): void {
     $party = makeSupplier();
     $this->actingAs(supplierUserWith(['parties-view-any', 'parties-delete']));
 
-    Volt::test('pages.suppliers.index')
+    Livewire::test('pages.suppliers.index')
         ->call('delete', $party->id)
         ->assertHasNoErrors();
 
@@ -111,7 +111,7 @@ it('filters by search term', function (): void {
     makeSupplier(['legal_name' => 'Beta Ltd']);
     $this->actingAs(supplierUserWith(['parties-view-any']));
 
-    Volt::test('pages.suppliers.index')
+    Livewire::test('pages.suppliers.index')
         ->set('search', 'Alpha')
         ->assertSee('Alpha Corp')
         ->assertDontSee('Beta Ltd');
@@ -122,7 +122,7 @@ it('filters by status', function (): void {
     makeSupplier(['legal_name' => 'Pending Supplier', 'status' => 'pending']);
     $this->actingAs(supplierUserWith(['parties-view-any']));
 
-    Volt::test('pages.suppliers.index')
+    Livewire::test('pages.suppliers.index')
         ->set('filterStatus', 'active')
         ->assertSee('Active Supplier')
         ->assertDontSee('Pending Supplier');
@@ -132,7 +132,7 @@ it('approves a supplier to active status', function (): void {
     $party = makeSupplier(['status' => 'pending']);
     $this->actingAs(supplierUserWith(['parties-view-any', 'parties-update']));
 
-    Volt::test('pages.suppliers.index')
+    Livewire::test('pages.suppliers.index')
         ->call('approveSupplier', $party->id)
         ->assertHasNoErrors();
 
@@ -143,7 +143,7 @@ it('deactivates a supplier', function (): void {
     $party = makeSupplier(['status' => 'active']);
     $this->actingAs(supplierUserWith(['parties-view-any', 'parties-update']));
 
-    Volt::test('pages.suppliers.index')
+    Livewire::test('pages.suppliers.index')
         ->call('deactivateSupplier', $party->id)
         ->assertHasNoErrors();
 
@@ -155,7 +155,7 @@ it('bulk approves selected suppliers', function (): void {
     $inactive = makeSupplier(['status' => 'inactive']);
     $this->actingAs(supplierUserWith(['parties-view-any', 'parties-update']));
 
-    Volt::test('pages.suppliers.index')
+    Livewire::test('pages.suppliers.index')
         ->set('selectedIds', [$pending->id, $inactive->id])
         ->call('bulkApprove')
         ->assertHasNoErrors()
@@ -170,7 +170,7 @@ it('bulk deactivates selected suppliers', function (): void {
     $active = makeSupplier(['status' => 'active']);
     $this->actingAs(supplierUserWith(['parties-view-any', 'parties-update']));
 
-    Volt::test('pages.suppliers.index')
+    Livewire::test('pages.suppliers.index')
         ->set('selectedIds', [$active->id])
         ->call('bulkDeactivate')
         ->assertHasNoErrors();
@@ -183,7 +183,7 @@ it('selectAllFiltered applies bulk action to every match', function (): void {
     $b = makeSupplier(['status' => 'pending']);
     $this->actingAs(supplierUserWith(['parties-view-any', 'parties-update']));
 
-    Volt::test('pages.suppliers.index')
+    Livewire::test('pages.suppliers.index')
         ->set('filterStatus', 'pending')
         ->call('markSelectAllFiltered')
         ->assertSet('selectAllFiltered', true)
@@ -198,7 +198,7 @@ it('renders the supplier detail page with party info', function (): void {
     $party = makeSupplier(['legal_name' => 'Show Test Supplier', 'primary_email' => 'show@test.co.za']);
     $this->actingAs(supplierUserWith(['parties-view-any', 'parties-view']));
 
-    Volt::test('pages.suppliers.show', ['id' => $party->id])
+    Livewire::test('pages.suppliers.show', ['id' => $party->id])
         ->assertOk()
         ->assertSee('Show Test Supplier')
         ->assertSee('show@test.co.za');
@@ -214,7 +214,7 @@ it('lists supplier invoices on the show page', function (): void {
     ]);
     $this->actingAs(supplierUserWith(['parties-view-any', 'parties-view']));
 
-    Volt::test('pages.suppliers.show', ['id' => $party->id])
+    Livewire::test('pages.suppliers.show', ['id' => $party->id])
         ->assertOk()
         ->assertSee('received');
 });
@@ -237,7 +237,7 @@ it('filters supplier invoices by status on the show page', function (): void {
     ]);
     $this->actingAs(supplierUserWith(['parties-view-any', 'parties-view']));
 
-    Volt::test('pages.suppliers.show', ['id' => $party->id])
+    Livewire::test('pages.suppliers.show', ['id' => $party->id])
         ->set('invoiceStatus', 'posted')
         ->assertSee('PINV-TEST-001')
         ->assertDontSee('PINV-TEST-002');
@@ -247,7 +247,7 @@ it('approves a supplier from the show page', function (): void {
     $party = makeSupplier(['status' => 'pending']);
     $this->actingAs(supplierUserWith(['parties-view-any', 'parties-view', 'parties-update']));
 
-    Volt::test('pages.suppliers.show', ['id' => $party->id])
+    Livewire::test('pages.suppliers.show', ['id' => $party->id])
         ->call('approveSupplier')
         ->assertHasNoErrors();
 
@@ -258,7 +258,7 @@ it('edits a supplier from the show page', function (): void {
     $party = makeSupplier(['legal_name' => 'Before Edit Ltd']);
     $this->actingAs(supplierUserWith(['parties-view-any', 'parties-view', 'parties-update']));
 
-    Volt::test('pages.suppliers.show', ['id' => $party->id])
+    Livewire::test('pages.suppliers.show', ['id' => $party->id])
         ->call('openEditForm')
         ->assertSet('showEditForm', true)
         ->assertSet('legalName', 'Before Edit Ltd')

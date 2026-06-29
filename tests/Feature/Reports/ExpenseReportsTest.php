@@ -4,7 +4,7 @@ use App\Modules\Accounting\Models\Account;
 use App\Modules\Core\Models\Document;
 use App\Modules\Core\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Livewire\Volt\Volt;
+use Livewire\Livewire;
 
 uses(RefreshDatabase::class);
 
@@ -43,7 +43,7 @@ it('aggregates posted invoice lines by account', function (): void {
     expenseInvoice($this->account, 100.00);
     expenseInvoice($this->account, 200.00);
 
-    $rows = Volt::test('pages.reports.expenses-by-account')->viewData('rows');
+    $rows = Livewire::test('pages.reports.expenses-by-account')->viewData('rows');
 
     expect($rows)->toHaveCount(1)
         ->and($rows->first()->account_code)->toBe('5210')
@@ -56,7 +56,7 @@ it('excludes non-posted invoices from the account report', function (): void {
     expenseInvoice($this->account, 100.00);
     expenseInvoice($this->account, 999.00, status: 'received');
 
-    $rows = Volt::test('pages.reports.expenses-by-account')->viewData('rows');
+    $rows = Livewire::test('pages.reports.expenses-by-account')->viewData('rows');
 
     expect((float) $rows->first()->total_excl)->toBe(100.00);
 });
@@ -65,7 +65,7 @@ it('excludes soft-deleted documents from the account report', function (): void 
     expenseInvoice($this->account, 100.00);
     expenseInvoice($this->account, 500.00)->delete();
 
-    $rows = Volt::test('pages.reports.expenses-by-account')->viewData('rows');
+    $rows = Livewire::test('pages.reports.expenses-by-account')->viewData('rows');
 
     expect((float) $rows->first()->total_excl)->toBe(100.00);
 });

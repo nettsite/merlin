@@ -4,7 +4,7 @@ use App\Modules\Core\Models\ChatMessage;
 use App\Modules\Core\Models\ChatSession;
 use App\Modules\Core\Models\User;
 use App\Services\ClaudeChatService;
-use Livewire\Volt\Volt;
+use Livewire\Livewire;
 
 it('redirects guests to login', function (): void {
     $this->get(route('help'))->assertRedirect(route('login'));
@@ -23,7 +23,7 @@ it('creates a chat session on first visit', function (): void {
 
     expect(ChatSession::where('user_id', $user->id)->exists())->toBeFalse();
 
-    Volt::actingAs($user)->test('pages.help.index');
+    Livewire::actingAs($user)->test('pages.help.index');
 
     expect(ChatSession::where('user_id', $user->id)->exists())->toBeTrue();
 });
@@ -32,7 +32,7 @@ it('reuses an existing session', function (): void {
     $user = User::factory()->create();
     $session = ChatSession::create(['user_id' => $user->id]);
 
-    Volt::actingAs($user)->test('pages.help.index');
+    Livewire::actingAs($user)->test('pages.help.index');
 
     expect(ChatSession::where('user_id', $user->id)->count())->toBe(1);
     expect(ChatSession::where('user_id', $user->id)->first()->id)->toBe($session->id);
@@ -45,7 +45,7 @@ it('loads existing messages on mount', function (): void {
     ChatMessage::create(['chat_session_id' => $session->id, 'role' => 'user', 'content' => 'Hello']);
     ChatMessage::create(['chat_session_id' => $session->id, 'role' => 'assistant', 'content' => 'Hi there!']);
 
-    $component = Volt::actingAs($user)->test('pages.help.index');
+    $component = Livewire::actingAs($user)->test('pages.help.index');
 
     expect($component->get('messages'))->toHaveCount(2);
     expect($component->get('messages.0.content'))->toBe('Hello');
@@ -63,7 +63,7 @@ it('sends a message, persists it, and appends the reply', function (): void {
 
     app()->instance(ClaudeChatService::class, $mockService);
 
-    $component = Volt::actingAs($user)->test('pages.help.index');
+    $component = Livewire::actingAs($user)->test('pages.help.index');
     $sessionId = $component->get('sessionId');
 
     $component->set('input', 'How do I upload an invoice?')->call('send');
@@ -80,7 +80,7 @@ it('sends a message, persists it, and appends the reply', function (): void {
 it('validates that the input is required', function (): void {
     $user = User::factory()->create();
 
-    Volt::actingAs($user)
+    Livewire::actingAs($user)
         ->test('pages.help.index')
         ->set('input', '')
         ->call('send')
@@ -95,7 +95,7 @@ it('shows a fallback message when the API fails', function (): void {
 
     app()->instance(ClaudeChatService::class, $mockService);
 
-    $component = Volt::actingAs($user)
+    $component = Livewire::actingAs($user)
         ->test('pages.help.index')
         ->set('input', 'What is Merlin?')
         ->call('send');
@@ -111,7 +111,7 @@ it('clears history', function (): void {
 
     ChatMessage::create(['chat_session_id' => $session->id, 'role' => 'user', 'content' => 'test']);
 
-    $component = Volt::actingAs($user)
+    $component = Livewire::actingAs($user)
         ->test('pages.help.index')
         ->call('clearHistory');
 

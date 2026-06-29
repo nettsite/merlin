@@ -3,7 +3,7 @@
 use App\Livewire\Concerns\HasCrudTable;
 use App\Modules\Core\Models\Person;
 use Livewire\Attributes\Layout;
-use Livewire\Volt\Component;
+use Livewire\Component;
 
 new #[Layout('components.layout.app')] class extends Component
 {

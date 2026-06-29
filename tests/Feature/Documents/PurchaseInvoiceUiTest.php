@@ -5,7 +5,7 @@ use App\Modules\Core\Models\Document;
 use App\Modules\Core\Models\DocumentLine;
 use App\Modules\Core\Models\User;
 use Illuminate\Support\Facades\Queue;
-use Livewire\Volt\Volt;
+use Livewire\Livewire;
 use Spatie\Permission\Models\Permission;
 
 /**
@@ -35,7 +35,7 @@ it('shows an extraction-failed badge on flagged invoices', function (): void {
         'metadata' => ['extraction_failed' => true],
     ]);
 
-    Volt::test('pages.purchase-invoices.index')
+    Livewire::test('pages.purchase-invoices.index')
         ->assertSee('Extraction failed');
 });
 
@@ -52,7 +52,7 @@ it('editLine populates editingLine from the existing record', function (): void 
         'tax_rate' => 15,
     ]);
 
-    Volt::test('pages.purchase-invoices.index')
+    Livewire::test('pages.purchase-invoices.index')
         ->set('detailId', $doc->id)
         ->call('editLine', $line->id)
         ->assertSet('editingLineId', $line->id)
@@ -72,7 +72,7 @@ it('saveLine persists changes when user has update permission', function (): voi
         'unit_price' => 100,
     ]);
 
-    Volt::test('pages.purchase-invoices.index')
+    Livewire::test('pages.purchase-invoices.index')
         ->set('detailId', $doc->id)
         ->call('editLine', $line->id)
         ->set('editingLine.description', 'New desc')
@@ -98,7 +98,7 @@ it('saveLine rejects negative quantity', function (): void {
     $doc = Document::factory()->purchaseInvoice()->create();
     $line = DocumentLine::factory()->for($doc)->create();
 
-    Volt::test('pages.purchase-invoices.index')
+    Livewire::test('pages.purchase-invoices.index')
         ->set('detailId', $doc->id)
         ->call('editLine', $line->id)
         ->set('editingLine.quantity', '-5')
@@ -113,7 +113,7 @@ it('cancelLine clears editing state without saving', function (): void {
     $doc = Document::factory()->purchaseInvoice()->create();
     $line = DocumentLine::factory()->for($doc)->create(['description' => 'Original']);
 
-    Volt::test('pages.purchase-invoices.index')
+    Livewire::test('pages.purchase-invoices.index')
         ->set('detailId', $doc->id)
         ->call('editLine', $line->id)
         ->set('editingLine.description', 'Changed but not saved')
@@ -131,7 +131,7 @@ it('markReviewed advances status when user has can-review-invoices', function ()
 
     $doc = Document::factory()->purchaseInvoice()->create(['status' => 'received']);
 
-    Volt::test('pages.purchase-invoices.index')
+    Livewire::test('pages.purchase-invoices.index')
         ->set('detailId', $doc->id)
         ->call('markReviewed')
         ->assertHasNoErrors();
@@ -144,7 +144,7 @@ it('markReviewed is forbidden without can-review-invoices', function (): void {
 
     $doc = Document::factory()->purchaseInvoice()->create(['status' => 'received']);
 
-    Volt::test('pages.purchase-invoices.index')
+    Livewire::test('pages.purchase-invoices.index')
         ->set('detailId', $doc->id)
         ->call('markReviewed')
         ->assertForbidden();
@@ -157,7 +157,7 @@ it('approve transitions to approved with can-authorise-invoices', function (): v
 
     $doc = Document::factory()->purchaseInvoice()->create(['status' => 'reviewed']);
 
-    Volt::test('pages.purchase-invoices.index')
+    Livewire::test('pages.purchase-invoices.index')
         ->set('detailId', $doc->id)
         ->call('approve')
         ->assertHasNoErrors();
@@ -170,7 +170,7 @@ it('post transitions to posted with can-post-invoices', function (): void {
 
     $doc = Document::factory()->purchaseInvoice()->create(['status' => 'approved']);
 
-    Volt::test('pages.purchase-invoices.index')
+    Livewire::test('pages.purchase-invoices.index')
         ->set('detailId', $doc->id)
         ->call('post')
         ->assertHasNoErrors();
@@ -183,7 +183,7 @@ it('confirmDispute requires a reason', function (): void {
 
     $doc = Document::factory()->purchaseInvoice()->create(['status' => 'received']);
 
-    Volt::test('pages.purchase-invoices.index')
+    Livewire::test('pages.purchase-invoices.index')
         ->set('detailId', $doc->id)
         ->call('confirmDispute')
         ->assertHasErrors(['actionReason']);
@@ -194,7 +194,7 @@ it('confirmDispute moves doc to disputed when reason supplied', function (): voi
 
     $doc = Document::factory()->purchaseInvoice()->create(['status' => 'received']);
 
-    Volt::test('pages.purchase-invoices.index')
+    Livewire::test('pages.purchase-invoices.index')
         ->set('detailId', $doc->id)
         ->set('actionReason', 'Amount looks wrong')
         ->call('confirmDispute')
@@ -213,7 +213,7 @@ it('confirmReprocess dispatches the job and resets status', function (): void {
     $doc = Document::factory()->purchaseInvoice()->create(['status' => 'disputed']);
     DocumentLine::factory()->for($doc)->count(2)->create();
 
-    Volt::test('pages.purchase-invoices.index')
+    Livewire::test('pages.purchase-invoices.index')
         ->set('detailId', $doc->id)
         ->call('confirmReprocess')
         ->assertHasNoErrors();
@@ -228,7 +228,7 @@ it('openReprocessConfirm is forbidden without permission', function (): void {
 
     $doc = Document::factory()->purchaseInvoice()->create(['status' => 'received']);
 
-    Volt::test('pages.purchase-invoices.index')
+    Livewire::test('pages.purchase-invoices.index')
         ->set('detailId', $doc->id)
         ->call('openReprocessConfirm')
         ->assertForbidden();
@@ -241,7 +241,7 @@ it('quickMarkReviewed is a no-op when doc is not in an eligible status', functio
 
     $doc = Document::factory()->purchaseInvoice()->create(['status' => 'approved']);
 
-    Volt::test('pages.purchase-invoices.index')
+    Livewire::test('pages.purchase-invoices.index')
         ->call('quickMarkReviewed', $doc->id)
         ->assertHasNoErrors();
 

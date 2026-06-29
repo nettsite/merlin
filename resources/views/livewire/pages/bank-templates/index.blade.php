@@ -5,7 +5,7 @@ use App\Livewire\Concerns\HasCrudTable;
 use App\Modules\Core\Models\BankTemplate;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Validate;
-use Livewire\Volt\Component;
+use Livewire\Component;
 
 new #[Layout('components.layout.app')] class extends Component
 {

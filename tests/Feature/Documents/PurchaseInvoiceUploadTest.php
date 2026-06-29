@@ -4,7 +4,7 @@ use App\Modules\Core\Models\Document;
 use App\Modules\Core\Models\User;
 use App\Modules\Purchasing\Services\DocumentService;
 use Illuminate\Http\UploadedFile;
-use Livewire\Volt\Volt;
+use Livewire\Livewire;
 
 function userWithDocumentPermissions(): User
 {
@@ -22,7 +22,7 @@ it('accepts a single pdf upload', function (): void {
     $this->actingAs(userWithDocumentPermissions());
     $file = UploadedFile::fake()->create('invoice.pdf', 100, 'application/pdf');
 
-    Volt::test('pages.purchase-invoices.index')
+    Livewire::test('pages.purchase-invoices.index')
         ->set('uploadFiles', [$file])
         ->call('processUpload')
         ->assertHasNoErrors(['uploadFiles']);
@@ -36,7 +36,7 @@ it('accepts a single docx upload', function (): void {
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
     );
 
-    Volt::test('pages.purchase-invoices.index')
+    Livewire::test('pages.purchase-invoices.index')
         ->set('uploadFiles', [$file])
         ->call('processUpload')
         ->assertHasNoErrors(['uploadFiles']);
@@ -50,7 +50,7 @@ it('accepts a single xlsx upload', function (): void {
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     );
 
-    Volt::test('pages.purchase-invoices.index')
+    Livewire::test('pages.purchase-invoices.index')
         ->set('uploadFiles', [$file])
         ->call('processUpload')
         ->assertHasNoErrors(['uploadFiles']);
@@ -60,7 +60,7 @@ it('accepts a single csv upload', function (): void {
     $this->actingAs(userWithDocumentPermissions());
     $file = UploadedFile::fake()->create('invoice.csv', 100, 'text/csv');
 
-    Volt::test('pages.purchase-invoices.index')
+    Livewire::test('pages.purchase-invoices.index')
         ->set('uploadFiles', [$file])
         ->call('processUpload')
         ->assertHasNoErrors(['uploadFiles']);
@@ -79,7 +79,7 @@ it('routes single upload through DocumentService::createFromFile', function (): 
 
     $file = UploadedFile::fake()->create('invoice.pdf', 100, 'application/pdf');
 
-    Volt::test('pages.purchase-invoices.index')
+    Livewire::test('pages.purchase-invoices.index')
         ->set('uploadFiles', [$file])
         ->call('processUpload');
 });
@@ -105,7 +105,7 @@ it('queues multiple files independently', function (): void {
             ->andReturn(['document' => $doc, 'duplicate' => false]);
     });
 
-    $component = Volt::test('pages.purchase-invoices.index')
+    $component = Livewire::test('pages.purchase-invoices.index')
         ->set('uploadFiles', $files)
         ->call('processUpload');
 
@@ -136,7 +136,7 @@ it('detects duplicates per file in a batch', function (): void {
         UploadedFile::fake()->create('new.pdf', 100, 'application/pdf'),
     ];
 
-    $component = Volt::test('pages.purchase-invoices.index')
+    $component = Livewire::test('pages.purchase-invoices.index')
         ->set('uploadFiles', $files)
         ->call('processUpload');
 
@@ -168,7 +168,7 @@ it('continues processing remaining files when one throws', function (): void {
             });
     });
 
-    $component = Volt::test('pages.purchase-invoices.index')
+    $component = Livewire::test('pages.purchase-invoices.index')
         ->set('uploadFiles', [$good1, $bad, $good2])
         ->call('processUpload');
 
@@ -188,7 +188,7 @@ it('rejects batches over 50 files', function (): void {
         range(1, 51)
     );
 
-    $component = Volt::test('pages.purchase-invoices.index')
+    $component = Livewire::test('pages.purchase-invoices.index')
         ->set('uploadFiles', $files)
         ->call('processUpload');
 
@@ -206,7 +206,7 @@ it('keeps modal open and populates uploadResults after submission', function ():
 
     $file = UploadedFile::fake()->create('invoice.pdf', 100, 'application/pdf');
 
-    $component = Volt::test('pages.purchase-invoices.index')
+    $component = Livewire::test('pages.purchase-invoices.index')
         ->set('showUpload', true)
         ->set('uploadFiles', [$file])
         ->call('processUpload');
@@ -220,7 +220,7 @@ it('resetForMore clears results and returns to form', function (): void {
 
     $file = UploadedFile::fake()->create('invoice.pdf', 100, 'application/pdf');
 
-    $component = Volt::test('pages.purchase-invoices.index')
+    $component = Livewire::test('pages.purchase-invoices.index')
         ->set('uploadFiles', [$file])
         ->call('processUpload');
 
@@ -237,7 +237,7 @@ it('openUpload clears stale results on reopen', function (): void {
 
     $file = UploadedFile::fake()->create('invoice.pdf', 100, 'application/pdf');
 
-    $component = Volt::test('pages.purchase-invoices.index')
+    $component = Livewire::test('pages.purchase-invoices.index')
         ->set('uploadFiles', [$file])
         ->call('processUpload');
 
@@ -273,7 +273,7 @@ it('extracts and processes PDFs from a ZIP', function (): void {
 
     $zipFile = UploadedFile::fake()->createWithContent('invoices.zip', file_get_contents($zipPath));
 
-    $component = Volt::test('pages.purchase-invoices.index')
+    $component = Livewire::test('pages.purchase-invoices.index')
         ->set('uploadFiles', [$zipFile])
         ->call('processUpload');
 
@@ -305,7 +305,7 @@ it('silently skips unsupported files inside a ZIP', function (): void {
 
     $zipFile = UploadedFile::fake()->createWithContent('mixed.zip', file_get_contents($zipPath));
 
-    $component = Volt::test('pages.purchase-invoices.index')
+    $component = Livewire::test('pages.purchase-invoices.index')
         ->set('uploadFiles', [$zipFile])
         ->call('processUpload');
 

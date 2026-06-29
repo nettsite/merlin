@@ -1,7 +1,7 @@
 <?php
 
 use App\Modules\Core\Models\User;
-use Livewire\Volt\Volt;
+use Livewire\Livewire;
 use Spatie\Permission\Models\Permission;
 
 /**
@@ -28,13 +28,13 @@ function permittedUser(string ...$permissions): User
 it('accounts page renders for permitted user', function (): void {
     $this->actingAs(permittedUser('accounts-view-any'));
 
-    Volt::test('pages.accounts.index')->assertOk();
+    Livewire::test('pages.accounts.index')->assertOk();
 });
 
 it('accounts page denies user without permission', function (): void {
     $this->actingAs(User::factory()->create());
 
-    Volt::test('pages.accounts.index')->assertForbidden();
+    Livewire::test('pages.accounts.index')->assertForbidden();
 });
 
 // --- account-groups ---
@@ -42,13 +42,13 @@ it('accounts page denies user without permission', function (): void {
 it('account-groups page renders for permitted user', function (): void {
     $this->actingAs(permittedUser('account-groups-view-any'));
 
-    Volt::test('pages.account-groups.index')->assertOk();
+    Livewire::test('pages.account-groups.index')->assertOk();
 });
 
 it('account-groups page denies user without permission', function (): void {
     $this->actingAs(User::factory()->create());
 
-    Volt::test('pages.account-groups.index')->assertForbidden();
+    Livewire::test('pages.account-groups.index')->assertForbidden();
 });
 
 // --- llm-logs ---
@@ -56,13 +56,13 @@ it('account-groups page denies user without permission', function (): void {
 it('llm-logs page renders for permitted user', function (): void {
     $this->actingAs(permittedUser('llm-logs-view-any'));
 
-    Volt::test('pages.llm-logs.index')->assertOk();
+    Livewire::test('pages.llm-logs.index')->assertOk();
 });
 
 it('llm-logs page denies user without permission', function (): void {
     $this->actingAs(User::factory()->create());
 
-    Volt::test('pages.llm-logs.index')->assertForbidden();
+    Livewire::test('pages.llm-logs.index')->assertForbidden();
 });
 
 // --- posting-rules ---
@@ -70,13 +70,13 @@ it('llm-logs page denies user without permission', function (): void {
 it('posting-rules page renders for permitted user', function (): void {
     $this->actingAs(permittedUser('posting-rules-view-any'));
 
-    Volt::test('pages.posting-rules.index')->assertOk();
+    Livewire::test('pages.posting-rules.index')->assertOk();
 });
 
 it('posting-rules page denies user without permission', function (): void {
     $this->actingAs(User::factory()->create());
 
-    Volt::test('pages.posting-rules.index')->assertForbidden();
+    Livewire::test('pages.posting-rules.index')->assertForbidden();
 });
 
 // --- roles ---
@@ -85,13 +85,13 @@ it('roles page renders for permitted user', function (): void {
     // Roles page is authorized via UserPolicy::viewAny ('users-view-any')
     $this->actingAs(permittedUser('users-view-any'));
 
-    Volt::test('pages.roles.index')->assertOk();
+    Livewire::test('pages.roles.index')->assertOk();
 });
 
 it('roles page denies user without permission', function (): void {
     $this->actingAs(User::factory()->create());
 
-    Volt::test('pages.roles.index')->assertForbidden();
+    Livewire::test('pages.roles.index')->assertForbidden();
 });
 
 // --- users ---
@@ -99,13 +99,13 @@ it('roles page denies user without permission', function (): void {
 it('users page renders for permitted user', function (): void {
     $this->actingAs(permittedUser('users-view-any'));
 
-    Volt::test('pages.users.index')->assertOk();
+    Livewire::test('pages.users.index')->assertOk();
 });
 
 it('users page denies user without permission', function (): void {
     $this->actingAs(User::factory()->create());
 
-    Volt::test('pages.users.index')->assertForbidden();
+    Livewire::test('pages.users.index')->assertForbidden();
 });
 
 // --- reports/* ---
@@ -113,23 +113,23 @@ it('users page denies user without permission', function (): void {
 it('expenses-by-account report renders', function (): void {
     $this->actingAs(User::factory()->create());
 
-    Volt::test('pages.reports.expenses-by-account')->assertOk();
+    Livewire::test('pages.reports.expenses-by-account')->assertOk();
 });
 
 it('expenses-by-supplier report renders', function (): void {
     $this->actingAs(User::factory()->create());
 
-    Volt::test('pages.reports.expenses-by-supplier')->assertOk();
+    Livewire::test('pages.reports.expenses-by-supplier')->assertOk();
 });
 
 it('llm-performance report renders for permitted user', function (): void {
     $this->actingAs(permittedUser('view-llm-summary'));
 
-    Volt::test('pages.reports.llm-performance')->assertOk();
+    Livewire::test('pages.reports.llm-performance')->assertOk();
 });
 
 it('llm-performance report denies user without permission', function (): void {
     $this->actingAs(User::factory()->create());
 
-    Volt::test('pages.reports.llm-performance')->assertForbidden();
+    Livewire::test('pages.reports.llm-performance')->assertForbidden();
 });

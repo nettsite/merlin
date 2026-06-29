@@ -7,7 +7,7 @@ use App\Modules\Core\Models\Document;
 use Carbon\Carbon;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Validate;
-use Livewire\Volt\Component;
+use Livewire\Component;
 use Livewire\WithPagination;
 
 new #[Layout('components.layout.app')] class extends Component

@@ -4,7 +4,7 @@ use App\Modules\Core\Models\Role;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\Validate;
-use Livewire\Volt\Component;
+use Livewire\Component;
 use Livewire\WithPagination;
 use Spatie\Permission\Models\Permission;
 

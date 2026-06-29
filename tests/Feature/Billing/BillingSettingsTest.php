@@ -6,7 +6,7 @@ use App\Modules\Accounting\Models\AccountType;
 use App\Modules\Billing\Settings\BillingSettings;
 use App\Modules\Core\Models\PaymentTerm;
 use App\Modules\Core\Models\User;
-use Livewire\Volt\Volt;
+use Livewire\Livewire;
 
 function billingAdminUser(): User
 {
@@ -42,13 +42,13 @@ it('redirects unauthenticated users to login', function (): void {
 it('forbids users without access-panel', function (): void {
     $this->actingAs(User::factory()->create());
 
-    Volt::test('pages.settings.billing')->assertForbidden();
+    Livewire::test('pages.settings.billing')->assertForbidden();
 });
 
 it('renders the billing settings page', function (): void {
     $this->actingAs(billingAdminUser());
 
-    Volt::test('pages.settings.billing')
+    Livewire::test('pages.settings.billing')
         ->assertOk()
         ->assertSee('Billing Settings');
 });
@@ -60,7 +60,7 @@ it('saves all settings', function (): void {
     $liability = liabilityAccount();
     $paymentTerm = PaymentTerm::factory()->create(['name' => 'Test Term']);
 
-    Volt::test('pages.settings.billing')
+    Livewire::test('pages.settings.billing')
         ->set('defaultReceivableAccountId', $asset->id)
         ->set('defaultContraAccountId', $asset->id)
         ->set('defaultPaymentTermId', $paymentTerm->id)
@@ -90,7 +90,7 @@ it('loads existing settings on mount', function (): void {
 
     $this->actingAs(billingAdminUser());
 
-    Volt::test('pages.settings.billing')
+    Livewire::test('pages.settings.billing')
         ->assertSet('defaultReceivableAccountId', $asset->id)
         ->assertSet('defaultPaymentTermId', $paymentTerm->id)
         ->assertSet('billingPeriodDay', 10);
@@ -99,12 +99,12 @@ it('loads existing settings on mount', function (): void {
 it('rejects billingPeriodDay outside 1..28', function (): void {
     $this->actingAs(billingAdminUser());
 
-    Volt::test('pages.settings.billing')
+    Livewire::test('pages.settings.billing')
         ->set('billingPeriodDay', 0)
         ->call('save')
         ->assertHasErrors(['billingPeriodDay']);
 
-    Volt::test('pages.settings.billing')
+    Livewire::test('pages.settings.billing')
         ->set('billingPeriodDay', 29)
         ->call('save')
         ->assertHasErrors(['billingPeriodDay']);
@@ -113,7 +113,7 @@ it('rejects billingPeriodDay outside 1..28', function (): void {
 it('rejects non-existent account ids', function (): void {
     $this->actingAs(billingAdminUser());
 
-    Volt::test('pages.settings.billing')
+    Livewire::test('pages.settings.billing')
         ->set('defaultReceivableAccountId', '00000000-0000-0000-0000-000000000000')
         ->call('save')
         ->assertHasErrors(['defaultReceivableAccountId']);
@@ -122,7 +122,7 @@ it('rejects non-existent account ids', function (): void {
 it('clears nullable fields when blanked', function (): void {
     $this->actingAs(billingAdminUser());
 
-    Volt::test('pages.settings.billing')
+    Livewire::test('pages.settings.billing')
         ->set('defaultReceivableAccountId', '')
         ->set('defaultContraAccountId', '')
         ->set('defaultPaymentTermId', '')

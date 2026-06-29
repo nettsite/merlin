@@ -4,7 +4,7 @@ use App\Modules\Core\Models\Document;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Services\DocumentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Livewire\Volt\Volt;
+use Livewire\Livewire;
 use Spatie\Permission\Models\Permission;
 
 uses(RefreshDatabase::class);
@@ -135,7 +135,7 @@ it('records a payment through the purchase invoices page', function (): void {
 
     $invoice = postedPurchaseInvoice();
 
-    Volt::test('pages.purchase-invoices.index')
+    Livewire::test('pages.purchase-invoices.index')
         ->set('detailId', $invoice->id)
         ->set('showDetail', true)
         ->call('openPaymentModal')

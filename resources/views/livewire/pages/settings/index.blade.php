@@ -12,7 +12,7 @@ use App\Modules\Purchasing\Settings\PurchasingSettings;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Url;
-use Livewire\Volt\Component;
+use Livewire\Component;
 use Livewire\WithFileUploads;
 use NettSite\NettMail\Models\Template;
 use Nettsite\NettMail\Core\Domain\Templates\TemplateType;

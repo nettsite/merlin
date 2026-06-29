@@ -6,7 +6,7 @@ use App\Modules\Core\Models\DocumentRelationship;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Services\DocumentService;
 use App\Modules\Core\Services\PartyService;
-use Livewire\Volt\Volt;
+use Livewire\Livewire;
 
 function sipClient()
 {
@@ -176,7 +176,7 @@ it('opens payment modal with balance pre-filled', function () {
     $user->givePermissionTo(['documents-view-any', 'documents-view', 'can-record-payments']);
     $this->actingAs($user);
 
-    Volt::test('pages.sales-invoices.index')
+    Livewire::test('pages.sales-invoices.index')
         ->call('openDetail', $invoice->id)
         ->call('openPaymentModal')
         ->assertSet('showPaymentModal', true)
@@ -189,7 +189,7 @@ it('records payment through the Volt UI', function () {
     $user->givePermissionTo(['documents-view-any', 'documents-view', 'can-record-payments']);
     $this->actingAs($user);
 
-    Volt::test('pages.sales-invoices.index')
+    Livewire::test('pages.sales-invoices.index')
         ->call('openDetail', $invoice->id)
         ->call('openPaymentModal')
         ->set('paymentForm.amount', '1000.00')
@@ -207,7 +207,7 @@ it('forbids recording payment without permission', function () {
     $user->givePermissionTo(['documents-view-any', 'documents-view']);
     $this->actingAs($user);
 
-    Volt::test('pages.sales-invoices.index')
+    Livewire::test('pages.sales-invoices.index')
         ->call('openDetail', $invoice->id)
         ->call('openPaymentModal')
         ->assertForbidden();

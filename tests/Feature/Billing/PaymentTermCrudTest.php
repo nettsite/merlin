@@ -3,7 +3,7 @@
 use App\Modules\Core\Enums\PaymentTermRule;
 use App\Modules\Core\Models\PaymentTerm;
 use App\Modules\Core\Models\User;
-use Livewire\Volt\Volt;
+use Livewire\Livewire;
 
 function ptUserWith(array $permissions): User
 {
@@ -20,13 +20,13 @@ it('redirects unauthenticated users to login', function (): void {
 it('forbids users without payment-terms-view-any', function (): void {
     $this->actingAs(User::factory()->create());
 
-    Volt::test('pages.payment-terms.index')->assertForbidden();
+    Livewire::test('pages.payment-terms.index')->assertForbidden();
 });
 
 it('renders the payment terms page', function (): void {
     $this->actingAs(ptUserWith(['payment-terms-view-any']));
 
-    Volt::test('pages.payment-terms.index')
+    Livewire::test('pages.payment-terms.index')
         ->assertOk()
         ->assertSee('Payment Terms');
 });
@@ -35,13 +35,13 @@ it('lists existing terms', function (): void {
     PaymentTerm::factory()->daysAfterInvoice(30)->create(['name' => '30 Days Net']);
     $this->actingAs(ptUserWith(['payment-terms-view-any']));
 
-    Volt::test('pages.payment-terms.index')->assertSee('30 Days Net');
+    Livewire::test('pages.payment-terms.index')->assertSee('30 Days Net');
 });
 
 it('creates a days-after-invoice term', function (): void {
     $this->actingAs(ptUserWith(['payment-terms-view-any', 'payment-terms-create']));
 
-    Volt::test('pages.payment-terms.index')
+    Livewire::test('pages.payment-terms.index')
         ->call('create')
         ->assertSet('showForm', true)
         ->set('name', '30 Days')
@@ -61,7 +61,7 @@ it('creates a days-after-invoice term', function (): void {
 it('creates an nth-of-following-month term', function (): void {
     $this->actingAs(ptUserWith(['payment-terms-view-any', 'payment-terms-create']));
 
-    Volt::test('pages.payment-terms.index')
+    Livewire::test('pages.payment-terms.index')
         ->call('create')
         ->set('name', '25th of Month')
         ->set('rule', PaymentTermRule::NthOfFollowingMonth->value)
@@ -80,7 +80,7 @@ it('creates an nth-of-following-month term', function (): void {
 it('requires days when rule uses days', function (): void {
     $this->actingAs(ptUserWith(['payment-terms-view-any', 'payment-terms-create']));
 
-    Volt::test('pages.payment-terms.index')
+    Livewire::test('pages.payment-terms.index')
         ->call('create')
         ->set('name', 'Missing Days')
         ->set('rule', PaymentTermRule::DaysAfterInvoice->value)
@@ -92,7 +92,7 @@ it('requires days when rule uses days', function (): void {
 it('requires dayOfMonth when rule uses it', function (): void {
     $this->actingAs(ptUserWith(['payment-terms-view-any', 'payment-terms-create']));
 
-    Volt::test('pages.payment-terms.index')
+    Livewire::test('pages.payment-terms.index')
         ->call('create')
         ->set('name', 'Missing Day')
         ->set('rule', PaymentTermRule::NthOfFollowingMonth->value)
@@ -105,7 +105,7 @@ it('edits a term', function (): void {
     $term = PaymentTerm::factory()->daysAfterInvoice(30)->create(['name' => 'Original Name']);
     $this->actingAs(ptUserWith(['payment-terms-view-any', 'payment-terms-update']));
 
-    Volt::test('pages.payment-terms.index')
+    Livewire::test('pages.payment-terms.index')
         ->call('edit', $term->id)
         ->assertSet('showForm', true)
         ->assertSet('name', 'Original Name')
@@ -126,7 +126,7 @@ it('soft-deletes a term', function (): void {
     $term = PaymentTerm::factory()->create();
     $this->actingAs(ptUserWith(['payment-terms-view-any', 'payment-terms-delete']));
 
-    Volt::test('pages.payment-terms.index')
+    Livewire::test('pages.payment-terms.index')
         ->call('delete', $term->id)
         ->assertHasNoErrors();
 
@@ -138,7 +138,7 @@ it('filters by search term', function (): void {
     PaymentTerm::factory()->create(['name' => 'Beta Term']);
     $this->actingAs(ptUserWith(['payment-terms-view-any']));
 
-    Volt::test('pages.payment-terms.index')
+    Livewire::test('pages.payment-terms.index')
         ->set('search', 'Alpha')
         ->assertSee('Alpha Term')
         ->assertDontSee('Beta Term');

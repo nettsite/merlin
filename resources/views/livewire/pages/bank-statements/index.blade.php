@@ -10,7 +10,7 @@ use App\Modules\Core\Services\Pdf\MagikaService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Livewire\Attributes\Layout;
-use Livewire\Volt\Component;
+use Livewire\Component;
 use Livewire\WithFileUploads;
 use Livewire\WithPagination;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;

@@ -6,7 +6,7 @@ use App\Modules\Core\Models\User;
 use App\Modules\Core\Settings\CompanySettings;
 use App\Modules\Core\Settings\CurrencySettings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Livewire\Volt\Volt;
+use Livewire\Livewire;
 use Tests\TestCase;
 
 class CurrencySettingsTest extends TestCase
@@ -25,7 +25,7 @@ class CurrencySettingsTest extends TestCase
     {
         $this->actingAs($this->adminUser());
 
-        Volt::test('pages.settings.general')
+        Livewire::test('pages.settings.general')
             ->set('companyName', 'Test Company (Pty) Ltd')
             ->set('baseCurrency', 'USD')
             ->set('locale', 'en_US')

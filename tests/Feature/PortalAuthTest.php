@@ -9,7 +9,7 @@ use App\Modules\Core\Services\PartyService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
-use Livewire\Volt\Volt;
+use Livewire\Livewire;
 
 // --- Helpers ---
 
@@ -53,7 +53,7 @@ function portalInvoice(Party $client): Document
 it('null-password person cannot log in', function (): void {
     portalPerson('nopass@example.com');
 
-    Volt::test('pages.portal.auth.login')
+    Livewire::test('pages.portal.auth.login')
         ->set('email', 'nopass@example.com')
         ->set('password', 'anything')
         ->call('login')
@@ -66,7 +66,7 @@ it('person with password can log in via portal guard', function (): void {
     $person = portalPerson('login@example.com');
     $person->forceFill(['password' => Hash::make('Secret1234!')])->save();
 
-    Volt::test('pages.portal.auth.login')
+    Livewire::test('pages.portal.auth.login')
         ->set('email', 'login@example.com')
         ->set('password', 'Secret1234!')
         ->call('login')
@@ -105,7 +105,7 @@ it('person can set password from a valid invite link', function (): void {
     preg_match('/set-password\/([^?]+)/', $url, $matches);
     $token = $matches[1];
 
-    Volt::test('pages.portal.auth.set-password', ['token' => $token])
+    Livewire::test('pages.portal.auth.set-password', ['token' => $token])
         ->set('email', 'invite@example.com')
         ->set('password', 'NewPassword1!')
         ->set('password_confirmation', 'NewPassword1!')
@@ -124,7 +124,7 @@ it('person cannot set password from an expired invite token', function (): void 
     $token = Password::broker('portal')->createToken($person);
     Password::broker('portal')->deleteToken($person);
 
-    Volt::test('pages.portal.auth.set-password', ['token' => $token])
+    Livewire::test('pages.portal.auth.set-password', ['token' => $token])
         ->set('email', 'expired@example.com')
         ->set('password', 'NewPassword1!')
         ->set('password_confirmation', 'NewPassword1!')

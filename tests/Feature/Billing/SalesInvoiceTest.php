@@ -10,7 +10,7 @@ use App\Modules\Core\Models\User;
 use App\Modules\Core\Services\DocumentService;
 use App\Modules\Core\Services\PartyService;
 use Illuminate\Support\Facades\Mail;
-use Livewire\Volt\Volt;
+use Livewire\Livewire;
 
 beforeEach(function (): void {
     BillingEmailTemplate::firstOrCreate(
@@ -55,13 +55,13 @@ it('redirects unauthenticated users to login', function (): void {
 it('forbids users without documents-view-any', function (): void {
     $this->actingAs(User::factory()->create());
 
-    Volt::test('pages.sales-invoices.index')->assertForbidden();
+    Livewire::test('pages.sales-invoices.index')->assertForbidden();
 });
 
 it('renders the sales invoices page', function (): void {
     $this->actingAs(siUserWith(['documents-view-any']));
 
-    Volt::test('pages.sales-invoices.index')
+    Livewire::test('pages.sales-invoices.index')
         ->assertOk()
         ->assertSee('Sales Invoices');
 });
@@ -152,7 +152,7 @@ it('send transitions invoice to sent', function (): void {
     $doc = siDraft($client);
     $this->actingAs(siUserWith(['documents-view-any', 'documents-view', 'can-send-sales-invoices']));
 
-    Volt::test('pages.sales-invoices.index')
+    Livewire::test('pages.sales-invoices.index')
         ->call('openDetail', $doc->id)
         ->call('openSendModal')
         ->call('confirmSend');
@@ -164,7 +164,7 @@ it('voids a draft invoice', function (): void {
     $doc = siDraft();
     $this->actingAs(siUserWith(['documents-view-any', 'documents-view', 'can-void-sales-invoices']));
 
-    Volt::test('pages.sales-invoices.index')
+    Livewire::test('pages.sales-invoices.index')
         ->call('openDetail', $doc->id)
         ->call('void');
 
@@ -178,7 +178,7 @@ it('voids a sent invoice', function (): void {
 
     $this->actingAs(siUserWith(['documents-view-any', 'documents-view', 'can-void-sales-invoices']));
 
-    Volt::test('pages.sales-invoices.index')
+    Livewire::test('pages.sales-invoices.index')
         ->call('openDetail', $doc->id)
         ->call('void');
 
@@ -204,7 +204,7 @@ it('creates an invoice through the Volt UI', function (): void {
     $client = siClient();
     $this->actingAs(siUserWith(['documents-view-any', 'documents-view', 'documents-create']));
 
-    Volt::test('pages.sales-invoices.index')
+    Livewire::test('pages.sales-invoices.index')
         ->call('openCreate')
         ->assertSet('showCreateModal', true)
         ->set('createForm.party_id', $client->id)

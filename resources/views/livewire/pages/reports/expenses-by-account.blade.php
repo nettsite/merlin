@@ -5,7 +5,7 @@ use App\Modules\Core\Settings\CurrencySettings;
 use App\Modules\Core\Models\DocumentLine;
 use Illuminate\Support\Carbon;
 use Livewire\Attributes\Layout;
-use Livewire\Volt\Component;
+use Livewire\Component;
 
 new #[Layout('components.layout.app')] class extends Component
 {

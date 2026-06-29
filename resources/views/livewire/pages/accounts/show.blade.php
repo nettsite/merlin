@@ -3,7 +3,7 @@
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Core\Models\DocumentLine;
 use Livewire\Attributes\Layout;
-use Livewire\Volt\Component;
+use Livewire\Component;
 use Livewire\WithPagination;
 
 new #[Layout('components.layout.app')] class extends Component

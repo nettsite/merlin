@@ -5,7 +5,7 @@ namespace Tests\Feature\Settings;
 use App\Modules\Core\Models\User;
 use App\Modules\Purchasing\Settings\PurchasingSettings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Livewire\Volt\Volt;
+use Livewire\Livewire;
 use Tests\TestCase;
 
 class PurchasingSettingsTest extends TestCase
@@ -24,7 +24,7 @@ class PurchasingSettingsTest extends TestCase
     {
         $this->actingAs($this->adminUser());
 
-        Volt::test('pages.settings.purchasing')
+        Livewire::test('pages.settings.purchasing')
             ->set('defaultPayableAccount', '2001')
             ->set('taxDefaultRate', 20.0)
             ->set('taxLabel', 'GST')

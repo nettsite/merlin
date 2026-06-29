@@ -4,7 +4,7 @@ use App\Modules\Core\Models\Party;
 use App\Modules\Core\Models\PaymentTerm;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Services\PartyService;
-use Livewire\Volt\Volt;
+use Livewire\Livewire;
 
 function clientUserWith(array $permissions): User
 {
@@ -31,13 +31,13 @@ it('redirects unauthenticated users to login', function (): void {
 it('forbids users without parties-view-any', function (): void {
     $this->actingAs(User::factory()->create());
 
-    Volt::test('pages.clients.index')->assertForbidden();
+    Livewire::test('pages.clients.index')->assertForbidden();
 });
 
 it('renders the clients page', function (): void {
     $this->actingAs(clientUserWith(['parties-view-any']));
 
-    Volt::test('pages.clients.index')
+    Livewire::test('pages.clients.index')
         ->assertOk()
         ->assertSee('Clients');
 });
@@ -46,13 +46,13 @@ it('lists existing clients', function (): void {
     makeClient(['legal_name' => 'Acme Corp', 'trading_name' => 'Acme Corp']);
     $this->actingAs(clientUserWith(['parties-view-any']));
 
-    Volt::test('pages.clients.index')->assertSee('Acme Corp');
+    Livewire::test('pages.clients.index')->assertSee('Acme Corp');
 });
 
 it('creates a client', function (): void {
     $this->actingAs(clientUserWith(['parties-view-any', 'parties-create']));
 
-    Volt::test('pages.clients.index')
+    Livewire::test('pages.clients.index')
         ->call('create')
         ->assertSet('showForm', true)
         ->set('legalName', 'New Client Ltd')
@@ -71,7 +71,7 @@ it('edits a client payment term', function (): void {
     $term = PaymentTerm::factory()->daysAfterInvoice(30)->create(['name' => '30 Days']);
     $this->actingAs(clientUserWith(['parties-view-any', 'parties-update']));
 
-    Volt::test('pages.clients.index')
+    Livewire::test('pages.clients.index')
         ->call('edit', $client->id)
         ->assertSet('showForm', true)
         ->assertSet('legalName', 'Edit Me Ltd')
@@ -87,7 +87,7 @@ it('soft-deletes a client', function (): void {
     $client = makeClient(['legal_name' => 'Delete Me Ltd']);
     $this->actingAs(clientUserWith(['parties-view-any', 'parties-delete']));
 
-    Volt::test('pages.clients.index')
+    Livewire::test('pages.clients.index')
         ->call('delete', $client->id)
         ->assertSet('showForm', false);
 
@@ -103,5 +103,5 @@ it('does not show suppliers in the clients list', function (): void {
 
     $this->actingAs(clientUserWith(['parties-view-any']));
 
-    Volt::test('pages.clients.index')->assertDontSee('Only A Supplier Ltd');
+    Livewire::test('pages.clients.index')->assertDontSee('Only A Supplier Ltd');
 });

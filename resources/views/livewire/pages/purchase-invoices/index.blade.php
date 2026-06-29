@@ -11,7 +11,7 @@ use App\Modules\Purchasing\Services\ExchangeRateService;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\On;
-use Livewire\Volt\Component;
+use Livewire\Component;
 use Livewire\WithFileUploads;
 use Livewire\WithPagination;
 

@@ -13,7 +13,7 @@ use App\Modules\Core\Services\PartyService;
 use App\Modules\Core\Settings\CurrencySettings;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Mail;
-use Livewire\Volt\Volt;
+use Livewire\Livewire;
 
 beforeEach(function (): void {
     BillingEmailTemplate::firstOrCreate(
@@ -74,7 +74,7 @@ it('redirects unauthenticated users to login', function (): void {
 it('renders the recurring invoices page', function (): void {
     $this->actingAs(riUserWith(['recurring-invoices-view-any']));
 
-    Volt::test('pages.recurring-invoices.index')
+    Livewire::test('pages.recurring-invoices.index')
         ->assertOk()
         ->assertSee('Recurring Invoices');
 });
@@ -599,13 +599,13 @@ it('pauses an active template and reactivates it', function (): void {
         'currency' => 'ZAR',
     ]);
 
-    Volt::test('pages.recurring-invoices.index')
+    Livewire::test('pages.recurring-invoices.index')
         ->call('pause', $template->id)
         ->assertOk();
 
     expect($template->fresh()->status)->toBe(RecurringInvoiceStatus::Paused);
 
-    Volt::test('pages.recurring-invoices.index')
+    Livewire::test('pages.recurring-invoices.index')
         ->call('activate', $template->id)
         ->assertOk();
 
@@ -626,7 +626,7 @@ it('forbids pause and activate without update permission', function (): void {
         'currency' => 'ZAR',
     ]);
 
-    Volt::test('pages.recurring-invoices.index')
+    Livewire::test('pages.recurring-invoices.index')
         ->call('pause', $template->id)
         ->assertForbidden();
 
@@ -634,7 +634,7 @@ it('forbids pause and activate without update permission', function (): void {
 
     $template->update(['status' => RecurringInvoiceStatus::Paused]);
 
-    Volt::test('pages.recurring-invoices.index')
+    Livewire::test('pages.recurring-invoices.index')
         ->call('activate', $template->id)
         ->assertForbidden();
 
