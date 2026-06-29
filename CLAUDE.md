@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Laravel business management app for small businesses. Core feature: LLM-assisted supplier invoice processing (PDFs/DOCX/XLSX/CSV → GL transactions). Previous Filament-based version at `~/Projects/merlin` is **read-only spec** — do not copy Filament files from it.
 
-**Stack:** Laravel 13, Livewire 4, Flux UI (livewire/flux), Volt (single-file components), Alpine.js, Tailwind CSS 3, Pest + PHPUnit 12, Laravel Breeze (Livewire stack) for auth.
+**Stack:** Laravel 13, Livewire 4, Flux UI (livewire/flux), Alpine.js, Tailwind CSS 3, Pest + PHPUnit 12, Laravel Breeze (Livewire stack) for auth.
 
 ## Commands
 
@@ -71,11 +71,11 @@ app/Exceptions/     — InvalidDocumentStateException, InvalidFileTypeException,
 
 **Party model uses Class Table Inheritance:** `Party` is the parent; `Person` and `Business` share its primary key. Use `$party->person` / `$party->business` and `$party->displayName`.
 
-### Volt Pages (`resources/views/livewire/pages/`)
+### Pages (`resources/views/livewire/pages/`)
 
-All pages are Volt single-file components. CRUD pages use `HasCrudTable` + `HasCrudForm` concerns.
+All pages are Livewire 4 native single-file components (`new class extends Component`). CRUD pages use `HasCrudTable` + `HasCrudForm` concerns.
 
-Routes use `Volt::route()` unless marked *view*. Any test that renders a view requires a built Vite manifest (`npm run build`).
+Routes use `Route::livewire()` unless marked *view*. Any test that renders a view requires a built Vite manifest (`npm run build`).
 
 | Route | File | Notes |
 |---|---|---|
