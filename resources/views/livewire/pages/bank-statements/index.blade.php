@@ -336,7 +336,9 @@ new #[Layout('components.layout.app')] class extends Component
         return [
             'rows'               => $rows,
             'detail'             => $detail,
-            'detailPdfUrl'       => $detail?->getFirstMedia('source_document')?->getUrl(),
+            'detailPdfUrl'       => ($detailMedia = $detail?->getFirstMedia('source_document'))
+                ? route('documents.media', $detailMedia)
+                : null,
             'bankAccounts'       => Account::active()->postable()
                 ->where(fn ($q) => $q->where('name', 'like', '%Bank%')
                     ->orWhere('name', 'like', '%Credit Card%')

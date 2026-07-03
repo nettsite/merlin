@@ -803,7 +803,7 @@ new #[Layout('components.layout.app')] class extends Component
                             @php $sourceMedia = $invoice->getFirstMedia('source_document'); @endphp
                             @if($sourceMedia)
                                 <a
-                                    href="{{ $sourceMedia->getUrl() }}"
+                                    href="{{ route('documents.media', $sourceMedia) }}"
                                     target="_blank"
                                     rel="noopener"
                                     title="View original invoice"

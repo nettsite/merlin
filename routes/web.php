@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\DocumentMediaController;
 use Illuminate\Support\Facades\Route;
 
 Route::view('/', 'welcome');
@@ -60,6 +61,9 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
 
     // Help
     Route::livewire('help', 'pages.help.index')->name('help');
+
+    // Authorized document file streaming (media stored on a private disk)
+    Route::get('documents/media/{media}', DocumentMediaController::class)->name('documents.media');
 });
 
 require __DIR__.'/auth.php';
