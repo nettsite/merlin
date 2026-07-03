@@ -24,7 +24,16 @@
                 <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
                     <span class="font-semibold text-lg text-ink">Merlin</span>
                     @if (Route::has('login'))
-                        <livewire:welcome.navigation />
+                        <nav class="flex items-center gap-4 text-sm font-medium">
+                            @auth
+                                <a href="{{ route('dashboard') }}" class="text-ink-soft hover:text-ink transition">Dashboard</a>
+                            @else
+                                <a href="{{ route('login') }}" class="text-ink-soft hover:text-ink transition">Sign in</a>
+                                @if (Route::has('register'))
+                                    <a href="{{ route('register') }}" class="text-ink-soft hover:text-ink transition">Register</a>
+                                @endif
+                            @endauth
+                        </nav>
                     @endif
                 </div>
             </header>
