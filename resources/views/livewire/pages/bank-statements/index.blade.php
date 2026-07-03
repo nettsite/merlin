@@ -683,7 +683,8 @@ new #[Layout('components.layout.app')] class extends Component
                                         @endif
                                     </td>
                                     <td class="px-3 py-2 text-right tabular-nums text-ink-soft text-xs">
-                                        {{ $line->metadata['running_balance'] !== null ? number_format((float)$line->metadata['running_balance'], 2) : '—' }}
+                                        @php($runningBalance = $line->metadata['running_balance'] ?? null)
+                                        {{ $runningBalance !== null ? number_format((float) $runningBalance, 2) : '—' }}
                                     </td>
                                     <td class="px-3 py-2 min-w-48">
                                         @if($detail->status !== 'posted')
