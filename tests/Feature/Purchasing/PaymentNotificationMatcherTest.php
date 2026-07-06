@@ -117,7 +117,7 @@ it('corrects a foreign-currency invoice to the confirmed local amount and soft-d
     $notification = paymentNotification([
         'currency' => 'ZAR',
         'total' => 2300.0,
-        'metadata' => ['payee_name' => 'Acme', 'method' => 'PayPal'],
+        'metadata' => ['payee_name' => 'Acme', 'method' => 'PayPal', 'confirmed' => true],
     ]);
 
     $this->matcher->merge($invoice, $notification, 0.95, 'test reason');
@@ -170,7 +170,7 @@ it('does not change totals when the payment was not made in the base currency', 
     $originalTotal = (float) $invoice->total;
 
     // Paid from a USD PayPal balance — not the local currency, nothing reliable to correct against.
-    $notification = paymentNotification(['currency' => 'USD', 'total' => 100.0]);
+    $notification = paymentNotification(['currency' => 'USD', 'total' => 100.0, 'metadata' => ['confirmed' => true]]);
 
     $this->matcher->merge($invoice, $notification, 0.6, 'test reason');
 
@@ -178,4 +178,32 @@ it('does not change totals when the payment was not made in the base currency', 
 
     expect((float) $invoice->total)->toBe($originalTotal)
         ->and($invoice->metadata['payment_notification']['amount_applied'])->toBeFalse();
+});
+
+it('does not change totals when the payment notification is only a pending/reserved hold, not confirmed', function (): void {
+    // e.g. an FNB card "reserved for purchase" alert — could still be reversed
+    // before it settles, so it isn't reliable enough to correct the invoice.
+    $invoice = Document::factory()->purchaseInvoice()->create([
+        'currency' => 'USD',
+        'exchange_rate' => 18.0,
+        'status' => 'received',
+    ]);
+
+    DocumentLine::factory()->for($invoice)->create(['unit_price' => 1000, 'tax_rate' => 15]);
+    $invoice->refresh();
+    $originalTotal = (float) $invoice->total;
+
+    $notification = paymentNotification([
+        'currency' => 'ZAR',
+        'total' => 2300.0,
+        'metadata' => ['payee_name' => 'Acme', 'confirmed' => false],
+    ]);
+
+    $this->matcher->merge($invoice, $notification, 0.6, 'test reason');
+
+    $invoice->refresh();
+
+    expect((float) $invoice->total)->toBe($originalTotal)
+        ->and($invoice->metadata['payment_notification']['amount_applied'])->toBeFalse()
+        ->and(Document::find($notification->id))->toBeNull();
 });

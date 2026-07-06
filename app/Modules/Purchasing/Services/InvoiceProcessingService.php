@@ -25,6 +25,7 @@ class InvoiceProcessingService
         private readonly DocumentKindClassifier $classifier,
         private readonly PaymentNotificationProcessingService $paymentNotificationProcessor,
         private readonly PaymentNotificationMatcher $paymentNotificationMatcher,
+        private readonly DuplicateInvoiceMerger $duplicateInvoiceMerger,
     ) {}
 
     /**
@@ -98,6 +99,18 @@ class InvoiceProcessingService
             'llm_confidence' => $extracted->confidence,
             'source' => 'llm_extracted',
         ]);
+
+        // 6a. Suppliers sometimes resend the exact same invoice as a different
+        // file (e.g. an "unpaid" copy followed by a "paid" copy). That's a
+        // reissue, not a second invoice — attach it to the original instead of
+        // creating a duplicate row.
+        $duplicate = $this->duplicateInvoiceMerger->findDuplicate($document);
+
+        if ($duplicate !== null) {
+            $this->duplicateInvoiceMerger->merge($document, $duplicate);
+
+            return;
+        }
 
         // 7. Create document lines with account resolution
         //

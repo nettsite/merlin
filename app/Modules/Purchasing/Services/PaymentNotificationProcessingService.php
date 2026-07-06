@@ -39,6 +39,7 @@ class PaymentNotificationProcessingService
                 'reference_text' => $extracted->referenceText,
                 'payee_name' => $extracted->payeeName,
                 'method' => $extracted->method,
+                'confirmed' => $extracted->confirmed,
             ], fn ($v) => $v !== null),
         ]);
 

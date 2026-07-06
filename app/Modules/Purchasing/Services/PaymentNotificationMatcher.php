@@ -143,10 +143,15 @@ class PaymentNotificationMatcher
             $baseCurrency = strtoupper($this->currencySettings->base_currency);
             $paidCurrency = strtoupper((string) $paymentNotification->currency);
 
+            // A merely pending/reserved notification (e.g. a card authorization
+            // hold) could still be reversed or adjusted before it settles — only
+            // a confirmed, completed payment is reliable enough to correct the
+            // invoice's amount against.
             $amountApplied = $invoice->is_foreign_currency
                 && ! in_array($invoice->status, Document::POSTED_STATUSES, true)
                 && $paidCurrency === $baseCurrency
-                && (float) $invoice->total > 0;
+                && (float) $invoice->total > 0
+                && ($paymentNotification->metadata['confirmed'] ?? false) === true;
 
             if ($amountApplied) {
                 $this->applyCorrectedAmount($invoice, $paymentNotification);

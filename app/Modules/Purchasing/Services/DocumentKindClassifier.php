@@ -17,13 +17,17 @@ class DocumentKindClassifier
      */
     private const PAYMENT_SIGNALS = [
         '/\bpaypal\b/i',
+        '/\bpayfast\b/i',
         '/\bproof of payment\b/i',
         '/\byou(?:\'ve| have)? sent a payment\b/i',
+        '/\byou successfully paid\b/i',
         '/\bpayment (?:confirmation|notification|receipt)\b/i',
         '/\beft confirmation\b/i',
         '/\bfnb connect\b/i',
         '/\breceipt for your payment\b/i',
         '/\bpayment was successful\b/i',
+        '/\breserved for purchase\b/i',
+        '/\bsent from an unattended mailbox\b/i',
     ];
 
     private const INVOICE_SIGNALS = [

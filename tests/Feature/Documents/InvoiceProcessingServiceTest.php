@@ -14,6 +14,7 @@ use App\Modules\Purchasing\DTO\ExtractedPaymentNotification;
 use App\Modules\Purchasing\Jobs\ProcessInvoiceDocument;
 use App\Modules\Purchasing\Services\AccountResolver;
 use App\Modules\Purchasing\Services\DocumentKindClassifier;
+use App\Modules\Purchasing\Services\DuplicateInvoiceMerger;
 use App\Modules\Purchasing\Services\ExchangeRateService;
 use App\Modules\Purchasing\Services\InvoiceProcessingService;
 use App\Modules\Purchasing\Services\PaymentNotificationMatcher;
@@ -72,6 +73,7 @@ beforeEach(function (): void {
         classifier: app(DocumentKindClassifier::class),
         paymentNotificationProcessor: $this->paymentNotificationProcessor,
         paymentNotificationMatcher: $this->paymentNotificationMatcher,
+        duplicateInvoiceMerger: app(DuplicateInvoiceMerger::class),
     );
 });
 
@@ -433,6 +435,7 @@ it('reclassifies a dropped file as a payment notification and skips invoice extr
         referenceText: 'INV-2024-001',
         payeeName: 'Acme Hosting',
         method: 'PayPal',
+        confirmed: true,
         confidence: 0.9,
         warnings: [],
     ));
@@ -463,6 +466,7 @@ it('matches order-independently: a payment notification arriving before the invo
         referenceText: 'INV-2024-001',
         payeeName: 'Acme Hosting',
         method: 'PayPal',
+        confirmed: true,
         confidence: 0.9,
         warnings: [],
     ));
@@ -484,4 +488,33 @@ it('matches order-independently: a payment notification arriving before the invo
 
     expect(Document::find($paymentDoc->id))->toBeNull()
         ->and($invoiceDoc->fresh()->metadata['payment_notification']['payee_name'] ?? null)->toBe('Acme Hosting');
+});
+
+// --- Duplicate invoice resends ---
+
+it('attaches a resent/duplicate invoice to the original instead of creating a second invoice', function (): void {
+    // party_id left null so SupplierResolver actually resolves (and reuses) the
+    // same supplier by tax number on both calls — the factory default would
+    // otherwise assign each document its own random, unrelated party.
+    $original = Document::factory()->purchaseInvoice()->create(['party_id' => null]);
+    attachFakeMedia($original);
+
+    $this->llmMock->allows('extractInvoice')->andReturn(fakeExtracted([fakeLine()]));
+    $this->service->process($original);
+
+    expect(DocumentLine::where('document_id', $original->id)->count())->toBe(1);
+
+    // Same invoice resent as a different file (e.g. the supplier's "paid" reissue)
+    // — same supplier and invoice number extracted again.
+    $resend = Document::factory()->purchaseInvoice()->create(['party_id' => null]);
+    attachFakeMedia($resend);
+
+    $this->llmMock->allows('extractInvoice')->andReturn(fakeExtracted([fakeLine()]));
+    $this->service->process($resend);
+
+    expect(Document::find($resend->id))->toBeNull()
+        ->and(DocumentLine::where('document_id', $original->id)->count())->toBe(1)
+        ->and(DocumentActivity::where('document_id', $original->id)
+            ->where('activity_type', 'duplicate_invoice_attached')
+            ->exists())->toBeTrue();
 });
