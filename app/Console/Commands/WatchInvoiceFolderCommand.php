@@ -171,9 +171,17 @@ class WatchInvoiceFolderCommand extends Command
      */
     protected function resolveFolder(): string
     {
-        $path = $this->argument('folder')
-            ?? config('documents.watch.folder', storage_path('app/invoice-watch'));
+        $path = (string) ($this->argument('folder')
+            ?? config('documents.watch.folder', storage_path('app/invoice-watch')));
 
-        return rtrim((string) $path, '/');
+        // A relative INVOICE_WATCH_DIR must resolve against the project root
+        // regardless of the process's working directory (this command's cwd
+        // happens to be the project root, but a relative path is still
+        // ambiguous if invoked differently — resolve explicitly).
+        if (! str_starts_with($path, '/')) {
+            $path = base_path($path);
+        }
+
+        return rtrim($path, '/');
     }
 }

@@ -31,12 +31,9 @@ new #[Layout('components.layout.app')] class extends Component
     /** @var array<int, \Livewire\Features\SupportFileUploads\TemporaryUploadedFile> */
     public array $uploadFiles = [];
 
-    /** @var array<int, array{name: string, status: string, document_number: string|null, error: string|null}> */
-    public array $uploadResults = [];
+    public bool $uploadDone = false;
 
-    public string $uploadPartyId = '';
-
-    public string $uploadCurrency = '';
+    public int $uploadedCount = 0;
 
     // Detail flyout
     public bool $showDetail = false;
@@ -91,7 +88,6 @@ new #[Layout('components.layout.app')] class extends Component
     public function mount(): void
     {
         $this->authorize('viewAny', Document::class);
-        $this->uploadCurrency = app(CurrencySettings::class)->base_currency;
     }
 
     public function updatedSearch(): void
@@ -113,16 +109,18 @@ new #[Layout('components.layout.app')] class extends Component
     public function openUpload(): void
     {
         $this->authorize('create', Document::class);
-        $this->reset(['uploadFiles', 'uploadResults', 'uploadPartyId']);
-        $this->uploadCurrency = app(CurrencySettings::class)->base_currency;
+        $this->reset(['uploadFiles']);
+        $this->uploadDone = false;
+        $this->uploadedCount = 0;
         $this->showUpload = true;
     }
 
     public function resetForMore(): void
     {
         $this->authorize('create', Document::class);
-        $this->reset(['uploadFiles', 'uploadResults', 'uploadPartyId']);
-        $this->uploadCurrency = app(CurrencySettings::class)->base_currency;
+        $this->reset(['uploadFiles']);
+        $this->uploadDone = false;
+        $this->uploadedCount = 0;
     }
 
     public function processUpload(): void
@@ -136,10 +134,26 @@ new #[Layout('components.layout.app')] class extends Component
             'uploadFiles.*' => 'file|max:51200',
         ]);
 
-        $svc = app(DocumentService::class);
-        $currency = $this->uploadCurrency ?: null;
+        // Uploaded files are dropped into the same watch folder invoices:watch
+        // polls — a single ingestion path for every invoice regardless of
+        // source, no party/currency hint (content-driven, exactly like a
+        // manually dropped file).
+        $folder = (string) config('documents.watch.folder', storage_path('app/invoice-watch'));
 
-        // Expand ZIPs and collect all file paths to process.
+        // A relative INVOICE_WATCH_DIR must resolve against the project root,
+        // not this request's working directory (which for a web request is
+        // typically the public/ document root, not the project root).
+        if (! str_starts_with($folder, '/')) {
+            $folder = base_path($folder);
+        }
+
+        $folder = rtrim($folder, '/');
+
+        if (! is_dir($folder)) {
+            mkdir($folder, 0755, true);
+        }
+
+        // Expand ZIPs and collect all file paths to drop into the watch folder.
         $paths = [];
         $extractDirs = [];
 
@@ -186,33 +200,25 @@ new #[Layout('components.layout.app')] class extends Component
         }
 
         foreach ($paths as $entry) {
-            try {
-                $result = $svc->createFromFile($entry['path'], [
-                    'party_id' => $this->uploadPartyId ?: null,
-                    'currency' => $currency,
-                ]);
+            $destination = $folder.'/'.$entry['name'];
 
-                $this->uploadResults[] = [
-                    'name'            => $entry['name'],
-                    'status'          => $result['duplicate'] ? 'duplicate' : 'queued',
-                    'document_number' => $result['document']->document_number,
-                    'error'           => null,
-                ];
-            } catch (\Throwable $e) {
-                $this->uploadResults[] = [
-                    'name'            => $entry['name'],
-                    'status'          => 'error',
-                    'document_number' => null,
-                    'error'           => $e->getMessage(),
-                ];
+            if (file_exists($destination)) {
+                // Avoid clobbering an existing dropped/unprocessed file with the same name.
+                $stem = pathinfo($entry['name'], PATHINFO_FILENAME);
+                $ext = pathinfo($entry['name'], PATHINFO_EXTENSION);
+                $destination = $folder.'/'.$stem.'-'.uniqid().'.'.$ext;
             }
+
+            copy($entry['path'], $destination);
         }
 
         foreach ($extractDirs as $dir) {
             app(\Illuminate\Filesystem\Filesystem::class)->deleteDirectory($dir);
         }
 
-        $this->reset(['uploadFiles', 'uploadPartyId']);
+        $this->uploadedCount = count($paths);
+        $this->uploadDone = true;
+        $this->reset(['uploadFiles']);
     }
 
     // -------------------------------------------------------------------------
@@ -674,9 +680,9 @@ new #[Layout('components.layout.app')] class extends Component
                 ->first();
         }
 
-        // The supplier dropdown only renders inside the upload modal and the
-        // header edit form — skip the query on every other interaction.
-        $needsSuppliers = $this->showUpload || ($this->showDetail && $this->editingHeader);
+        // The supplier dropdown only renders inside the header edit form — skip
+        // the query on every other interaction.
+        $needsSuppliers = $this->showDetail && $this->editingHeader;
 
         return [
             'rows' => $rows,
@@ -947,57 +953,14 @@ new #[Layout('components.layout.app')] class extends Component
 
 {{-- ===== Upload Modal ===== --}}
 <flux:modal name="upload-modal" wire:model.self="showUpload" class="w-[600px]">
-    @if(count($uploadResults) > 0)
-        {{-- ===== Results view ===== --}}
-        @php
-            $queued = collect($uploadResults)->where('status', 'queued')->count();
-            $dupes  = collect($uploadResults)->where('status', 'duplicate')->count();
-            $errors = collect($uploadResults)->where('status', 'error')->count();
-        @endphp
+    @if($uploadDone)
+        {{-- ===== Confirmation view ===== --}}
         <div class="p-6 border-b border-line">
-            <flux:heading size="lg" class="font-semibold">Upload Results</flux:heading>
+            <flux:heading size="lg" class="font-semibold">Upload Complete</flux:heading>
         </div>
-        <div class="p-6 space-y-4">
-            @if($errors > 0)
-                <div class="px-4 py-3 rounded bg-red-50 border border-red-200 text-sm text-danger">
-                    {{ $errors }} file{{ $errors > 1 ? 's' : '' }} failed.
-                    @if($queued > 0) {{ $queued }} queued for processing. @endif
-                    @if($dupes > 0) {{ $dupes }} duplicate{{ $dupes > 1 ? 's' : '' }} skipped. @endif
-                </div>
-            @else
-                <div class="px-4 py-3 rounded bg-green-50 border border-green-200 text-sm text-success">
-                    {{ $queued }} file{{ $queued !== 1 ? 's' : '' }} queued for processing.
-                    @if($dupes > 0) {{ $dupes }} duplicate{{ $dupes > 1 ? 's' : '' }} skipped. @endif
-                </div>
-            @endif
-
-            <div class="max-h-[320px] overflow-y-auto border border-line rounded">
-                <table class="w-full text-xs">
-                    <thead class="bg-surface-alt sticky top-0">
-                        <tr>
-                            <th class="px-3 py-2 text-left font-medium text-ink-muted">File</th>
-                            <th class="px-3 py-2 text-left font-medium text-ink-muted">Status</th>
-                            <th class="px-3 py-2 text-left font-medium text-ink-muted">Document</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach($uploadResults as $result)
-                            <tr class="border-t border-line">
-                                <td class="px-3 py-2 max-w-[240px] truncate text-ink" title="{{ $result['name'] }}">{{ $result['name'] }}</td>
-                                <td class="px-3 py-2">
-                                    @if($result['status'] === 'queued')
-                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-700">Queued</span>
-                                    @elseif($result['status'] === 'duplicate')
-                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-50 text-yellow-700">Duplicate</span>
-                                    @else
-                                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-50 text-danger">Error</span>
-                                    @endif
-                                </td>
-                                <td class="px-3 py-2 text-ink-soft">{{ $result['document_number'] ?? $result['error'] ?? '—' }}</td>
-                            </tr>
-                        @endforeach
-                    </tbody>
-                </table>
+        <div class="p-6">
+            <div class="px-4 py-3 rounded bg-green-50 border border-green-200 text-sm text-success">
+                {{ $uploadedCount }} file{{ $uploadedCount !== 1 ? 's' : '' }} queued for processing.
             </div>
         </div>
         <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-line bg-surface-alt">
@@ -1083,27 +1046,6 @@ new #[Layout('components.layout.app')] class extends Component
                         </div>
                     </template>
                 </div>
-
-                <flux:field>
-                    <flux:label>Supplier (optional)</flux:label>
-                    <flux:select wire:model="uploadPartyId">
-                        <option value="">Auto-detect from invoice</option>
-                        @foreach($suppliers as $supplier)
-                            <option value="{{ $supplier->id }}">{{ $supplier->business?->display_name }}</option>
-                        @endforeach
-                    </flux:select>
-                </flux:field>
-
-                <flux:field>
-                    <flux:label>Currency</flux:label>
-                    <flux:input
-                        wire:model="uploadCurrency"
-                        class="uppercase max-w-[120px]"
-                        maxlength="3"
-                        placeholder="{{ app(\App\Modules\Core\Settings\CurrencySettings::class)->base_currency }}"
-                    />
-                    <flux:description>Leave blank to use the base currency. Fill in to override for foreign-currency batches.</flux:description>
-                </flux:field>
             </div>
             <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-line bg-surface-alt">
                 <flux:button type="button" variant="ghost" wire:click="$set('showUpload', false)">Cancel</flux:button>
