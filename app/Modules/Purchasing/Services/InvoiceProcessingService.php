@@ -22,6 +22,9 @@ class InvoiceProcessingService
         private readonly PostingRuleService $postingRuleService,
         private readonly CurrencySettings $currencySettings,
         private readonly PurchasingSettings $purchasingSettings,
+        private readonly DocumentKindClassifier $classifier,
+        private readonly PaymentNotificationProcessingService $paymentNotificationProcessor,
+        private readonly PaymentNotificationMatcher $paymentNotificationMatcher,
     ) {}
 
     /**
@@ -40,6 +43,20 @@ class InvoiceProcessingService
 
         // 1. Extract text from PDF (pdftotext → Claude vision fallback)
         $text = $this->extractor->extract($media->getPath(), $document);
+
+        // 1a. A dropped file might be a payment notification (PayPal receipt,
+        // FNB Connect email) rather than an invoice — reclassify and hand off
+        // to the dedicated pipeline instead of running invoice extraction on it.
+        if ($this->classifier->classify($text) === DocumentKindClassifier::KIND_PAYMENT_NOTIFICATION) {
+            $document->update([
+                'document_type' => 'payment_notification',
+                'status' => config('documents.types.payment_notification.default_status', 'received'),
+            ]);
+
+            $this->paymentNotificationProcessor->process($document, $text);
+
+            return;
+        }
 
         // 2. Build supplier history context if we already know the supplier
         $history = $document->party_id ? $this->getSupplierHistory($document->party) : [];
@@ -193,6 +210,23 @@ class InvoiceProcessingService
 
         // 9. Evaluate autonomous posting rules
         $this->postingRuleService->evaluateAndPost($document);
+
+        // 10. A payment notification for this invoice may have already arrived
+        // and be waiting unmatched — check regardless of arrival order.
+        $document->refresh();
+        $match = $this->paymentNotificationMatcher->findPaymentMatch($document);
+
+        if ($match !== null && $match['confidence'] >= $this->purchasingSettings->payment_match_auto_confidence) {
+            $this->paymentNotificationMatcher->merge($document, $match['document'], $match['confidence'], $match['reason']);
+        } elseif ($match !== null) {
+            $match['document']->update([
+                'metadata' => array_merge($match['document']->metadata ?? [], [
+                    'suggested_invoice_id' => $document->id,
+                    'match_confidence' => $match['confidence'],
+                    'match_reason' => $match['reason'],
+                ]),
+            ]);
+        }
     }
 
     /**

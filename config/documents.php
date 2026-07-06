@@ -117,6 +117,14 @@ return [
             'requires_due_date' => false,
             'auto_number' => false,
         ],
+        'payment_notification' => [
+            'label' => 'Payment Notification',
+            'direction' => 'inbound',
+            'prefix' => 'PMTN',
+            'default_status' => 'received',
+            'requires_due_date' => false,
+            'auto_number' => false,
+        ],
     ],
 
 ];

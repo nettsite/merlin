@@ -28,6 +28,9 @@ new #[Layout('components.layout.app')] class extends Component
     #[Validate('required|numeric|min:0|max:100')]
     public float|string $descriptionSimilarity = 60.0;
 
+    #[Validate('required|numeric|min:0|max:1')]
+    public float|string $paymentMatchAutoConfidence = 0.80;
+
     public bool $saved = false;
 
     public function mount(): void
@@ -42,6 +45,7 @@ new #[Layout('components.layout.app')] class extends Component
         $this->fallbackConfidence = $settings->fallback_confidence;
         $this->amountTolerance = $settings->amount_tolerance;
         $this->descriptionSimilarity = $settings->description_similarity;
+        $this->paymentMatchAutoConfidence = $settings->payment_match_auto_confidence;
     }
 
     public function save(): void
@@ -56,6 +60,7 @@ new #[Layout('components.layout.app')] class extends Component
         $settings->fallback_confidence = (float) $this->fallbackConfidence;
         $settings->amount_tolerance = (float) $this->amountTolerance;
         $settings->description_similarity = (float) $this->descriptionSimilarity;
+        $settings->payment_match_auto_confidence = (float) $this->paymentMatchAutoConfidence;
         $settings->save();
 
         $this->saved = true;
@@ -124,6 +129,13 @@ new #[Layout('components.layout.app')] class extends Component
                 <flux:input wire:model="descriptionSimilarity" type="number" step="1" min="0" max="100" class="max-w-xs" />
                 <flux:description>Minimum similarity score for line description matching in pattern-based auto-posting.</flux:description>
                 <flux:error name="descriptionSimilarity" />
+            </flux:field>
+
+            <flux:field>
+                <flux:label>Min. Confidence for Payment Notification Auto-Match <span class="text-danger">*</span></flux:label>
+                <flux:input wire:model="paymentMatchAutoConfidence" type="number" step="0.01" min="0" max="1" class="max-w-xs" />
+                <flux:description>0–1 scale. A payment notification (PayPal/FNB Connect receipt) matched to an invoice below this confidence is surfaced for manual confirmation instead of auto-merging.</flux:description>
+                <flux:error name="paymentMatchAutoConfidence" />
             </flux:field>
         </div>
 

@@ -8,6 +8,7 @@ use App\Modules\Core\Models\Document;
 use App\Modules\Core\Models\DocumentLine;
 use App\Modules\Purchasing\Services\DocumentService;
 use App\Modules\Purchasing\Services\ExchangeRateService;
+use App\Modules\Purchasing\Services\PaymentNotificationMatcher;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\On;
@@ -79,6 +80,13 @@ new #[Layout('components.layout.app')] class extends Component
 
     /** @var array<string, mixed> */
     public array $headerForm = [];
+
+    // Payment notification linking
+    public bool $showLinkPaymentNotification = false;
+
+    public ?string $linkingPaymentNotificationId = null;
+
+    public string $linkInvoiceId = '';
 
     public function mount(): void
     {
@@ -317,6 +325,69 @@ new #[Layout('components.layout.app')] class extends Component
         app(DocumentService::class)->reprocess($doc, Auth::user());
         $this->showReprocessConfirm = false;
         session()->flash('success', 'Invoice queued for reprocessing.');
+    }
+
+    // -------------------------------------------------------------------------
+    // Payment notification linking
+    // -------------------------------------------------------------------------
+
+    public function openLinkPaymentNotification(string $paymentNotificationId): void
+    {
+        $this->authorize('create', Document::class);
+        $this->linkingPaymentNotificationId = $paymentNotificationId;
+        $this->linkInvoiceId = '';
+        $this->showLinkPaymentNotification = true;
+    }
+
+    public function confirmLinkPaymentNotification(): void
+    {
+        $this->validate(['linkInvoiceId' => 'required|exists:documents,id']);
+
+        $paymentNotification = Document::where('document_type', 'payment_notification')->findOrFail($this->linkingPaymentNotificationId);
+        $invoice = Document::purchaseInvoices()->findOrFail($this->linkInvoiceId);
+        $this->authorize('update', $invoice);
+
+        app(PaymentNotificationMatcher::class)->merge($invoice, $paymentNotification, 1.0, 'Manually linked by user.');
+
+        $this->showLinkPaymentNotification = false;
+        $this->linkingPaymentNotificationId = null;
+        session()->flash('success', 'Payment notification linked to invoice.');
+    }
+
+    public function cancelLinkPaymentNotification(): void
+    {
+        $this->showLinkPaymentNotification = false;
+        $this->linkingPaymentNotificationId = null;
+    }
+
+    public function confirmSuggestedMatch(string $paymentNotificationId): void
+    {
+        $paymentNotification = Document::where('document_type', 'payment_notification')->findOrFail($paymentNotificationId);
+        $invoiceId = $paymentNotification->metadata['suggested_invoice_id'] ?? null;
+
+        abort_unless($invoiceId, 404);
+
+        $invoice = Document::purchaseInvoices()->findOrFail($invoiceId);
+        $this->authorize('update', $invoice);
+
+        app(PaymentNotificationMatcher::class)->merge(
+            $invoice,
+            $paymentNotification,
+            (float) ($paymentNotification->metadata['match_confidence'] ?? 0),
+            (string) ($paymentNotification->metadata['match_reason'] ?? ''),
+        );
+
+        session()->flash('success', 'Payment notification matched to invoice.');
+    }
+
+    public function dismissSuggestedMatch(string $paymentNotificationId): void
+    {
+        $paymentNotification = Document::where('document_type', 'payment_notification')->findOrFail($paymentNotificationId);
+        $this->authorize('update', $paymentNotification);
+
+        $metadata = $paymentNotification->metadata ?? [];
+        unset($metadata['suggested_invoice_id'], $metadata['match_confidence'], $metadata['match_reason']);
+        $paymentNotification->update(['metadata' => $metadata ?: null]);
     }
 
     // -------------------------------------------------------------------------
@@ -589,11 +660,18 @@ new #[Layout('components.layout.app')] class extends Component
         $activities = collect();
         $accounts = collect();
 
+        $suggestedPaymentNotification = null;
+
         if ($this->showDetail && $this->detailId) {
             $detail = Document::with(['party.business', 'payableAccount'])->findOrFail($this->detailId);
             $lines = $detail->lines()->with(['account', 'llmSuggestedAccount'])->get();
             $activities = $detail->activities()->with('user')->get();
             $accounts = Account::postable()->active()->orderBy('code')->get(['id', 'code', 'name']);
+
+            $suggestedPaymentNotification = Document::where('document_type', 'payment_notification')
+                ->where('status', 'received')
+                ->where('metadata->suggested_invoice_id', $detail->id)
+                ->first();
         }
 
         // The supplier dropdown only renders inside the upload modal and the
@@ -611,6 +689,14 @@ new #[Layout('components.layout.app')] class extends Component
             'lines' => $lines,
             'activities' => $activities,
             'accounts' => $accounts,
+            'suggestedPaymentNotification' => $suggestedPaymentNotification,
+            'pendingPaymentNotifications' => Document::where('document_type', 'payment_notification')
+                ->where('status', 'received')
+                ->latest('issue_date')
+                ->get(),
+            'linkableInvoices' => $this->showLinkPaymentNotification
+                ? Document::purchaseInvoices()->with('party.business')->latest('issue_date')->limit(100)->get()
+                : collect(),
             'baseCurrency' => app(CurrencySettings::class)->base_currency,
             'baseCurrencySymbol' => ExchangeRateService::currencySymbol(app(CurrencySettings::class)->base_currency),
             'detailCurrencySymbol' => $detail ? ExchangeRateService::currencySymbol($detail->currency) : '',
@@ -646,6 +732,32 @@ new #[Layout('components.layout.app')] class extends Component
         </flux:button>
     @endcan
 </div>
+
+{{-- Unmatched payment notifications --}}
+@if($pendingPaymentNotifications->isNotEmpty())
+    <div class="mx-6 mt-4 rounded border border-amber-200 bg-amber-50">
+        <div class="px-4 py-2 text-sm font-semibold text-ink border-b border-amber-200">
+            Unmatched payment notifications ({{ $pendingPaymentNotifications->count() }})
+        </div>
+        <ul class="divide-y divide-amber-200">
+            @foreach($pendingPaymentNotifications as $notification)
+                <li class="flex items-center justify-between gap-4 px-4 py-2 text-sm">
+                    <div class="min-w-0">
+                        <span class="font-medium text-ink">{{ $notification->metadata['payee_name'] ?? 'Unknown payee' }}</span>
+                        <span class="text-ink-muted">
+                            — {{ $notification->currency }} {{ number_format((float) $notification->total, 2) }}
+                            on {{ $notification->issue_date?->format('Y-m-d') }}
+                            @if($notification->metadata['method'] ?? null) via {{ $notification->metadata['method'] }} @endif
+                        </span>
+                    </div>
+                    <flux:button wire:click="openLinkPaymentNotification('{{ $notification->id }}')" size="xs" variant="ghost">
+                        Link to invoice
+                    </flux:button>
+                </li>
+            @endforeach
+        </ul>
+    </div>
+@endif
 
 {{-- Status tabs --}}
 <div class="flex items-center gap-1 px-6 pt-4 border-b border-line overflow-x-auto">
@@ -1023,6 +1135,23 @@ new #[Layout('components.layout.app')] class extends Component
                     @endcan
                 </div>
             @endif
+
+            @if($suggestedPaymentNotification)
+                <div class="mb-4 px-4 py-3 rounded bg-amber-50 border border-amber-200 text-sm">
+                    <span class="text-ink">
+                        Possible payment match ({{ number_format(((float) ($suggestedPaymentNotification->metadata['match_confidence'] ?? 0)) * 100, 0) }}%):
+                        {{ $suggestedPaymentNotification->metadata['payee_name'] ?? 'payment notification' }}
+                        — {{ $suggestedPaymentNotification->currency }} {{ number_format((float) $suggestedPaymentNotification->total, 2) }}
+                    </span>
+                    <span class="text-ink-muted block mt-0.5">{{ $suggestedPaymentNotification->metadata['match_reason'] ?? '' }}</span>
+                    @can('update', $detail)
+                        <div class="mt-2 flex gap-2">
+                            <flux:button wire:click="confirmSuggestedMatch('{{ $suggestedPaymentNotification->id }}')" size="xs" variant="primary">Confirm</flux:button>
+                            <flux:button wire:click="dismissSuggestedMatch('{{ $suggestedPaymentNotification->id }}')" size="xs" variant="ghost">Dismiss</flux:button>
+                        </div>
+                    @endcan
+                </div>
+            @endif
             <div class="flex items-start justify-between">
                 <div>
                     <div class="flex items-center gap-3">
@@ -1345,6 +1474,31 @@ new #[Layout('components.layout.app')] class extends Component
         <div class="flex justify-end gap-3">
             <flux:button type="button" variant="ghost" wire:click="$set('showRejectReason', false)">Cancel</flux:button>
             <flux:button type="submit" variant="danger">Reject</flux:button>
+        </div>
+    </form>
+</flux:modal>
+
+{{-- Link payment notification modal --}}
+<flux:modal name="link-payment-notification-modal" wire:model.self="showLinkPaymentNotification" class="w-[420px]">
+    <form wire:submit="confirmLinkPaymentNotification" class="p-6 space-y-4">
+        <flux:heading>Link Payment Notification</flux:heading>
+        <p class="text-sm text-ink-soft">Choose the purchase invoice this payment notification settles.</p>
+        <flux:field>
+            <flux:label>Invoice <span class="text-danger">*</span></flux:label>
+            <flux:select wire:model="linkInvoiceId">
+                <option value="">— Select invoice —</option>
+                @foreach($linkableInvoices as $invoice)
+                    <option value="{{ $invoice->id }}">
+                        {{ $invoice->document_number }} — {{ $invoice->party?->business?->display_name ?? 'No supplier' }}
+                        ({{ $invoice->currency }} {{ number_format((float) $invoice->total, 2) }})
+                    </option>
+                @endforeach
+            </flux:select>
+            <flux:error name="linkInvoiceId" />
+        </flux:field>
+        <div class="flex justify-end gap-3">
+            <flux:button type="button" variant="ghost" wire:click="cancelLinkPaymentNotification">Cancel</flux:button>
+            <flux:button type="submit" variant="primary">Link</flux:button>
         </div>
     </form>
 </flux:modal>

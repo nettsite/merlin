@@ -10,6 +10,7 @@ use App\Modules\Core\Models\Document;
 use App\Modules\Core\Models\LlmLog;
 use App\Modules\Core\Settings\CurrencySettings;
 use App\Modules\Purchasing\DTO\ExtractedInvoice;
+use App\Modules\Purchasing\DTO\ExtractedPaymentNotification;
 use App\Modules\Purchasing\Settings\PurchasingSettings;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\Client\ConnectionException;
@@ -212,6 +213,50 @@ class LlmService
             'base_currency' => strtoupper($this->currencySettings->base_currency),
             'layout_hints' => $layoutHints,
             'user_hint' => $userHint,
+        ])->render();
+    }
+
+    /**
+     * Extract structured payment details from a payment notification (PayPal
+     * receipt, FNB Connect email, EFT confirmation, etc).
+     *
+     * Unlike invoice/bank-statement extraction there is no reconciliation
+     * check to gate on — these documents are short and unambiguous — so this
+     * only falls back to the strong model if the fast model call fails
+     * outright (bad JSON or API error).
+     */
+    public function extractPaymentNotification(string $text, ?Model $loggable = null): ExtractedPaymentNotification
+    {
+        $prompt = $this->buildPaymentNotificationPrompt($text);
+
+        try {
+            return $this->extractPaymentNotificationWith($prompt, config('services.anthropic.model_fast'), $loggable);
+        } catch (LlmApiException|\RuntimeException) {
+            return $this->extractPaymentNotificationWith($prompt, config('services.anthropic.model'), $loggable);
+        }
+    }
+
+    private function extractPaymentNotificationWith(string $prompt, string $model, ?Model $loggable): ExtractedPaymentNotification
+    {
+        $log = $this->callApi(
+            messages: [['role' => 'user', 'content' => $prompt]],
+            loggable: $loggable,
+            startNs: hrtime(true),
+            model: $model,
+        );
+
+        $extracted = ExtractedPaymentNotification::fromArray($this->parseJsonResponse($log->response_payload['text']));
+
+        $log->update(['confidence' => $extracted->confidence]);
+
+        return $extracted;
+    }
+
+    private function buildPaymentNotificationPrompt(string $text): string
+    {
+        return view('prompts.payment-notification-extraction', [
+            'text' => $text,
+            'base_currency' => strtoupper($this->currencySettings->base_currency),
         ])->render();
     }
 

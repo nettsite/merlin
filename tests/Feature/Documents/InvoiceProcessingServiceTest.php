@@ -10,10 +10,14 @@ use App\Modules\Core\Services\LlmService;
 use App\Modules\Core\Settings\CurrencySettings;
 use App\Modules\Purchasing\DTO\ExtractedInvoice;
 use App\Modules\Purchasing\DTO\ExtractedInvoiceLine;
+use App\Modules\Purchasing\DTO\ExtractedPaymentNotification;
 use App\Modules\Purchasing\Jobs\ProcessInvoiceDocument;
 use App\Modules\Purchasing\Services\AccountResolver;
+use App\Modules\Purchasing\Services\DocumentKindClassifier;
 use App\Modules\Purchasing\Services\ExchangeRateService;
 use App\Modules\Purchasing\Services\InvoiceProcessingService;
+use App\Modules\Purchasing\Services\PaymentNotificationMatcher;
+use App\Modules\Purchasing\Services\PaymentNotificationProcessingService;
 use App\Modules\Purchasing\Services\PostingRuleService;
 use App\Modules\Purchasing\Services\SupplierResolver;
 use App\Modules\Purchasing\Settings\PurchasingSettings;
@@ -40,10 +44,21 @@ beforeEach(function (): void {
 
     // Mock DocumentTextExtractor to avoid actual filesystem/pdftotext calls
     $this->extractorMock = Mockery::mock(DocumentTextExtractor::class);
-    $this->extractorMock->allows('extract')->andReturn('fake extracted invoice text');
+    $this->extractorMock->allows('extract')->andReturn('fake extracted invoice text')->byDefault();
 
     // Mock LlmService to avoid live API calls
     $this->llmMock = Mockery::mock(LlmService::class);
+
+    $this->paymentNotificationMatcher = app(PaymentNotificationMatcher::class);
+
+    // Built manually (not via the container) so it shares the same LlmService
+    // mock as the invoice pipeline — extractPaymentNotification() calls land
+    // on $this->llmMock too.
+    $this->paymentNotificationProcessor = new PaymentNotificationProcessingService(
+        llm: $this->llmMock,
+        matcher: $this->paymentNotificationMatcher,
+        purchasingSettings: app(PurchasingSettings::class),
+    );
 
     $this->service = new InvoiceProcessingService(
         extractor: $this->extractorMock,
@@ -54,6 +69,9 @@ beforeEach(function (): void {
         postingRuleService: app(PostingRuleService::class),
         currencySettings: app(CurrencySettings::class),
         purchasingSettings: app(PurchasingSettings::class),
+        classifier: app(DocumentKindClassifier::class),
+        paymentNotificationProcessor: $this->paymentNotificationProcessor,
+        paymentNotificationMatcher: $this->paymentNotificationMatcher,
     );
 });
 
@@ -396,4 +414,74 @@ it('sets exchange rate and foreign amounts when invoice is in USD', function ():
         ->and((float) $line->foreign_line_total)->toBe(100.0)
         ->and($line->foreign_tax_amount)->not->toBeNull()
         ->and((float) $line->unit_price)->toBe(round(100.0 * $expectedRate, 4));
+});
+
+// --- Payment notification classification & matching ---
+
+it('reclassifies a dropped file as a payment notification and skips invoice extraction', function (): void {
+    $document = Document::factory()->purchaseInvoice()->create();
+    attachFakeMedia($document);
+
+    $this->extractorMock->allows('extract')->andReturn(
+        'PayPal — You sent a payment of $100.00 USD to Acme Hosting. Receipt for your payment.'
+    );
+
+    $this->llmMock->expects('extractPaymentNotification')->once()->andReturn(new ExtractedPaymentNotification(
+        paymentDate: Carbon::parse('2024-01-16'),
+        paidAmount: 1150.0,
+        paidCurrency: 'ZAR',
+        referenceText: 'INV-2024-001',
+        payeeName: 'Acme Hosting',
+        method: 'PayPal',
+        confidence: 0.9,
+        warnings: [],
+    ));
+
+    $this->service->process($document);
+
+    $document->refresh();
+
+    expect($document->document_type)->toBe('payment_notification')
+        ->and($document->currency)->toBe('ZAR')
+        ->and((float) $document->total)->toBe(1150.0)
+        ->and(DocumentLine::where('document_id', $document->id)->count())->toBe(0);
+});
+
+it('matches order-independently: a payment notification arriving before the invoice still auto-merges once the invoice is processed', function (): void {
+    // 1. Payment notification arrives first — no invoice exists yet, so it stays pending.
+    $paymentDoc = Document::factory()->purchaseInvoice()->create();
+    attachFakeMedia($paymentDoc);
+
+    $this->extractorMock->allows('extract')->andReturnValues([
+        'PayPal — You sent a payment of $100.00 USD to Acme Hosting. Receipt for your payment.',
+        'fake extracted invoice text',
+    ]);
+    $this->llmMock->allows('extractPaymentNotification')->andReturn(new ExtractedPaymentNotification(
+        paymentDate: Carbon::now()->subDays(5),
+        paidAmount: 1150.0,
+        paidCurrency: 'ZAR',
+        referenceText: 'INV-2024-001',
+        payeeName: 'Acme Hosting',
+        method: 'PayPal',
+        confidence: 0.9,
+        warnings: [],
+    ));
+
+    $this->service->process($paymentDoc);
+
+    expect($paymentDoc->fresh()->document_type)->toBe('payment_notification');
+
+    // 2. The invoice it settles arrives afterwards and should auto-merge on processing.
+    $invoiceDoc = Document::factory()->purchaseInvoice()->create([
+        'document_number' => 'PINV-2024-00099',
+        'issue_date' => now()->subDays(10)->toDateString(),
+    ]);
+    attachFakeMedia($invoiceDoc);
+
+    $this->llmMock->allows('extractInvoice')->andReturn(fakeExtracted([fakeLine()]));
+
+    $this->service->process($invoiceDoc);
+
+    expect(Document::find($paymentDoc->id))->toBeNull()
+        ->and($invoiceDoc->fresh()->metadata['payment_notification']['payee_name'] ?? null)->toBe('Acme Hosting');
 });

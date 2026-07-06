@@ -1,0 +1,65 @@
+<?php
+
+namespace App\Modules\Purchasing\Services;
+
+class DocumentKindClassifier
+{
+    public const KIND_INVOICE = 'invoice';
+
+    public const KIND_PAYMENT_NOTIFICATION = 'payment_notification';
+
+    /**
+     * Payment notifications (PayPal receipts, FNB Connect emails, EFT
+     * confirmations) use very distinct boilerplate that invoices never do.
+     * Invoices, in turn, use billing language these notifications never do.
+     * We classify by which vocabulary dominates rather than requiring an
+     * extra LLM call for what is normally an obvious distinction.
+     */
+    private const PAYMENT_SIGNALS = [
+        '/\bpaypal\b/i',
+        '/\bproof of payment\b/i',
+        '/\byou(?:\'ve| have)? sent a payment\b/i',
+        '/\bpayment (?:confirmation|notification|receipt)\b/i',
+        '/\beft confirmation\b/i',
+        '/\bfnb connect\b/i',
+        '/\breceipt for your payment\b/i',
+        '/\bpayment was successful\b/i',
+    ];
+
+    private const INVOICE_SIGNALS = [
+        '/\btax invoice\b/i',
+        '/\binvoice\s*(?:no|number|#)\b/i',
+        '/\bsubtotal\b/i',
+        '/\bvat\s*(?:no|number|reg)\b/i',
+        '/\bpurchase order\b/i',
+        '/\bbill\s*to\b/i',
+        '/\bdue date\b/i',
+        '/\bquantity\b/i',
+    ];
+
+    public function classify(string $text): string
+    {
+        $paymentScore = $this->countMatches(self::PAYMENT_SIGNALS, $text);
+        $invoiceScore = $this->countMatches(self::INVOICE_SIGNALS, $text);
+
+        if ($paymentScore > 0 && $paymentScore >= $invoiceScore) {
+            return self::KIND_PAYMENT_NOTIFICATION;
+        }
+
+        return self::KIND_INVOICE;
+    }
+
+    /** @param string[] $patterns */
+    private function countMatches(array $patterns, string $text): int
+    {
+        $count = 0;
+
+        foreach ($patterns as $pattern) {
+            if (preg_match($pattern, $text) === 1) {
+                $count++;
+            }
+        }
+
+        return $count;
+    }
+}

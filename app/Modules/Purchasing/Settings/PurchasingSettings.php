@@ -27,6 +27,9 @@ class PurchasingSettings extends Settings
     /** Minimum description similarity score (0–100) required for pattern-based auto-posting. */
     public float $description_similarity = 60.0;
 
+    /** Minimum match confidence required to auto-merge a payment notification into its matching purchase invoice. */
+    public float $payment_match_auto_confidence = 0.80;
+
     public static function group(): string
     {
         return 'purchasing';
