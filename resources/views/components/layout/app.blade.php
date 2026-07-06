@@ -41,6 +41,8 @@
 
         <flux:spacer />
 
+        <livewire:incident-bell />
+
         <flux:dropdown position="bottom" align="end">
             <flux:profile name="{{ auth()->user()?->name ?? '' }}" />
             <flux:menu>
@@ -60,6 +62,8 @@
     <flux:main class="bg-white p-0">
         {{ $slot }}
     </flux:main>
+
+    <x-incident-toast />
 
     @fluxScripts
 </body>

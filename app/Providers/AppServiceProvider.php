@@ -28,10 +28,12 @@ use App\Modules\Core\Models\PaymentTerm;
 use App\Modules\Core\Models\Person;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Policies\AllModulesPolicy;
+use App\Modules\Core\Services\IncidentSyncService;
 use App\Modules\Core\Services\Pdf\MagikaService;
 use App\Modules\Core\Settings\CurrencySettings;
 use App\Modules\Purchasing\Models\PostingRule;
 use App\Modules\Purchasing\Services\ExchangeRateService;
+use App\Modules\Purchasing\Services\UnpostedInvoicesIncidentDetector;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Facades\Date;
@@ -60,6 +62,12 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(MagikaService::class, fn (): MagikaService => new MagikaService(
             config('documents.magika.binary', 'magika'),
         ));
+
+        // Registered incident detectors, checked by IncidentSyncService — add
+        // new incident types here.
+        $this->app->singleton(IncidentSyncService::class, fn ($app): IncidentSyncService => new IncidentSyncService([
+            $app->make(UnpostedInvoicesIncidentDetector::class),
+        ]));
     }
 
     public function boot(): void
