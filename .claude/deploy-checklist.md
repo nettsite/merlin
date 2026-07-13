@@ -12,7 +12,7 @@ Each entry follows: **Symptom → Root cause → Detection probe → Fix**.
 - **Root cause:** `Content-Security-Policy` header missing or too restrictive after a new middleware or nginx/apache config change.
 - **Probe:** `curl -sI <APP_URL>/ | grep -i content-security-policy`
 - **Expected:** Header present; must include `script-src` and `style-src` with at least `'self'`. `'unsafe-inline'` acceptable for Livewire/Alpine compatibility, but log a warning.
-- **Fix:** Check `app/Http/Middleware/SecurityHeaders.php` or server config.
+- **Fix:** Check `app/Http/Middleware/SecurityHeaders.php` (appended to the web group in `bootstrap/app.php`). The policy allows the Vite dev server origins only when `APP_ENV=local`.
 
 ### CORS allowed_origins
 - **Symptom:** API or Livewire requests from the frontend domain fail with `CORS policy` errors.
@@ -52,7 +52,7 @@ Each entry follows: **Symptom → Root cause → Detection probe → Fix**.
 - **Symptom:** `Spatie\Activitylog` entries reference old FQCN after namespace refactor; or `Relation::requireMorphMap` throws on unmapped models.
 - **Root cause:** New model added without registering its morph alias in `AppServiceProvider::configureMorphMap()`.
 - **Probe:** `php artisan tinker --execute 'echo json_encode(array_keys(Illuminate\Database\Eloquent\Relations\Relation::morphMap()));'`
-- **Expected:** All domain models listed. Currently required: `account`, `account_group`, `account_type`, `business`, `document`, `document_activity`, `document_line`, `document_relationship`, `llm_log`, `party`, `party_relationship`, `person`, `posting_rule`, `user`.
+- **Expected:** All domain models listed. Currently required: `account`, `account_group`, `account_type`, `address`, `bank_template`, `billing_email_template`, `business`, `contact_assignment`, `document`, `document_activity`, `document_line`, `document_relationship`, `llm_log`, `party`, `party_relationship`, `payment_term`, `person`, `posting_rule`, `recurring_invoice`, `recurring_invoice_line`, `user`.
 - **Fix:** Add missing alias to `configureMorphMap()` in `AppServiceProvider`.
 
 ### Pending Migrations
@@ -143,6 +143,16 @@ Each entry follows: **Symptom → Root cause → Detection probe → Fix**.
 - **Probe:** `test -L public/storage && echo OK || echo MISSING`
 - **Expected:** `OK`.
 - **Fix:** `php artisan storage:link --force` — add to deploy hook so it runs automatically. Discovered on 2026-04-30 dry run.
+
+---
+
+## Verification
+
+### Probe the Right Vhost
+- **Symptom:** A code change verifies in tests but a `curl` probe against the app shows the old behaviour; FPM reloads and cache clears change nothing.
+- **Root cause:** Two Merlin instances are served locally: `https://merlin.app` → `/home/will/NettSite/merlin` (deployed copy) and `https://merlin.local` / `http://merlin` → `/home/will/Projects/nettsite/merlin` (working tree). The dev `.env` sets `APP_URL=https://merlin.app`, so probes built from `APP_URL` hit the deployed copy, not the working tree. Discovered 2026-07-13.
+- **Probe:** `grep DocumentRoot /etc/apache2/sites-enabled/merlin*.conf` and confirm the target vhost's root matches the tree being verified.
+- **Fix:** Probe `https://merlin.local` for working-tree checks; treat `https://merlin.app` as the deploy target (verify it only after the deployed copy is updated).
 
 ---
 
