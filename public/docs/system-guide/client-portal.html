@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Client Portal — Merlin System Guide</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/docs.css">
+</head>
+<body>
+    <div id="docs-shell">
+        <aside id="docs-sidebar"></aside>
+
+        <main id="docs-content">
+            <article>
+                <h1>Client Portal</h1>
+                <p>The client portal gives a client's contact person their own login — separate from staff accounts — to view and eventually pay their invoices online. The authentication layer is live; the invoice-viewing pages are the next build phase.</p>
+
+                <h2 id="authentication">Authentication</h2>
+                <p>Portal users authenticate against a dedicated <code>portal</code> guard, entirely separate from the staff <code>web</code> guard. Routes live in <code>routes/portal.php</code> under the <code>/portal</code> prefix:</p>
+                <table>
+                    <thead><tr><th>Route</th><th>Middleware</th><th>Purpose</th></tr></thead>
+                    <tbody>
+                        <tr><td><code>/portal/login</code></td><td><code>guest:portal</code></td><td>Portal login page.</td></tr>
+                        <tr><td><code>/portal/set-password/{token}</code></td><td><code>guest:portal</code></td><td>Invite acceptance — the contact sets their password via a tokened link.</td></tr>
+                        <tr><td><code>POST /portal/logout</code></td><td><code>auth:portal</code></td><td>Session logout.</td></tr>
+                    </tbody>
+                </table>
+
+                <h2 id="invitations">Invitations</h2>
+                <p>Access is invitation-only: <code>PortalInviteService</code> (<code>app/Modules/Billing/Services/</code>) issues a set-password link to an existing contact person. There is no open self-registration — that's a deliberately parked decision (see <code>ROADMAP.md</code>) to keep the attack surface small.</p>
+
+                <div class="callout">
+                    <span class="callout-title">Rate limiting is the portal's own job</span>
+                    The portal guard inherits none of Breeze's login throttling. Any portal auth action (login, set-password) must include its own <code>RateLimiter</code> block — this is an established project rule, not an optimisation.
+                </div>
+
+                <h2 id="whats-next">What's next</h2>
+                <p>Phase C3 adds <code>/portal/invoices/{invoice}</code> — authenticated invoice viewing, followed by online payment. Related parked items (multi-party client switcher for contacts who represent several parties, supplier self-service) are documented in <code>ROADMAP.md</code>.</p>
+            </article>
+        </main>
+
+        <nav id="docs-toc"></nav>
+    </div>
+
+    <script src="assets/nav.js"></script>
+</body>
+</html>

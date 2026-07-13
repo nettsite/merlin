@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Incident Notifications — Merlin System Guide</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/docs.css">
+</head>
+<body>
+    <div id="docs-shell">
+        <aside id="docs-sidebar"></aside>
+
+        <main id="docs-content">
+            <article>
+                <h1>Incident Notifications</h1>
+                <p>The incident framework surfaces business-state problems — conditions that exist until someone fixes them — through a bell in the top navigation, a dashboard panel, and a toast on first detection. Incidents are global (they describe the state of the business, not a per-user inbox) and self-clearing: when the underlying condition resolves, the incident closes for everyone.</p>
+
+                <h2 id="architecture">Architecture</h2>
+                <table>
+                    <thead><tr><th>Piece</th><th>Location</th><th>Role</th></tr></thead>
+                    <tbody>
+                        <tr><td><code>IncidentDetector</code></td><td><code>app/Modules/Core/Contracts/</code></td><td>Contract each detector implements: <code>type()</code> returns a stable slug; <code>check()</code> returns <code>null</code> (condition absent) or <code>{title, message, metadata}</code> (condition present).</td></tr>
+                        <tr><td><code>IncidentSyncService</code></td><td><code>app/Modules/Core/Services/</code></td><td>Runs every registered detector; opens a <code>NotificationIncident</code> when <code>check()</code> returns data, updates it while the condition persists, resolves it when <code>check()</code> returns <code>null</code>.</td></tr>
+                        <tr><td><code>NotificationIncident</code></td><td><code>app/Modules/Core/Models/</code></td><td>Eloquent model with query scopes for active/resolved incidents. One row per detector type per occurrence.</td></tr>
+                        <tr><td><code>UnpostedInvoicesIncidentDetector</code></td><td><code>app/Modules/Purchasing/Services/</code></td><td>The first concrete detector (see below).</td></tr>
+                    </tbody>
+                </table>
+
+                <h2 id="ui-components">UI components</h2>
+                <ul>
+                    <li><code>resources/views/livewire/incident-bell.blade.php</code> — badge + dropdown in the top navigation. Polls with <code>wire:poll.20s="checkIncidents"</code>; the poll is also what triggers <code>IncidentSyncService</code>, so detection runs as long as anyone has a page open.</li>
+                    <li><code>resources/views/livewire/incident-dashboard-panel.blade.php</code> — active-incident panel on the dashboard, same 20-second poll.</li>
+                    <li><code>resources/views/components/incident-toast.blade.php</code> — transient toast when a new incident appears during a session.</li>
+                </ul>
+                <div class="callout">
+                    <span class="callout-title">Two layouts, both wired</span>
+                    The bell is mounted in both live layouts — <code>resources/views/layouts/app.blade.php</code> and <code>resources/views/components/layout/app.blade.php</code>. Any change to how the bell is embedded must be made in both, mirroring the dual-nav convention.
+                </div>
+                <p>Visibility is permission-gated: users without <code>documents-view-any</code> don't see the bell or panel.</p>
+
+                <h2 id="the-unposted-invoices-detector">The unposted-invoices detector</h2>
+                <p><code>UnpostedInvoicesIncidentDetector</code> fires while any purchase invoice sits in <code>received</code>, <code>reviewed</code>, or <code>approved</code> — extracted but not yet at a terminal state. Its metadata carries the total and a per-status breakdown. It clears once every such invoice has been posted or rejected.</p>
+
+                <h2 id="adding-a-detector">Adding a new detector</h2>
+                <ol>
+                    <li>Create a class implementing <code>IncidentDetector</code>. Return a stable slug from <code>type()</code>; make <code>check()</code> cheap — it runs on every 20-second poll.</li>
+                    <li>Register it in <code>AppServiceProvider</code>, where <code>IncidentSyncService</code> is constructed with its detector array (around the existing <code>UnpostedInvoicesIncidentDetector</code> entry).</li>
+                    <li>No UI changes needed — the bell, panel, and toast render whatever the sync service produces.</li>
+                    <li>Add a feature test asserting the incident opens on the trigger condition and resolves when it clears. Note: assert on metadata <em>values</em>, not array key order.</li>
+                </ol>
+            </article>
+        </main>
+
+        <nav id="docs-toc"></nav>
+    </div>
+
+    <script src="assets/nav.js"></script>
+</body>
+</html>

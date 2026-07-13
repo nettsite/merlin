@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Credit Notes — Merlin User Guide</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/docs.css">
+</head>
+<body>
+    <div id="docs-shell">
+        <aside id="docs-sidebar"></aside>
+
+        <main id="docs-content">
+            <article>
+                <h1>Credit Notes</h1>
+                <p>A credit note reduces what a client owes you — because you overcharged, goods were returned, or you're settling a dispute. It's the opposite of a sales invoice: instead of adding to the client's balance, it subtracts from it.</p>
+
+                <h2 id="creating-a-credit-note">Creating a credit note</h2>
+                <ol>
+                    <li>Go to <strong>Credit Notes</strong> and click <strong>New Credit Note</strong>.</li>
+                    <li>Choose the client and set the date.</li>
+                    <li>Add line items describing what is being credited, with amounts and VAT.</li>
+                </ol>
+                <p>The credit note starts in <strong>Draft</strong> status with its own number (e.g. CRN-2026-00005). Edit the header and lines freely while it's a draft.</p>
+
+                <h2 id="credit-note-statuses">Credit note statuses</h2>
+                <table>
+                    <thead><tr><th>Status</th><th>What it means</th></tr></thead>
+                    <tbody>
+                        <tr><td>Draft</td><td>Being prepared. Amounts can still be changed.</td></tr>
+                        <tr><td>Issued</td><td>Finalised and issued to the client. Ready to apply against an invoice.</td></tr>
+                        <tr><td>Applied</td><td>Applied against a sales invoice, reducing what's owed. Final state.</td></tr>
+                        <tr><td>Voided</td><td>Cancelled. Final state.</td></tr>
+                    </tbody>
+                </table>
+
+                <h2 id="issuing">Issuing</h2>
+                <p>When the details are right, click <strong>Issue</strong>. This finalises the credit note — the amounts are now fixed.</p>
+
+                <h2 id="applying-to-an-invoice">Applying to an invoice</h2>
+                <p>Click <strong>Apply</strong> on an issued credit note and choose the sales invoice it offsets. The credit reduces the outstanding balance of that invoice and the credit note moves to <strong>Applied</strong>.</p>
+
+                <h2 id="voiding">Voiding</h2>
+                <p>If a credit note was created in error, click <strong>Void</strong>. Voided credit notes stay in the list for your records but have no effect on any balance.</p>
+
+                <div class="callout">
+                    <span class="callout-title">Don't edit — credit</span>
+                    Once a sales invoice has been sent or posted, don't try to change it. Issue a credit note instead. That keeps a clean, auditable trail of what was charged and what was corrected.
+                </div>
+
+                <h2 id="filtering-and-searching">Filtering and searching</h2>
+                <p>Use the status tabs (All, Draft, Issued, Applied, Voided) to filter the list, and the search box to find credit notes by number or client.</p>
+            </article>
+        </main>
+
+        <nav id="docs-toc"></nav>
+    </div>
+
+    <script src="assets/nav.js"></script>
+</body>
+</html>

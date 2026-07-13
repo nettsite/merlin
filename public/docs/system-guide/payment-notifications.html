@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Payment Notifications — Merlin System Guide</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/docs.css">
+</head>
+<body>
+    <div id="docs-shell">
+        <aside id="docs-sidebar"></aside>
+
+        <main id="docs-content">
+            <article>
+                <h1>Payment Notifications</h1>
+                <p>Payment notifications are receipts and payment confirmations — PayPal receipts, FNB Connect confirmations, Payfast notifications — that arrive through the same ingestion path as purchase invoices. Merlin classifies them as a distinct document type, matches them to the purchase invoice they settle, and consolidates the pair into a single document carrying both source files.</p>
+
+                <h2 id="document-type">Document type</h2>
+                <p>Payment notifications use <code>document_type = payment_notification</code> with number prefix <code>PMTN</code> (see <code>config/documents.php</code>). Classification happens during LLM extraction: the prompt distinguishes a payment receipt from an invoice, and the pipeline routes the document to <code>PaymentNotificationProcessingService</code> instead of the invoice pipeline.</p>
+
+                <h2 id="matching">Matching</h2>
+                <p><code>PaymentNotificationMatcher</code> (<code>app/Modules/Purchasing/Services/</code>) does the pairing. Matching runs in both directions:</p>
+                <ul>
+                    <li><strong><code>findInvoiceMatch()</code></strong> — a freshly processed payment notification searches existing purchase invoices. Only invoices issued on or before the payment date, within a 30-day window (<code>MAX_DATE_WINDOW_DAYS</code>), are candidates.</li>
+                    <li><strong><code>findPaymentMatch()</code></strong> — the reciprocal check. A freshly processed purchase invoice searches pending payment notifications (status <code>received</code>) dated on or after its issue date, within the same 30-day window. This handles the receipt-arrives-first ordering.</li>
+                </ul>
+                <p>Each candidate is scored on amount and supplier/name similarity; the best match above threshold is returned as <code>{document, confidence, reason}</code>. The <code>reason</code> string is recorded for auditability.</p>
+
+                <h2 id="consolidation">Consolidation</h2>
+                <p>On a successful match the notification is merged into the invoice document rather than kept as a sibling: the invoice ends up carrying both PDFs on its <code>source_document</code> media collection (the bill and the proof of payment), and the standalone notification document is absorbed. The invoice detail view lists both files.</p>
+
+                <h2 id="forex-correction">Foreign-currency correction</h2>
+                <p>For foreign-currency invoices, the payment notification shows the amount <em>actually charged</em> in base currency — better data than the daily rate from <code>ExchangeRateService</code>. When the matched notification is <strong>confirmed</strong>, Merlin corrects the invoice's base-currency figures to the settled amount. The correction is deliberately gated on confirmation status: an unconfirmed notification never rewrites invoice amounts.</p>
+
+                <div class="callout">
+                    <span class="callout-title">No GL payment entry — ever</span>
+                    A matched payment notification documents that payment occurred; it never records a payment transaction in the ledger. Recording the actual cash movement is the bank-statement pipeline's job — the bank statement remains the single source of truth for money leaving the account. This avoids double-counting when the same payment later appears on a statement.
+                </div>
+
+                <h2 id="duplicate-invoice-merging">Duplicate invoice merging</h2>
+                <p><code>DuplicateInvoiceMerger</code> handles the adjacent problem of the same invoice arriving twice (supplier resends, reminder copies). When a newly processed invoice matches an existing one on supplier, number, and amounts, the new file is merged into the existing document's media instead of creating a second <code>Document</code> row. <code>InvoiceProcessingService</code> invokes the merger as part of processing.</p>
+
+                <h2 id="testing">Testing</h2>
+                <p>Feature coverage lives in the purchase-invoice test suites: matcher scoring and window bounds, receipt-first and invoice-first orderings, the confirmed-only forex gate, and duplicate-resend merging. When changing the matcher, keep the date-window queries on <code>whereDate()</code> — raw string comparison misses same-day rows on SQLite.</p>
+            </article>
+        </main>
+
+        <nav id="docs-toc"></nav>
+    </div>
+
+    <script src="assets/nav.js"></script>
+</body>
+</html>

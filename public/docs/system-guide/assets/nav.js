@@ -32,6 +32,7 @@ const NAV = [
             { file: 'parties.html', title: 'Parties & Contacts' },
             { file: 'roles-permissions.html', title: 'Roles & Permissions' },
             { file: 'settings.html', title: 'Settings' },
+            { file: 'incident-notifications.html', title: 'Incident Notifications' },
         ],
     },
     {
@@ -42,6 +43,7 @@ const NAV = [
             { file: 'invoice-pipeline.html', title: 'The Invoice Pipeline' },
             { file: 'document-lifecycle.html', title: 'Document Lifecycle' },
             { file: 'posting-rules.html', title: 'Posting Rules' },
+            { file: 'payment-notifications.html', title: 'Payment Notifications' },
             { file: 'bank-statements.html', title: 'Bank Statements' },
             { file: 'llm-logs.html', title: 'LLM Logs' },
         ],
@@ -51,8 +53,11 @@ const NAV = [
         pages: [
             { file: 'clients.html', title: 'Clients' },
             { file: 'sales-invoices.html', title: 'Sales Invoices' },
+            { file: 'quotes-credit-notes.html', title: 'Quotes & Credit Notes' },
             { file: 'recurring-invoices.html', title: 'Recurring Invoices' },
             { file: 'payment-terms.html', title: 'Payment Terms' },
+            { file: 'client-portal.html', title: 'Client Portal' },
+            { file: 'ninja-import.html', title: 'InvoiceNinja Import' },
         ],
     },
     {

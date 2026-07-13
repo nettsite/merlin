@@ -82,6 +82,21 @@
                 <h2 id="reprocessing">If the extraction went wrong</h2>
                 <p>If Merlin misread an invoice — wrong supplier, garbled line items, missing amounts — use the <strong>Reprocess</strong> button. This deletes the extracted details and sends the invoice through the reading process again from scratch. Reprocessing is useful if the file was initially unreadable and has since been replaced, or if a settings change should change how it's extracted.</p>
 
+                <h2 id="payment-notifications">Payment notifications</h2>
+                <p>If you upload a payment receipt or notification — a PayPal receipt, an FNB Connect payment confirmation, a Payfast notification — Merlin recognises it as a payment rather than an invoice and tries to match it to the purchase invoice it settles. It looks for an invoice from around the same time (up to 30 days before the payment) with matching amounts and supplier details.</p>
+                <ul>
+                    <li>When a match is found, the payment notification is attached to the invoice, so the invoice carries both documents — the bill and the proof of payment.</li>
+                    <li>If the notification arrives <em>before</em> the invoice, Merlin holds it and matches it automatically when the invoice is later uploaded.</li>
+                    <li>For foreign-currency invoices, a confirmed payment notification showing the actual amount paid corrects the invoice's exchange-rate figures to what was really charged.</li>
+                </ul>
+                <div class="callout">
+                    <span class="callout-title">Payments are still recorded from your bank statement</span>
+                    A matched payment notification documents the payment — it does not record it in your accounts. The actual payment entry comes from your <a href="bank-statements.html">bank statement</a>, which remains the source of truth for money leaving your account.
+                </div>
+
+                <h2 id="duplicate-invoices">Duplicate invoices</h2>
+                <p>Suppliers sometimes send the same invoice twice — a resend, a reminder copy, or the same bill arriving by two routes. When Merlin detects that an uploaded invoice matches one it already has (same supplier, number, and amounts), it merges the new file into the existing invoice instead of creating a duplicate entry.</p>
+
                 <h2 id="viewing-the-original">Viewing the original file</h2>
                 <p>You can view the original uploaded file from the review panel at any time to compare against what Merlin extracted.</p>
             </article>

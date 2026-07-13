@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Quotes — Merlin User Guide</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/docs.css">
+</head>
+<body>
+    <div id="docs-shell">
+        <aside id="docs-sidebar"></aside>
+
+        <main id="docs-content">
+            <article>
+                <h1>Quotes</h1>
+                <p>Quotes are price proposals you send to clients before any work is done or goods are supplied. A quote looks like an invoice — client, line items, amounts — but it doesn't affect your accounts. If the client accepts, you convert it to a sales invoice with one click.</p>
+
+                <h2 id="creating-a-quote">Creating a quote</h2>
+                <ol>
+                    <li>Go to <strong>Quotes</strong> and click <strong>New Quote</strong>.</li>
+                    <li>Choose the client and set the quote date.</li>
+                    <li>Add line items — description, quantity, unit price, and VAT.</li>
+                </ol>
+                <p>The quote is created in <strong>Draft</strong> status and gets a quote number automatically (e.g. QUO-2026-00012). You can edit the header and lines freely while it's a draft.</p>
+
+                <h2 id="quote-statuses">Quote statuses</h2>
+                <table>
+                    <thead><tr><th>Status</th><th>What it means</th></tr></thead>
+                    <tbody>
+                        <tr><td>Draft</td><td>Being prepared. Not yet sent to the client.</td></tr>
+                        <tr><td>Sent</td><td>Emailed to the client. Waiting for a response.</td></tr>
+                        <tr><td>Accepted</td><td>The client has accepted. Ready to convert to an invoice.</td></tr>
+                        <tr><td>Converted</td><td>An invoice has been created from this quote. Final state.</td></tr>
+                        <tr><td>Declined</td><td>The client turned it down. Final state.</td></tr>
+                        <tr><td>Expired</td><td>The quote lapsed without a response. Final state.</td></tr>
+                    </tbody>
+                </table>
+
+                <h2 id="sending-a-quote">Sending a quote</h2>
+                <p>Open the quote and click <strong>Send</strong>. Merlin emails the quote to the client's contact and moves it to <strong>Sent</strong>.</p>
+
+                <h2 id="recording-the-outcome">Recording the outcome</h2>
+                <ul>
+                    <li><strong>Mark Accepted</strong> — the client said yes. The quote is now ready to convert.</li>
+                    <li><strong>Decline</strong> — the client said no. You'll be asked to confirm; declined quotes can't be reopened.</li>
+                    <li><strong>Expire</strong> — the quote lapsed without an answer.</li>
+                </ul>
+
+                <h2 id="converting-to-an-invoice">Converting to an invoice</h2>
+                <p>Once a quote is accepted, click <strong>Convert to Invoice</strong>. Merlin creates a new sales invoice with the same client and line items, gives it its own invoice number, and marks the quote as <strong>Converted</strong>. From there the invoice behaves like any other <a href="sales-invoices.html">sales invoice</a> — you send it, track payment, and post it.</p>
+
+                <div class="callout">
+                    <span class="callout-title">Quotes never touch your accounts</span>
+                    Nothing about a quote is posted to your ledger — not when it's created, sent, or accepted. Only the sales invoice created by conversion affects your books.
+                </div>
+
+                <h2 id="filtering-and-searching">Filtering and searching</h2>
+                <p>Use the status tabs at the top of the list (All, Draft, Sent, Accepted, Converted, Declined, Expired) to filter, and the search box to find quotes by number or client.</p>
+            </article>
+        </main>
+
+        <nav id="docs-toc"></nav>
+    </div>
+
+    <script src="assets/nav.js"></script>
+</body>
+</html>

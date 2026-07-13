@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Alerts &amp; Notifications — Merlin User Guide</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/docs.css">
+</head>
+<body>
+    <div id="docs-shell">
+        <aside id="docs-sidebar"></aside>
+
+        <main id="docs-content">
+            <article>
+                <h1>Alerts &amp; Notifications</h1>
+                <p>Merlin watches for conditions that need your attention and surfaces them in three places: a bell icon in the top navigation, an alert panel on the dashboard, and a brief pop-up toast when something new is detected.</p>
+
+                <h2 id="the-bell">The notification bell</h2>
+                <p>The bell in the top navigation shows a badge with the number of active alerts. Click it to open a dropdown listing each alert with a short description. Clicking an alert takes you to the page where you can deal with it.</p>
+                <p>The bell checks for new alerts automatically every 20 seconds — you don't need to refresh the page.</p>
+
+                <h2 id="the-dashboard-panel">The dashboard panel</h2>
+                <p>Active alerts also appear in a panel on the dashboard, so anything outstanding is visible the moment you log in.</p>
+
+                <h2 id="what-merlin-alerts-on">What Merlin alerts on</h2>
+                <table>
+                    <thead><tr><th>Alert</th><th>When it appears</th><th>How to clear it</th></tr></thead>
+                    <tbody>
+                        <tr>
+                            <td>Unposted invoices</td>
+                            <td>One or more purchase invoices are sitting in Received, Reviewed, or Approved status — processed but not yet posted to your accounts.</td>
+                            <td>Review and post (or reject) the waiting invoices under <a href="purchase-invoices.html">Purchase Invoices</a>. The alert clears itself once nothing is waiting.</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <p>More alert types will be added over time — the same bell and panel will show them all.</p>
+
+                <div class="callout">
+                    <span class="callout-title">Alerts are shared, not personal</span>
+                    Alerts describe the state of the business, not your personal to-do list. Every user who can view documents sees the same alerts, and when one person resolves the underlying issue, the alert clears for everyone.
+                </div>
+            </article>
+        </main>
+
+        <nav id="docs-toc"></nav>
+    </div>
+
+    <script src="assets/nav.js"></script>
+</body>
+</html>

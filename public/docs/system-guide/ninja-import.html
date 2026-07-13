@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>InvoiceNinja Import — Merlin System Guide</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/docs.css">
+</head>
+<body>
+    <div id="docs-shell">
+        <aside id="docs-sidebar"></aside>
+
+        <main id="docs-content">
+            <article>
+                <h1>InvoiceNinja Import</h1>
+                <p>Merlin ships a one-shot migration command for moving billing data out of a self-hosted InvoiceNinja v5 installation. It reads the Ninja install directly and creates the equivalent Merlin records, so an existing billing history carries over instead of starting from zero.</p>
+
+                <h2 id="usage">Usage</h2>
+                <pre><code>php artisan ninja:import {path?} [--dry-run] [--only=phase] [--limit=N]</code></pre>
+                <table>
+                    <thead><tr><th>Argument / option</th><th>Meaning</th></tr></thead>
+                    <tbody>
+                        <tr><td><code>path</code></td><td>The InvoiceNinja install directory (e.g. <code>/srv/ninja</code>). Prompted for if omitted.</td></tr>
+                        <tr><td><code>--dry-run</code></td><td>Show what would be imported — counts only, no writes.</td></tr>
+                        <tr><td><code>--only=</code></td><td>Run a single phase: <code>clients</code>, <code>contacts</code>, <code>invoices</code>, <code>quotes</code>, <code>credits</code>, <code>payments</code>, or <code>recurring</code>.</td></tr>
+                        <tr><td><code>--limit=N</code></td><td>Cap rows per phase — useful for a trial run against production data. <code>0</code> (default) means no limit.</td></tr>
+                    </tbody>
+                </table>
+
+                <h2 id="what-gets-imported">What gets imported</h2>
+                <p>The import runs in phases, in dependency order. Ninja clients become Merlin <a href="parties.html">parties</a> with client relationships; their contacts become persons with contact assignments; invoices, quotes, and credits become <code>Document</code> rows of the matching type; payments attach to their invoices; recurring profiles become <a href="recurring-invoices.html">recurring invoices</a>. Internal ID maps (Ninja client id → Merlin party UUID, Ninja invoice id → Merlin document UUID) keep cross-references intact across phases.</p>
+
+                <div class="callout">
+                    <span class="callout-title">Run dry first</span>
+                    Always run with <code>--dry-run</code> first and check the phase counts against what you expect from the Ninja install. Then run phases individually with <code>--only=</code> if you want to verify each step, or run the whole command for a full import.
+                </div>
+
+                <h2 id="registration">Command registration</h2>
+                <p>The command lives in <code>app/Modules/Billing/Console/ImportFromNinja.php</code>. Module console commands are not auto-discovered — they're registered explicitly in <code>AppServiceProvider::register()</code>. If the command doesn't appear in <code>php artisan list</code>, check that registration.</p>
+            </article>
+        </main>
+
+        <nav id="docs-toc"></nav>
+    </div>
+
+    <script src="assets/nav.js"></script>
+</body>
+</html>

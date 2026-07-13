@@ -9,6 +9,7 @@ const NAV = [
         group: 'Getting Started',
         pages: [
             { file: 'index.html', title: 'Welcome to Merlin' },
+            { file: 'notifications.html', title: 'Alerts & Notifications' },
         ],
     },
     {
@@ -24,7 +25,10 @@ const NAV = [
         group: 'Billing',
         pages: [
             { file: 'clients.html', title: 'Clients' },
+            { file: 'contacts.html', title: 'Contacts' },
+            { file: 'quotes.html', title: 'Quotes' },
             { file: 'sales-invoices.html', title: 'Sales Invoices' },
+            { file: 'credit-notes.html', title: 'Credit Notes' },
             { file: 'recurring-invoices.html', title: 'Recurring Invoices' },
             { file: 'payment-terms.html', title: 'Payment Terms' },
         ],
