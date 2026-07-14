@@ -5,7 +5,9 @@ use App\Modules\Core\Models\Document;
 use App\Modules\Core\Models\DocumentLine;
 use App\Modules\Core\Models\User;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Str;
 use Livewire\Livewire;
+use Spatie\MediaLibrary\MediaCollections\Models\Media;
 use Spatie\Permission\Models\Permission;
 
 /**
@@ -37,6 +39,65 @@ it('shows an extraction-failed badge on flagged invoices', function (): void {
 
     Livewire::test('pages.purchase-invoices.index')
         ->assertSee('Extraction failed');
+});
+
+// --- Files ---
+
+it('shows the source document and attachments in the detail flyout', function (): void {
+    $this->actingAs(piUser('documents-view-any', 'documents-view'));
+
+    $doc = Document::factory()->purchaseInvoice()->create();
+
+    Media::create([
+        'model_type' => (new Document)->getMorphClass(),
+        'model_id' => $doc->id,
+        'uuid' => Str::uuid(),
+        'collection_name' => 'source_document',
+        'name' => 'invoice',
+        'file_name' => 'original-invoice.pdf',
+        'mime_type' => 'application/pdf',
+        'disk' => 'local',
+        'conversions_disk' => 'local',
+        'size' => 1024,
+        'manipulations' => [],
+        'custom_properties' => [],
+        'generated_conversions' => [],
+        'responsive_images' => [],
+        'order_column' => 1,
+    ]);
+
+    Media::create([
+        'model_type' => (new Document)->getMorphClass(),
+        'model_id' => $doc->id,
+        'uuid' => Str::uuid(),
+        'collection_name' => 'attachments',
+        'name' => 'receipt',
+        'file_name' => 'payfast-receipt.pdf',
+        'mime_type' => 'application/pdf',
+        'disk' => 'local',
+        'conversions_disk' => 'local',
+        'size' => 1024,
+        'manipulations' => [],
+        'custom_properties' => [],
+        'generated_conversions' => [],
+        'responsive_images' => [],
+        'order_column' => 1,
+    ]);
+
+    Livewire::test('pages.purchase-invoices.index')
+        ->call('openDetail', $doc->id)
+        ->assertSee('original-invoice.pdf')
+        ->assertSee('payfast-receipt.pdf');
+});
+
+it('hides the Files section when there are no attached files', function (): void {
+    $this->actingAs(piUser('documents-view-any', 'documents-view'));
+
+    $doc = Document::factory()->purchaseInvoice()->create();
+
+    Livewire::test('pages.purchase-invoices.index')
+        ->call('openDetail', $doc->id)
+        ->assertDontSeeText('Files');
 });
 
 // --- Inline line editing ---

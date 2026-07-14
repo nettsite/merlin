@@ -15,6 +15,7 @@ class PaymentNotificationMatcher
 
     public function __construct(
         private readonly CurrencySettings $currencySettings,
+        private readonly PaymentEvidenceRecorder $paymentEvidenceRecorder,
     ) {}
 
     /**
@@ -155,6 +156,20 @@ class PaymentNotificationMatcher
 
             if ($amountApplied) {
                 $this->applyCorrectedAmount($invoice, $paymentNotification);
+            }
+
+            // Only record a real GL payment when the notification is a
+            // confirmed (not merely pending/reserved) payment in the base
+            // currency — a foreign-currency notification's total can't be
+            // trusted against balance_due, which is always base-currency.
+            if ($paidCurrency === $baseCurrency && ($paymentNotification->metadata['confirmed'] ?? false) === true) {
+                $this->paymentEvidenceRecorder->record(
+                    $invoice,
+                    (float) $paymentNotification->total,
+                    $paymentNotification->issue_date ?? now(),
+                    $paymentNotification->reference,
+                    $paymentNotification->metadata['method'] ?? 'payment notification',
+                );
             }
 
             $invoice->update([

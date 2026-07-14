@@ -110,3 +110,36 @@ it('still classifies a real tax invoice mentioning bank account details as an in
 
     expect($this->classifier->classify($text))->toBe(DocumentKindClassifier::KIND_INVOICE);
 });
+
+// --- Paid-signal detection ---
+
+it('flags a supplier tax invoice / receipt combo as carrying a paid signal', function (): void {
+    $text = <<<'TEXT'
+        Tax Invoice / Receipt #1680798
+        Invoice Date: Monday, June 1st, 2026
+
+        Description                Quantity   Total
+        Cloud Server (Reseller)    1          R1820.00
+
+        Subtotal: R1820.00
+        Amount Paid: R1820.00
+        Balance Due: R0.00
+        TEXT;
+
+    expect($this->classifier->hasPaidSignal($text))->toBeTrue();
+});
+
+it('does not flag a plain unpaid tax invoice as carrying a paid signal', function (): void {
+    $text = <<<'TEXT'
+        Tax Invoice #1680798
+        Invoice Date: Monday, June 1st, 2026
+        Due Date: Monday, June 8th, 2026
+
+        Description                Quantity   Total
+        Cloud Server (Reseller)    1          R1820.00
+
+        Subtotal: R1820.00
+        TEXT;
+
+    expect($this->classifier->hasPaidSignal($text))->toBeFalse();
+});

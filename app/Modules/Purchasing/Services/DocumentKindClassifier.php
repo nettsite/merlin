@@ -41,6 +41,22 @@ class DocumentKindClassifier
         '/\bquantity\b/i',
     ];
 
+    /**
+     * A supplier "tax invoice / receipt" combo document scores as
+     * KIND_INVOICE (it carries invoice vocabulary) but still marks the
+     * purchase as paid. Checked separately from classify() so the invoice
+     * vs payment_notification split is untouched — this only flags whether
+     * an invoice-classified document also carries paid-evidence language.
+     */
+    private const PAID_SIGNALS = [
+        '/\bpaid in full\b/i',
+        '/\bbalance due:?\s*(?:r|R|\$)?\s*0(?:\.00)?\b/i',
+        '/\bthis invoice has been paid\b/i',
+        '/\bpayment received\b/i',
+        '/\bamount paid\b/i',
+        '/\breceipt\b/i',
+    ];
+
     public function classify(string $text): string
     {
         $paymentScore = $this->countMatches(self::PAYMENT_SIGNALS, $text);
@@ -51,6 +67,11 @@ class DocumentKindClassifier
         }
 
         return self::KIND_INVOICE;
+    }
+
+    public function hasPaidSignal(string $text): bool
+    {
+        return $this->countMatches(self::PAID_SIGNALS, $text) > 0;
     }
 
     /** @param string[] $patterns */

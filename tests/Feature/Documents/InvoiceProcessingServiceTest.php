@@ -14,9 +14,11 @@ use App\Modules\Purchasing\DTO\ExtractedPaymentNotification;
 use App\Modules\Purchasing\Jobs\ProcessInvoiceDocument;
 use App\Modules\Purchasing\Services\AccountResolver;
 use App\Modules\Purchasing\Services\DocumentKindClassifier;
+use App\Modules\Purchasing\Services\DocumentService;
 use App\Modules\Purchasing\Services\DuplicateInvoiceMerger;
 use App\Modules\Purchasing\Services\ExchangeRateService;
 use App\Modules\Purchasing\Services\InvoiceProcessingService;
+use App\Modules\Purchasing\Services\PaymentEvidenceRecorder;
 use App\Modules\Purchasing\Services\PaymentNotificationMatcher;
 use App\Modules\Purchasing\Services\PaymentNotificationProcessingService;
 use App\Modules\Purchasing\Services\PostingRuleService;
@@ -74,6 +76,7 @@ beforeEach(function (): void {
         paymentNotificationProcessor: $this->paymentNotificationProcessor,
         paymentNotificationMatcher: $this->paymentNotificationMatcher,
         duplicateInvoiceMerger: app(DuplicateInvoiceMerger::class),
+        paymentEvidenceRecorder: app(PaymentEvidenceRecorder::class),
     );
 });
 
@@ -516,5 +519,147 @@ it('attaches a resent/duplicate invoice to the original instead of creating a se
         ->and(DocumentLine::where('document_id', $original->id)->count())->toBe(1)
         ->and(DocumentActivity::where('document_id', $original->id)
             ->where('activity_type', 'duplicate_invoice_attached')
+            ->exists())->toBeTrue();
+});
+
+it('does not merge two distinct recurring invoices with the same amount and no paid language', function (): void {
+    // A recurring supplier (hosting, rent, retainer) routinely bills the same
+    // amount roughly monthly — same party, same-ish amount, ~30 days apart is
+    // normal billing, not a duplicate. Only the invoice number distinguishes
+    // them, and neither carries paid-evidence language, so fuzzy matching
+    // must not kick in.
+    $january = new ExtractedInvoice(
+        supplierName: 'Acme Hosting (Pty) Ltd',
+        supplierTaxNumber: '4123456789',
+        supplierEmail: null,
+        supplierPhone: null,
+        invoiceNumber: 'INV-2024-001',
+        issueDate: Carbon::parse('2024-01-15'),
+        dueDate: Carbon::parse('2024-02-14'),
+        currency: config('currency.base', 'ZAR'),
+        subtotal: 1000.0,
+        taxTotal: 150.0,
+        total: 1150.0,
+        lines: [fakeLine()],
+        confidence: 0.95,
+        warnings: [],
+    );
+
+    $february = new ExtractedInvoice(
+        supplierName: 'Acme Hosting (Pty) Ltd',
+        supplierTaxNumber: '4123456789',
+        supplierEmail: null,
+        supplierPhone: null,
+        invoiceNumber: 'INV-2024-002',
+        issueDate: Carbon::parse('2024-02-14'),
+        dueDate: Carbon::parse('2024-03-15'),
+        currency: config('currency.base', 'ZAR'),
+        subtotal: 1000.0,
+        taxTotal: 150.0,
+        total: 1150.0,
+        lines: [fakeLine()],
+        confidence: 0.95,
+        warnings: [],
+    );
+
+    $this->llmMock->allows('extractInvoice')->andReturnValues([$january, $february]);
+
+    $januaryDoc = Document::factory()->purchaseInvoice()->create(['party_id' => null]);
+    attachFakeMedia($januaryDoc);
+    $this->service->process($januaryDoc);
+
+    $februaryDoc = Document::factory()->purchaseInvoice()->create(['party_id' => null]);
+    attachFakeMedia($februaryDoc);
+    $this->service->process($februaryDoc);
+
+    expect(Document::find($februaryDoc->id))->not->toBeNull()
+        ->and(Document::where('document_type', 'purchase_invoice')->count())->toBe(2)
+        ->and(DocumentLine::where('document_id', $januaryDoc->id)->count())->toBe(1)
+        ->and(DocumentLine::where('document_id', $februaryDoc->id)->count())->toBe(1);
+});
+
+// --- Payment evidence: GL payment recording without duplication ---
+
+it('does not double-record a payment when both a bank notification and a supplier receipt confirm the same payment', function (): void {
+    // 1. Unpaid invoice arrives and is posted.
+    $original = Document::factory()->purchaseInvoice()->create(['party_id' => null, 'status' => 'received', 'issue_date' => null]);
+    attachFakeMedia($original);
+
+    $this->llmMock->allows('extractInvoice')->andReturn(fakeExtracted([fakeLine()]));
+    $this->service->process($original);
+    $original->refresh();
+
+    app(DocumentService::class)->post($original, User::factory()->create());
+    $original->refresh();
+    expect($original->status)->toBe('posted');
+
+    // 2. A bank payment notification arrives and settles it — creates the GL payment.
+    $bankDoc = Document::factory()->purchaseInvoice()->create();
+    attachFakeMedia($bankDoc);
+
+    $this->extractorMock->allows('extract')->andReturn(
+        'FNB Connect — Proof of Payment. Beneficiary: Acme Hosting. Amount: R1150.00. Reference: INV-2024-001'
+    );
+    $this->llmMock->allows('extractPaymentNotification')->andReturn(new ExtractedPaymentNotification(
+        paymentDate: Carbon::parse($original->issue_date->toDateString())->addDay(),
+        paidAmount: 1150.0,
+        paidCurrency: 'ZAR',
+        referenceText: 'INV-2024-001',
+        payeeName: 'Acme Hosting',
+        method: 'EFT',
+        confirmed: true,
+        confidence: 0.9,
+        warnings: [],
+    ));
+    $this->service->process($bankDoc);
+
+    $original->refresh();
+    expect((float) $original->balance_due)->toBe(0.0)
+        ->and($original->status)->toBe('paid')
+        ->and($original->childDocuments()
+            ->wherePivot('relationship_type', 'payment_for')
+            ->where('document_type', 'payment')
+            ->count())->toBe(1);
+
+    // 3. The supplier's own "paid" receipt arrives afterwards, under its own
+    // receipt number (no reference match) — must attach as evidence only,
+    // not create a second GL payment.
+    $receipt = Document::factory()->purchaseInvoice()->create(['party_id' => null, 'issue_date' => null]);
+    attachFakeMedia($receipt);
+
+    $this->extractorMock->allows('extract')->andReturn(<<<'TEXT'
+        Tax Invoice / Receipt #RCPT-9001
+        Subtotal: 1000.00
+        VAT No: 4123456789
+        Amount Paid: 1150.00
+        Balance Due: R0.00
+        TEXT);
+    $this->llmMock->allows('extractInvoice')->andReturn(new ExtractedInvoice(
+        supplierName: 'Acme Hosting (Pty) Ltd',
+        supplierTaxNumber: '4123456789',
+        supplierEmail: null,
+        supplierPhone: null,
+        invoiceNumber: 'RCPT-9001',
+        issueDate: Carbon::parse($original->issue_date->toDateString())->addDays(2),
+        dueDate: null,
+        currency: config('currency.base', 'ZAR'),
+        subtotal: 1000.0,
+        taxTotal: 150.0,
+        total: 1150.0,
+        lines: [],
+        confidence: 0.9,
+        warnings: [],
+    ));
+    $this->service->process($receipt);
+
+    expect(Document::find($receipt->id))->toBeNull();
+
+    $original->refresh();
+    expect($original->childDocuments()
+        ->wherePivot('relationship_type', 'payment_for')
+        ->where('document_type', 'payment')
+        ->count())->toBe(1)
+        ->and(DocumentActivity::where('document_id', $original->id)
+            ->where('activity_type', 'payment_evidence_noted')
             ->exists())->toBeTrue();
 });

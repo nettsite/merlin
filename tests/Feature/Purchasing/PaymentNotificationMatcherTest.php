@@ -5,6 +5,7 @@ use App\Modules\Core\Models\DocumentActivity;
 use App\Modules\Core\Models\DocumentLine;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Settings\CurrencySettings;
+use App\Modules\Purchasing\Services\PaymentEvidenceRecorder;
 use App\Modules\Purchasing\Services\PaymentNotificationMatcher;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
@@ -12,7 +13,7 @@ uses(RefreshDatabase::class);
 
 beforeEach(function (): void {
     $this->actingAs(User::factory()->create());
-    $this->matcher = new PaymentNotificationMatcher(app(CurrencySettings::class));
+    $this->matcher = new PaymentNotificationMatcher(app(CurrencySettings::class), app(PaymentEvidenceRecorder::class));
 });
 
 function paymentNotification(array $overrides = []): Document
@@ -206,4 +207,68 @@ it('does not change totals when the payment notification is only a pending/reser
     expect((float) $invoice->total)->toBe($originalTotal)
         ->and($invoice->metadata['payment_notification']['amount_applied'])->toBeFalse()
         ->and(Document::find($notification->id))->toBeNull();
+});
+
+// --- GL payment recording ---
+
+it('creates a real GL payment when a confirmed base-currency notification matches a posted invoice', function (): void {
+    $invoice = Document::factory()->purchaseInvoice()->create(['status' => 'posted']);
+    DocumentLine::factory()->for($invoice)->create(['unit_price' => 1000, 'tax_rate' => 15]);
+    $invoice->refresh();
+    expect((float) $invoice->balance_due)->toBe(1150.0);
+
+    $notification = paymentNotification([
+        'total' => 1150.0,
+        'reference' => 'PAY-REF-1',
+        'metadata' => ['payee_name' => 'Acme', 'method' => 'EFT', 'confirmed' => true],
+    ]);
+
+    $this->matcher->merge($invoice, $notification, 0.95, 'test reason');
+
+    $invoice->refresh();
+
+    expect((float) $invoice->balance_due)->toBe(0.0)
+        ->and($invoice->status)->toBe('paid')
+        ->and($invoice->childDocuments()
+            ->wherePivot('relationship_type', 'payment_for')
+            ->where('document_type', 'payment')
+            ->count())->toBe(1);
+});
+
+it('does not create a second GL payment when a second confirmation arrives for an already-settled invoice', function (): void {
+    // Same payment confirmed twice — a bank advice, then a payment-gateway
+    // email for the same EFT — must not double up the GL entry.
+    $invoice = Document::factory()->purchaseInvoice()->create(['status' => 'posted']);
+    DocumentLine::factory()->for($invoice)->create(['unit_price' => 1000, 'tax_rate' => 15]);
+    $invoice->refresh();
+
+    $bankAdvice = paymentNotification(['total' => 1150.0, 'metadata' => ['confirmed' => true]]);
+    $this->matcher->merge($invoice, $bankAdvice, 0.95, 'bank advice');
+    $invoice->refresh();
+
+    $gatewayEmail = paymentNotification(['total' => 1150.0, 'metadata' => ['confirmed' => true]]);
+    $this->matcher->merge($invoice, $gatewayEmail, 0.95, 'gateway email');
+    $invoice->refresh();
+
+    expect($invoice->childDocuments()
+        ->wherePivot('relationship_type', 'payment_for')
+        ->where('document_type', 'payment')
+        ->count())->toBe(1)
+        ->and(DocumentActivity::where('document_id', $invoice->id)
+            ->where('activity_type', 'payment_evidence_noted')
+            ->exists())->toBeTrue();
+});
+
+it('stashes pending_payment metadata and creates no GL payment when the invoice is not yet posted', function (): void {
+    $invoice = Document::factory()->purchaseInvoice()->create(['status' => 'received']);
+    DocumentLine::factory()->for($invoice)->create(['unit_price' => 1000, 'tax_rate' => 15]);
+    $invoice->refresh();
+
+    $notification = paymentNotification(['total' => 1150.0, 'reference' => 'PAY-REF-2', 'metadata' => ['confirmed' => true]]);
+    $this->matcher->merge($invoice, $notification, 0.95, 'test reason');
+
+    $invoice->refresh();
+
+    expect((float) $invoice->metadata['pending_payment']['amount'])->toBe(1150.0)
+        ->and($invoice->childDocuments()->wherePivot('relationship_type', 'payment_for')->count())->toBe(0);
 });

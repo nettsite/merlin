@@ -32,8 +32,16 @@ trait HasDocumentNumber
         $prefix = config("documents.types.{$type}.prefix", 'DOC');
         $year = now()->year;
 
+        // Scoped by prefix, not document_type: a document can be reclassified
+        // after numbering (e.g. purchase_invoice -> payment_notification when
+        // InvoiceProcessingService detects it's actually a payment receipt).
+        // Its number stays but its type no longer matches — filtering by type
+        // here would make that row invisible to future max() lookups even
+        // though document_number is globally unique, letting a later document
+        // compute the same "next" number and collide. Each type has its own
+        // distinct prefix (see config/documents.php), so the prefix+year LIKE
+        // pattern alone is already an exact scope.
         $last = static::withTrashed()
-            ->where('document_type', $type)
             ->where('document_number', 'like', "{$prefix}-{$year}-%")
             ->max('document_number');
 

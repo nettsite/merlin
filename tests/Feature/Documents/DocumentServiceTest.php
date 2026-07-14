@@ -126,6 +126,50 @@ it('records payment activity', function (): void {
         ->and((float) $activity->metadata['amount'])->toBe(1000.0);
 });
 
+// --- Pending payment evidence (recorded once posted) ---
+
+it('records a pending purchase payment once the invoice is posted', function (): void {
+    // Payment evidence (e.g. a matched PayPal notification) arrived while the
+    // invoice was still under review, before any GL row existed to post
+    // against — it gets replayed once post() runs.
+    $doc = Document::factory()->purchaseInvoice()->create([
+        'status' => 'approved',
+        'metadata' => [
+            'pending_payment' => [
+                'amount' => 1150.0,
+                'date' => now()->toDateString(),
+                'reference' => 'PAY-REF-3',
+                'evidence_source' => 'PayPal',
+            ],
+        ],
+    ]);
+
+    DocumentLine::factory()->for($doc)->create(['unit_price' => 1000, 'tax_rate' => 15]);
+    $doc->refresh();
+    expect((float) $doc->balance_due)->toBe(1150.0);
+
+    $this->service->post($doc, $this->user);
+
+    $doc->refresh();
+
+    expect($doc->status)->toBe('paid')
+        ->and((float) $doc->balance_due)->toBe(0.0)
+        ->and($doc->metadata['pending_payment'] ?? null)->toBeNull()
+        ->and($doc->childDocuments()
+            ->wherePivot('relationship_type', 'payment_for')
+            ->where('document_type', 'payment')
+            ->count())->toBe(1);
+});
+
+it('does nothing extra when posting an invoice with no pending payment', function (): void {
+    $doc = Document::factory()->purchaseInvoice()->create(['status' => 'approved']);
+
+    $this->service->post($doc, $this->user);
+
+    expect($doc->fresh()->status)->toBe('posted')
+        ->and($doc->fresh()->childDocuments()->count())->toBe(0);
+});
+
 // --- Foreign currency payment ---
 
 it('finalises the exchange rate from actual ZAR paid', function (): void {

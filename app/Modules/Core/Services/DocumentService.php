@@ -9,6 +9,7 @@ use App\Modules\Core\Models\DocumentActivity;
 use App\Modules\Core\Models\DocumentRelationship;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Settings\CurrencySettings;
+use App\Modules\Purchasing\Services\PaymentEvidenceRecorder;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -125,6 +126,7 @@ class DocumentService
     public function post(Document $doc, User $by): void
     {
         $this->transition($doc, 'posted', $by, 'Posted to the general ledger.');
+        $this->recordPendingPurchasePayment($doc);
     }
 
     /**
@@ -505,6 +507,40 @@ class DocumentService
     public function postAutonomously(Document $doc, string $reason): void
     {
         $this->transition($doc, 'posted', null, "Auto-posted: {$reason}");
+        $this->recordPendingPurchasePayment($doc);
+    }
+
+    /**
+     * A purchase invoice can reach 'posted' status after payment evidence (a
+     * bank/gateway notification or a paid receipt) already arrived while it
+     * was still under review — that evidence gets stashed as pending_payment
+     * metadata instead of a GL entry, since there's no ledger row to post
+     * against yet. Once posted, replay it through the same dedup-guarded
+     * recorder used for evidence that arrives after posting.
+     */
+    private function recordPendingPurchasePayment(Document $doc): void
+    {
+        if ($doc->document_type !== 'purchase_invoice') {
+            return;
+        }
+
+        $pending = $doc->metadata['pending_payment'] ?? null;
+
+        if ($pending === null) {
+            return;
+        }
+
+        $metadata = $doc->metadata;
+        unset($metadata['pending_payment']);
+        $doc->update(['metadata' => $metadata ?: null]);
+
+        app(PaymentEvidenceRecorder::class)->record(
+            $doc,
+            (float) $pending['amount'],
+            Carbon::parse($pending['date']),
+            $pending['reference'] ?? null,
+            $pending['evidence_source'] ?? 'pending payment',
+        );
     }
 
     protected function transition(Document $doc, string $to, ?User $by, string $description): void

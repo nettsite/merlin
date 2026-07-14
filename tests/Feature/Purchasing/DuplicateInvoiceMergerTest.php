@@ -67,3 +67,62 @@ it('merges a duplicate invoice by attaching its media to the original and discar
             ->where('activity_type', 'duplicate_invoice_attached')
             ->exists())->toBeTrue();
 });
+
+// --- Fuzzy matching (receipts with their own number) ---
+
+it('finds a fuzzy duplicate by party, amount, and date proximity when there is no reference match', function (): void {
+    $party = Party::factory()->create();
+
+    $original = Document::factory()->purchaseInvoice()->create([
+        'party_id' => $party->id,
+        'reference' => '1680798',
+        'issue_date' => '2026-06-01',
+        'total' => 1150.00,
+    ]);
+
+    // A receipt for the same purchase, but carrying its own receipt number.
+    $receipt = Document::factory()->purchaseInvoice()->create([
+        'party_id' => $party->id,
+        'reference' => 'RCPT-99',
+        'issue_date' => '2026-06-05',
+    ]);
+
+    $found = $this->merger->findFuzzyDuplicate($receipt, 1150.00);
+
+    expect($found)->not->toBeNull()
+        ->and($found->id)->toBe($original->id);
+});
+
+it('does not fuzzy-match invoices outside the amount tolerance', function (): void {
+    $party = Party::factory()->create();
+
+    Document::factory()->purchaseInvoice()->create([
+        'party_id' => $party->id,
+        'issue_date' => '2026-06-01',
+        'total' => 1150.00,
+    ]);
+
+    $receipt = Document::factory()->purchaseInvoice()->create([
+        'party_id' => $party->id,
+        'issue_date' => '2026-06-05',
+    ]);
+
+    expect($this->merger->findFuzzyDuplicate($receipt, 2000.00))->toBeNull();
+});
+
+it('does not fuzzy-match invoices outside the date window', function (): void {
+    $party = Party::factory()->create();
+
+    Document::factory()->purchaseInvoice()->create([
+        'party_id' => $party->id,
+        'issue_date' => '2026-01-01',
+        'total' => 1150.00,
+    ]);
+
+    $receipt = Document::factory()->purchaseInvoice()->create([
+        'party_id' => $party->id,
+        'issue_date' => '2026-06-05',
+    ]);
+
+    expect($this->merger->findFuzzyDuplicate($receipt, 1150.00))->toBeNull();
+});

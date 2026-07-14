@@ -673,7 +673,7 @@ new #[Layout('components.layout.app')] class extends Component
         $suggestedPaymentNotification = null;
 
         if ($this->showDetail && $this->detailId) {
-            $detail = Document::with(['party.business', 'payableAccount'])->findOrFail($this->detailId);
+            $detail = Document::with(['party.business', 'payableAccount', 'media'])->findOrFail($this->detailId);
             $lines = $detail->lines()->with(['account', 'llmSuggestedAccount'])->get();
             $activities = $detail->activities()->with('user')->get();
             $accounts = Account::postable()->active()->orderBy('code')->get(['id', 'code', 'name']);
@@ -1335,6 +1335,42 @@ new #[Layout('components.layout.app')] class extends Component
                     </table>
                 </div>
             </div>
+
+            {{-- Files --}}
+            @php
+                $sourceMedia = $detail->getFirstMedia('source_document');
+                $attachmentMedia = $detail->getMedia('attachments');
+            @endphp
+            @if($sourceMedia || $attachmentMedia->isNotEmpty())
+                <div class="px-6 py-4 border-b border-line">
+                    <h3 class="text-sm font-semibold text-ink mb-3">Files</h3>
+                    <div class="space-y-1.5">
+                        @if($sourceMedia)
+                            <a
+                                href="{{ route('documents.media', $sourceMedia) }}"
+                                target="_blank"
+                                rel="noopener"
+                                class="flex items-center gap-2 text-xs text-ink-soft hover:text-ink"
+                            >
+                                <flux:icon.document-text class="size-4 text-ink-muted" />
+                                <span>{{ $sourceMedia->file_name }}</span>
+                                <span class="text-ink-muted">— Original</span>
+                            </a>
+                        @endif
+                        @foreach($attachmentMedia as $media)
+                            <a
+                                href="{{ route('documents.media', $media) }}"
+                                target="_blank"
+                                rel="noopener"
+                                class="flex items-center gap-2 text-xs text-ink-soft hover:text-ink"
+                            >
+                                <flux:icon.paper-clip class="size-4 text-ink-muted" />
+                                <span>{{ $media->file_name }}</span>
+                            </a>
+                        @endforeach
+                    </div>
+                </div>
+            @endif
 
             {{-- Activity log --}}
             @if($activities->isNotEmpty())

@@ -26,6 +26,7 @@ class InvoiceProcessingService
         private readonly PaymentNotificationProcessingService $paymentNotificationProcessor,
         private readonly PaymentNotificationMatcher $paymentNotificationMatcher,
         private readonly DuplicateInvoiceMerger $duplicateInvoiceMerger,
+        private readonly PaymentEvidenceRecorder $paymentEvidenceRecorder,
     ) {}
 
     /**
@@ -100,14 +101,36 @@ class InvoiceProcessingService
             'source' => 'llm_extracted',
         ]);
 
-        // 6a. Suppliers sometimes resend the exact same invoice as a different
-        // file (e.g. an "unpaid" copy followed by a "paid" copy). That's a
-        // reissue, not a second invoice — attach it to the original instead of
-        // creating a duplicate row.
+        // 6a. Suppliers sometimes resend the same invoice as a different file
+        // (e.g. an "unpaid" copy followed by a "paid" copy, or a "tax invoice
+        // / receipt" combo with its own receipt number). That's a reissue,
+        // not a second invoice — attach it to the original instead of
+        // creating a duplicate row. Invoice number/reference is the reliable
+        // signal and always applies. Amount+date fuzzy matching is NOT a
+        // reliable duplicate signal on its own — recurring suppliers (hosting,
+        // rent, retainers) routinely bill the same amount roughly monthly, so
+        // it's only used as a fallback when the document also carries actual
+        // paid-evidence language ("receipt", "paid in full", ...), i.e. it's
+        // already known to be evidence of payment rather than a new invoice.
         $duplicate = $this->duplicateInvoiceMerger->findDuplicate($document);
+        $hasPaidSignal = $this->classifier->hasPaidSignal($text);
+
+        if ($duplicate === null && $hasPaidSignal) {
+            $duplicate = $this->duplicateInvoiceMerger->findFuzzyDuplicate($document, $extracted->total);
+        }
 
         if ($duplicate !== null) {
             $this->duplicateInvoiceMerger->merge($document, $duplicate);
+
+            if ($hasPaidSignal) {
+                $this->paymentEvidenceRecorder->record(
+                    $duplicate->fresh(),
+                    $extracted->total,
+                    $extracted->issueDate ?? now(),
+                    $extracted->invoiceNumber,
+                    'supplier receipt',
+                );
+            }
 
             return;
         }
