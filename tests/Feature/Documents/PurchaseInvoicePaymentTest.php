@@ -1,5 +1,6 @@
 <?php
 
+use App\Modules\Accounting\Models\Account;
 use App\Modules\Core\Models\Document;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Services\DocumentService;
@@ -53,6 +54,20 @@ it('records a partial payment and transitions to partially_paid', function (): v
         'child_document_id' => $payment->id,
         'relationship_type' => 'payment_for',
     ]);
+});
+
+it('sets payable_account_id and contra_account_id on the payment so AP is debited and bank credited in reports', function (): void {
+    $invoice = postedPurchaseInvoice();
+    $bankAccount = Account::factory()->create();
+
+    $payment = app(DocumentService::class)->recordPurchasePayment($invoice, [
+        'amount' => 400.00,
+        'date' => now()->toDateString(),
+        'contra_account_id' => $bankAccount->id,
+    ], null);
+
+    expect($payment->payable_account_id)->toBe($invoice->payable_account_id)
+        ->and($payment->contra_account_id)->toBe($bankAccount->id);
 });
 
 it('records a full payment and transitions to paid', function (): void {

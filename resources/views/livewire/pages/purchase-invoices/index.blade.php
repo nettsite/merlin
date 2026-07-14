@@ -66,6 +66,7 @@ new #[Layout('components.layout.app')] class extends Component
         'date' => '',
         'reference' => '',
         'finalise_rate' => false,
+        'contra_account_id' => '',
     ];
 
     // Bulk selection
@@ -515,6 +516,7 @@ new #[Layout('components.layout.app')] class extends Component
             // Default to finalising when the FX rate is still provisional —
             // the actual amount paid fixes the true cost.
             'finalise_rate' => (bool) ($doc->is_foreign_currency && $doc->exchange_rate_provisional),
+            'contra_account_id' => app(\App\Modules\Billing\Settings\BillingSettings::class)->default_contra_account_id ?? '',
         ];
         $this->showPaymentModal = true;
     }
@@ -526,6 +528,7 @@ new #[Layout('components.layout.app')] class extends Component
             'paymentForm.date' => 'required|date',
             'paymentForm.reference' => 'nullable|string|max:255',
             'paymentForm.finalise_rate' => 'boolean',
+            'paymentForm.contra_account_id' => 'nullable|uuid|exists:accounts,id',
         ]);
 
         $this->authorize('can-record-payments');
@@ -537,6 +540,7 @@ new #[Layout('components.layout.app')] class extends Component
                 'date' => $this->paymentForm['date'],
                 'reference' => $this->paymentForm['reference'] ?: null,
                 'finalise_rate' => (bool) $this->paymentForm['finalise_rate'],
+                'contra_account_id' => $this->paymentForm['contra_account_id'] ?: null,
             ], Auth::user());
         } catch (\InvalidArgumentException $e) {
             $this->addError('paymentForm.amount', $e->getMessage());

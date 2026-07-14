@@ -66,6 +66,49 @@ it('renders the sales invoices page', function (): void {
         ->assertSee('Sales Invoices');
 });
 
+it('shows the outstanding balance column', function (): void {
+    $invoice = siDraft();
+    $invoice->lines()->create([
+        'line_number' => 1,
+        'type' => 'service',
+        'description' => 'Consulting',
+        'quantity' => 1,
+        'unit_price' => 1000.00,
+        'discount_percent' => 0,
+        'discount_amount' => 0,
+        'tax_rate' => 0,
+    ]);
+    $invoice->recalculateTotals();
+    app(DocumentService::class)->markAsSent($invoice, User::factory()->create());
+    app(BillingService::class)->recordPayment($invoice->fresh(), ['amount' => 400.00, 'date' => now()->toDateString()], null);
+
+    $this->actingAs(siUserWith(['documents-view-any']));
+
+    Livewire::test('pages.sales-invoices.index')
+        ->assertOk()
+        ->assertSee('600.00'); // balance_due after a 400 payment on a 1000 invoice
+});
+
+it('filters to unpaid invoices (sent + partially_paid combined)', function (): void {
+    $sent = siDraft();
+    $sent->lines()->create(['line_number' => 1, 'type' => 'service', 'description' => 'A', 'quantity' => 1, 'unit_price' => 100, 'discount_percent' => 0, 'discount_amount' => 0, 'tax_rate' => 0]);
+    $sent->recalculateTotals();
+    app(DocumentService::class)->markAsSent($sent, User::factory()->create());
+
+    $paid = siDraft();
+    $paid->lines()->create(['line_number' => 1, 'type' => 'service', 'description' => 'B', 'quantity' => 1, 'unit_price' => 200, 'discount_percent' => 0, 'discount_amount' => 0, 'tax_rate' => 0]);
+    $paid->recalculateTotals();
+    app(DocumentService::class)->markAsSent($paid, User::factory()->create());
+    app(BillingService::class)->recordPayment($paid->fresh(), ['amount' => 200.00, 'date' => now()->toDateString()], null);
+
+    $this->actingAs(siUserWith(['documents-view-any']));
+
+    $component = Livewire::test('pages.sales-invoices.index')->set('statusFilter', 'unpaid');
+
+    $component->assertSee($sent->document_number)
+        ->assertDontSee($paid->document_number);
+});
+
 // --- BillingService::createDraft ---
 
 it('creates a draft document', function (): void {

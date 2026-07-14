@@ -505,7 +505,8 @@ new #[Layout('components.layout.app')] class extends Component
                         ->orWhere('legal_name', 'like', "%{$this->search}%")
                     );
             }))
-            ->when($this->statusFilter, fn ($q) => $q->where('status', $this->statusFilter))
+            ->when($this->statusFilter === 'unpaid', fn ($q) => $q->whereIn('status', ['sent', 'partially_paid']))
+            ->when($this->statusFilter && $this->statusFilter !== 'unpaid', fn ($q) => $q->where('status', $this->statusFilter))
             ->when(
                 $this->sortBy === 'client',
                 fn ($q) => $q
@@ -578,7 +579,11 @@ new #[Layout('components.layout.app')] class extends Component
 <div class="flex items-center gap-3 px-6 py-3 border-b border-line bg-surface-alt">
     <flux:input wire:model.live.debounce.300ms="search" placeholder="Search invoices…" icon="magnifying-glass" size="sm" class="max-w-xs" />
     <div class="flex gap-1">
-        @foreach(['' => 'All', 'draft' => 'Draft', 'sent' => 'Sent', 'voided' => 'Voided'] as $status => $label)
+        @php
+            $tabCounts = $statusCounts->toArray();
+            $tabCounts['unpaid'] = ($statusCounts['sent'] ?? 0) + ($statusCounts['partially_paid'] ?? 0);
+        @endphp
+        @foreach(['' => 'All', 'unpaid' => 'Unpaid', 'draft' => 'Draft', 'sent' => 'Sent', 'partially_paid' => 'Partially Paid', 'paid' => 'Paid', 'voided' => 'Voided'] as $status => $label)
             <button
                 wire:click="$set('statusFilter', '{{ $status }}')"
                 @class([
@@ -588,8 +593,8 @@ new #[Layout('components.layout.app')] class extends Component
                 ])
             >
                 {{ $label }}
-                @if($status !== '' && ($statusCounts[$status] ?? 0) > 0)
-                    <span class="ml-1 text-xs opacity-60">{{ $statusCounts[$status] }}</span>
+                @if($status !== '' && ($tabCounts[$status] ?? 0) > 0)
+                    <span class="ml-1 text-xs opacity-60">{{ $tabCounts[$status] }}</span>
                 @endif
             </button>
         @endforeach
@@ -606,6 +611,7 @@ new #[Layout('components.layout.app')] class extends Component
                 <x-crud.th column="issue_date" :sort-by="$sortBy" :sort-dir="$sortDir">Issue Date</x-crud.th>
                 <x-crud.th column="due_date" :sort-by="$sortBy" :sort-dir="$sortDir">Due Date</x-crud.th>
                 <x-crud.th column="total" :sort-by="$sortBy" :sort-dir="$sortDir" :right="true">Total</x-crud.th>
+                <x-crud.th column="balance_due" :sort-by="$sortBy" :sort-dir="$sortDir" :right="true">Balance</x-crud.th>
                 <x-crud.th column="status" :sort-by="$sortBy" :sort-dir="$sortDir">Status</x-crud.th>
             </tr>
         </thead>
@@ -641,23 +647,32 @@ new #[Layout('components.layout.app')] class extends Component
                     <td class="px-4 py-3 text-right font-medium text-ink tabular-nums">
                         {{ $currencySymbol }}{{ number_format((float) $invoice->total, 2) }}
                     </td>
+                    <td @class([
+                        'px-4 py-3 text-right tabular-nums',
+                        'font-medium text-warning' => (float) $invoice->balance_due > 0,
+                        'text-ink-soft' => (float) $invoice->balance_due <= 0,
+                    ])>
+                        {{ $currencySymbol }}{{ number_format((float) $invoice->balance_due, 2) }}
+                    </td>
                     <td class="px-4 py-3">
                         @php
                             $badgeClass = match($invoice->status) {
                                 'draft' => 'bg-surface-alt text-ink-muted',
                                 'sent' => 'bg-blue-50 text-blue-700',
+                                'partially_paid' => 'bg-amber-50 text-warning',
+                                'paid' => 'bg-green-50 text-success',
                                 'voided' => 'bg-red-50 text-danger',
                                 default => 'bg-surface-alt text-ink-muted',
                             };
                         @endphp
                         <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium {{ $badgeClass }}">
-                            {{ ucfirst($invoice->status) }}
+                            {{ ucwords(str_replace('_', ' ', $invoice->status)) }}
                         </span>
                     </td>
                 </tr>
             @empty
                 <tr>
-                    <td colspan="6" class="px-4 py-12 text-center">
+                    <td colspan="7" class="px-4 py-12 text-center">
                         <p class="font-medium text-ink">No sales invoices yet.</p>
                         @can('create', \App\Modules\Core\Models\Document::class)
                             <p class="mt-1 text-sm text-ink-muted">Create your first invoice to get started.</p>

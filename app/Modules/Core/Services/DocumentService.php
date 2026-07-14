@@ -185,6 +185,8 @@ class DocumentService
                 $excess = max(0.0, $amount - $balanceDue);
                 $applyAmount = $excess > 0.01 ? $balanceDue : $amount;
 
+                $this->createPaymentDocument($invoice, $applyAmount, $doc->issue_date ?? now(), $doc->reference, $doc->contra_account_id);
+
                 $this->recordPayment(
                     doc: $invoice,
                     amount: $applyAmount,
@@ -245,6 +247,41 @@ class DocumentService
                 }
             }
         });
+    }
+
+    /**
+     * Create an inbound payment document for a bank-statement settlement,
+     * linked to the invoice it settles. Mirrors BillingService::recordPayment()'s
+     * payment document, but for the bank-statement reconciliation path, which
+     * previously mutated the invoice directly without leaving a payment record
+     * (so the balance sheet never credited AR or debited bank for it).
+     */
+    private function createPaymentDocument(Document $invoice, float $amount, CarbonInterface $date, ?string $reference, ?string $contraAccountId): Document
+    {
+        $payment = Document::create([
+            'document_type' => 'payment',
+            'direction' => 'inbound',
+            'status' => 'posted',
+            'party_id' => $invoice->party_id,
+            'issue_date' => $date->toDateString(),
+            'currency' => $invoice->currency,
+            'exchange_rate' => $invoice->exchange_rate ?? 1.0,
+            'subtotal' => $amount,
+            'tax_total' => 0,
+            'total' => $amount,
+            'receivable_account_id' => $invoice->receivable_account_id,
+            'contra_account_id' => $contraAccountId,
+            'source' => 'system',
+            'reference' => $reference,
+        ]);
+
+        DocumentRelationship::create([
+            'parent_document_id' => $invoice->id,
+            'child_document_id' => $payment->id,
+            'relationship_type' => 'payment_for',
+        ]);
+
+        return $payment;
     }
 
     public function dispute(Document $doc, User $by, string $reason): void
@@ -357,7 +394,7 @@ class DocumentService
      * payment document linked via DocumentRelationship, then delegates
      * amount/balance/status updates to recordPayment().
      *
-     * @param  array{amount: float, date: string, reference?: string|null, finalise_rate?: bool}  $data
+     * @param  array{amount: float, date: string, reference?: string|null, finalise_rate?: bool, contra_account_id?: string|null}  $data
      */
     public function recordPurchasePayment(Document $invoice, array $data, ?User $by): Document
     {
@@ -385,6 +422,8 @@ class DocumentService
                 'subtotal' => $amount,
                 'tax_total' => 0,
                 'total' => $amount,
+                'payable_account_id' => $invoice->payable_account_id,
+                'contra_account_id' => $data['contra_account_id'] ?? null,
                 'source' => 'manual',
                 'reference' => $reference,
             ]);

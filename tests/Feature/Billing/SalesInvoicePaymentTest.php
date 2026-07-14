@@ -1,5 +1,6 @@
 <?php
 
+use App\Modules\Accounting\Models\Account;
 use App\Modules\Billing\Services\BillingService;
 use App\Modules\Core\Models\Document;
 use App\Modules\Core\Models\DocumentRelationship;
@@ -93,6 +94,21 @@ it('creates a payment document linked to the invoice', function () {
         'child_document_id' => $payment->id,
         'relationship_type' => 'payment_for',
     ]);
+});
+
+it('sets receivable_account_id on the payment document so AR is credited in reports', function () {
+    $invoice = sipSentInvoice();
+    $invoice->update(['receivable_account_id' => Account::factory()->create()->id]);
+
+    app(BillingService::class)->recordPayment($invoice, [
+        'amount' => 250.00,
+        'date' => '2026-05-10',
+    ], null);
+
+    $payment = Document::where('document_type', 'payment')->latest()->first();
+
+    expect($payment->receivable_account_id)->toBe($invoice->fresh()->receivable_account_id)
+        ->and($payment->receivable_account_id)->not->toBeNull();
 });
 
 it('updates invoice amount_paid and balance_due', function () {

@@ -39,12 +39,16 @@ class BillingService
         $paymentTermId = $this->resolvePaymentTermId($client, $data['payment_term_id'] ?? null);
         $dueDate = $this->resolveDueDate($issueDate, $paymentTermId);
 
+        $clientRel = $client->relationships()->where('relationship_type', 'client')->first();
+        $receivableAccountId = $clientRel?->default_receivable_account_id
+            ?? $this->billingSettings->default_receivable_account_id;
+
         return Document::create([
             'document_type' => 'sales_invoice',
             'direction' => 'outbound',
             'status' => 'draft',
             'party_id' => $client->id,
-            'receivable_account_id' => $this->billingSettings->default_receivable_account_id,
+            'receivable_account_id' => $receivableAccountId,
             'payment_term_id' => $paymentTermId,
             'issue_date' => $issueDate->toDateString(),
             'due_date' => $dueDate?->toDateString(),
@@ -145,6 +149,7 @@ class BillingService
                 'subtotal' => $amount,
                 'tax_total' => 0,
                 'total' => $amount,
+                'receivable_account_id' => $invoice->receivable_account_id,
                 'contra_account_id' => $bankAccountId,
                 'source' => 'manual',
                 'reference' => $reference,

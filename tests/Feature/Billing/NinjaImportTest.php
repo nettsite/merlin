@@ -6,8 +6,8 @@ use App\Modules\Accounting\Models\AccountType;
 use App\Modules\Billing\Enums\RecurringFrequency;
 use App\Modules\Billing\Enums\RecurringInvoiceStatus;
 use App\Modules\Billing\Models\RecurringInvoice;
+use App\Modules\Billing\Settings\BillingSettings;
 use App\Modules\Core\Models\Document;
-use App\Modules\Core\Models\DocumentRelationship;
 use App\Modules\Core\Models\Party;
 use App\Modules\Core\Models\PartyRelationship;
 use Illuminate\Support\Facades\DB;
@@ -85,6 +85,7 @@ function createNinjaSchema(): void
         public_notes TEXT, terms TEXT, footer TEXT,
         uses_inclusive_taxes INTEGER DEFAULT 0,
         tax_name1 TEXT, tax_rate1 REAL DEFAULT 0,
+        discount REAL DEFAULT 0, is_amount_discount INTEGER DEFAULT 0,
         is_deleted INTEGER DEFAULT 0
     )');
 
@@ -177,6 +178,47 @@ function seedNinjaFixture(): void
         'is_deleted' => 0,
     ]);
 
+    // Ninja invoice-level (amount) discount — not reflected in line_items,
+    // must be applied on import or the line total overstates the true amount.
+    $ninja->table('invoices')->insert([
+        'id' => 102,
+        'number' => 'INV-0043',
+        'client_id' => 1,
+        'status_id' => 4,
+        'date' => '2025-01-16',
+        'due_date' => '2025-02-16',
+        'amount' => 65.00,
+        'balance' => 0,
+        'line_items' => json_encode([
+            ['product_key' => 'co.za', 'notes' => 'Domain renewal', 'cost' => 120.00, 'quantity' => 1, 'tax_rate1' => 0],
+        ]),
+        'uses_inclusive_taxes' => 0,
+        'discount' => 55.00,
+        'is_amount_discount' => 1,
+        'is_deleted' => 0,
+    ]);
+
+    // Per-line (percentage) discounts — separate from the header discount above.
+    $ninja->table('invoices')->insert([
+        'id' => 103,
+        'number' => 'INV-0044',
+        'client_id' => 1,
+        'status_id' => 2,
+        'date' => '2025-01-17',
+        'due_date' => '2025-02-17',
+        'amount' => 3187.50,
+        'balance' => 3187.50,
+        'line_items' => json_encode([
+            ['product_key' => '', 'notes' => 'VPS rental', 'cost' => 1500.00, 'quantity' => 1, 'discount' => 0, 'is_amount_discount' => false, 'tax_rate1' => 0],
+            ['product_key' => '', 'notes' => 'Install',    'cost' => 450.00,  'quantity' => 4, 'discount' => 25, 'is_amount_discount' => false, 'tax_rate1' => 0],
+            ['product_key' => '', 'notes' => 'Submit',     'cost' => 450.00,  'quantity' => 1, 'discount' => 25, 'is_amount_discount' => false, 'tax_rate1' => 0],
+        ]),
+        'uses_inclusive_taxes' => 0,
+        'discount' => 0,
+        'is_amount_discount' => 0,
+        'is_deleted' => 0,
+    ]);
+
     $ninja->table('payments')->insert([
         'id' => 201,
         'number' => 'PAY-0201',
@@ -194,6 +236,69 @@ function seedNinjaFixture(): void
         'paymentable_id' => 101,
         'paymentable_type' => 'invoices',
         'amount' => 2800.00,
+        'refunded' => 0,
+    ]);
+
+    // Ninja's "apply credit" payment type: header amount is 0, but the
+    // allocation to the invoice is real (type_id=32 in real Ninja data).
+    $ninja->table('payments')->insert([
+        'id' => 202,
+        'number' => '0866',
+        'client_id' => 1,
+        'status_id' => 4,
+        'amount' => 0.00,
+        'date' => '2025-02-11',
+        'transaction_reference' => null,
+        'is_deleted' => 0,
+    ]);
+
+    $ninja->table('paymentables')->insert([
+        'id' => 2,
+        'payment_id' => 202,
+        'paymentable_id' => 103,
+        'paymentable_type' => 'invoices',
+        'amount' => 3187.50,
+        'refunded' => 0,
+    ]);
+
+    // A rounding-driven overpayment allocation (100.50 against a 100.00
+    // invoice) — must be capped at balance_due, and the payment document's
+    // total must reflect what was actually applied (100.00), not 100.50.
+    $ninja->table('invoices')->insert([
+        'id' => 104,
+        'number' => 'INV-0045',
+        'client_id' => 1,
+        'status_id' => 2,
+        'date' => '2025-01-18',
+        'due_date' => '2025-02-18',
+        'amount' => 100.00,
+        'balance' => 0,
+        'line_items' => json_encode([
+            ['product_key' => '', 'notes' => 'Hosting', 'cost' => 100.00, 'quantity' => 1, 'tax_rate1' => 0],
+        ]),
+        'uses_inclusive_taxes' => 0,
+        'discount' => 0,
+        'is_amount_discount' => 0,
+        'is_deleted' => 0,
+    ]);
+
+    $ninja->table('payments')->insert([
+        'id' => 203,
+        'number' => 'PAY-0203',
+        'client_id' => 1,
+        'status_id' => 4,
+        'amount' => 100.50,
+        'date' => '2025-02-12',
+        'transaction_reference' => null,
+        'is_deleted' => 0,
+    ]);
+
+    $ninja->table('paymentables')->insert([
+        'id' => 3,
+        'payment_id' => 203,
+        'paymentable_id' => 104,
+        'paymentable_type' => 'invoices',
+        'amount' => 100.50,
         'refunded' => 0,
     ]);
 
@@ -240,6 +345,12 @@ function ninjaRequiredAccounts(): void
     ] as $acct) {
         Account::firstOrCreate(['code' => $acct['code']], $acct);
     }
+
+    // ClientReceivableAccountService creates per-client sub-accounts as
+    // children of whichever account is configured here.
+    $settings = app(BillingSettings::class);
+    $settings->default_receivable_account_id = Account::where('code', '1100')->value('id');
+    $settings->save();
 }
 
 // -------------------------------------------------------------------------
@@ -271,7 +382,12 @@ it('imports client as an active business party with client relationship', functi
     expect($party)->not->toBeNull();
     expect($party->status)->toBe('active');
     expect($party->business->legal_name)->toBe('Acme Corp');
-    expect($rel->metadata['default_receivable_account_id'])->toBe(Account::where('code', '1100')->value('id'));
+
+    $clientAccountId = $rel->metadata['default_receivable_account_id'] ?? null;
+    expect($clientAccountId)->not->toBeNull();
+
+    $clientAccount = Account::find($clientAccountId);
+    expect($clientAccount->parent_id)->toBe(Account::where('code', '1100')->value('id'));
 });
 
 it('imports contact with correct ContactAssignment', function (): void {
@@ -319,6 +435,90 @@ it('imports invoice with correct document number, lines and totals', function ()
     expect($l1->account_id)->toBe(Account::where('code', '4000')->value('id'));
 });
 
+it('applies a Ninja header-level (amount) discount so the invoice total matches Ninja, not the raw line sum', function (): void {
+    $this->artisan('ninja:import', ['path' => ninjaEnvDir()])->assertSuccessful();
+
+    $doc = Document::query()
+        ->where('document_type', 'sales_invoice')
+        ->whereJsonContains('metadata->ninja_id', 102)
+        ->first();
+
+    expect($doc)->not->toBeNull();
+
+    $line = $doc->lines->firstWhere('line_number', 1);
+    expect((float) $line->unit_price)->toBe(120.0)
+        ->and((float) $line->discount_amount)->toBe(55.0)
+        ->and((float) $line->line_total)->toBe(65.0);
+
+    // The line item alone sums to 120 — the header discount must bring the
+    // document total down to Ninja's true amount of 65, not 120.
+    expect((float) $doc->total)->toBe(65.0);
+});
+
+it('applies each line\'s own percentage discount so the invoice total matches Ninja', function (): void {
+    $this->artisan('ninja:import', ['path' => ninjaEnvDir()])->assertSuccessful();
+
+    $doc = Document::query()
+        ->where('document_type', 'sales_invoice')
+        ->whereJsonContains('metadata->ninja_id', 103)
+        ->first();
+
+    expect($doc)->not->toBeNull();
+    expect($doc->lines)->toHaveCount(3);
+
+    $l1 = $doc->lines->firstWhere('line_number', 1);
+    $l2 = $doc->lines->firstWhere('line_number', 2);
+    $l3 = $doc->lines->firstWhere('line_number', 3);
+
+    expect((float) $l1->line_total)->toBe(1500.0)
+        ->and((float) $l2->line_total)->toBe(1350.0)
+        ->and((float) $l3->line_total)->toBe(337.5);
+
+    // Raw cost×quantity sums to 4200 — line discounts must bring the
+    // document total down to Ninja's true amount of 3187.50.
+    expect((float) $doc->total)->toBe(3187.5);
+});
+
+it('applies a zero-header-amount "apply credit" payment using its real allocation', function (): void {
+    $this->artisan('ninja:import', ['path' => ninjaEnvDir()])->assertSuccessful();
+
+    $invoice = Document::query()
+        ->where('document_type', 'sales_invoice')
+        ->whereJsonContains('metadata->ninja_id', 103)
+        ->first();
+
+    expect($invoice)->not->toBeNull()
+        ->and($invoice->status)->toBe('paid')
+        ->and((float) $invoice->balance_due)->toBe(0.0);
+
+    $payment = Document::where('document_type', 'payment')
+        ->whereJsonContains('metadata->ninja_id', 202)
+        ->first();
+
+    expect($payment)->not->toBeNull()
+        ->and((float) $payment->total)->toBe(3187.5);
+});
+
+it('caps an overpayment at balance_due and records only the applied amount on the payment document', function (): void {
+    $this->artisan('ninja:import', ['path' => ninjaEnvDir()])->assertSuccessful();
+
+    $invoice = Document::query()
+        ->where('document_type', 'sales_invoice')
+        ->whereJsonContains('metadata->ninja_id', 104)
+        ->first();
+
+    expect($invoice)->not->toBeNull()
+        ->and($invoice->status)->toBe('paid')
+        ->and((float) $invoice->amount_paid)->toBe(100.0)
+        ->and((float) $invoice->balance_due)->toBe(0.0);
+
+    $payment = Document::where('document_type', 'payment')
+        ->whereJsonContains('metadata->ninja_id', 203)
+        ->first();
+
+    expect($payment)->not->toBeNull()
+        ->and((float) $payment->total)->toBe(100.0);
+});
 
 it('imports recurring invoice with correct frequency and status', function (): void {
     $this->artisan('ninja:import', ['path' => ninjaEnvDir()])->assertSuccessful();

@@ -1,5 +1,7 @@
 <?php
 
+use App\Modules\Accounting\Models\Account;
+use App\Modules\Billing\Settings\BillingSettings;
 use App\Modules\Core\Models\Party;
 use App\Modules\Core\Models\PaymentTerm;
 use App\Modules\Core\Models\User;
@@ -64,6 +66,28 @@ it('creates a client', function (): void {
     $party = Party::clients()->latest()->first();
     expect($party)->not->toBeNull()
         ->and($party->business?->legal_name)->toBe('New Client Ltd');
+});
+
+it('creates a receivable sub-account for a new client when a control account is configured', function (): void {
+    $control = Account::factory()->create();
+    $settings = app(BillingSettings::class);
+    $settings->default_receivable_account_id = $control->id;
+    $settings->save();
+
+    $this->actingAs(clientUserWith(['parties-view-any', 'parties-create']));
+
+    Livewire::test('pages.clients.index')
+        ->call('create')
+        ->set('legalName', 'Sub Account Client Ltd')
+        ->set('tradingName', 'Sub Account Client')
+        ->call('save');
+
+    $party = Party::clients()->latest()->first();
+    $rel = $party->relationships->firstWhere('relationship_type', 'client');
+    $accountId = $rel->metadata['default_receivable_account_id'] ?? null;
+
+    expect($accountId)->not->toBeNull();
+    expect(Account::find($accountId)->parent_id)->toBe($control->id);
 });
 
 it('edits a client payment term', function (): void {

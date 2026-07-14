@@ -245,6 +245,18 @@ new #[Layout('components.layout.app')] class extends Component
                 {{ $paymentTerms->firstWhere('id', $clientRel?->payment_term_id)?->name ?? '—' }}
             </p>
         </div>
+        <div>
+            <p class="text-xs font-medium uppercase tracking-wide text-ink-muted">Receivable Account</p>
+            <p class="mt-1 text-sm text-ink">
+                @if($clientRel?->default_receivable_account_id)
+                    <a href="{{ route('accounts.show', $clientRel->default_receivable_account_id) }}" wire:navigate class="hover:text-accent hover:underline">
+                        View AR Ledger
+                    </a>
+                @else
+                    —
+                @endif
+            </p>
+        </div>
         @if($party->notes)
             <div class="col-span-2 sm:col-span-3 lg:col-span-4">
                 <p class="text-xs font-medium uppercase tracking-wide text-ink-muted">Notes</p>

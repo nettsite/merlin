@@ -1,7 +1,7 @@
 <?php
 
 use App\Modules\Accounting\Models\Account;
-use App\Modules\Core\Models\DocumentLine;
+use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -39,19 +39,65 @@ new #[Layout('components.layout.app')] class extends Component
         $account = Account::with('group.type')->findOrFail($this->accountId);
 
         $sortColumn = match ($this->sortBy) {
-            'document_number' => 'documents.document_number',
-            'type' => 'documents.document_type',
-            'amount' => 'document_lines.line_total',
-            default => 'documents.issue_date',
+            'document_number' => 'document_number',
+            'type' => 'document_type',
+            'amount' => 'amount',
+            default => 'issue_date',
         };
 
-        $lines = DocumentLine::query()
-            ->join('documents', 'documents.id', '=', 'document_lines.document_id')
+        $partyName = 'COALESCE(businesses.legal_name, CONCAT(persons.first_name, \' \', persons.last_name))';
+
+        $withPartyJoins = fn ($query) => $query
             ->leftJoin('businesses', 'businesses.id', '=', 'documents.party_id')
-            ->leftJoin('persons', 'persons.id', '=', 'documents.party_id')
-            ->selectRaw('document_lines.*, documents.issue_date, documents.document_number, documents.document_type, documents.status as document_status, COALESCE(businesses.legal_name, CONCAT(persons.first_name, " ", persons.last_name)) as party_name')
+            ->leftJoin('persons', 'persons.id', '=', 'documents.party_id');
+
+        // Individual line-item postings (expense/income allocations).
+        $lineRows = $withPartyJoins(
+            DB::table('document_lines')->join('documents', 'documents.id', '=', 'document_lines.document_id')
+        )
             ->where('document_lines.account_id', $this->accountId)
             ->whereNull('document_lines.deleted_at')
+            ->selectRaw("'line' as source, documents.id as document_id, documents.issue_date, documents.document_number, documents.document_type, documents.status as document_status, {$partyName} as party_name, document_lines.description as description, document_lines.line_total as amount");
+
+        // Sales invoice header → debit against this account when it's the client's receivable account.
+        $salesHeaderRows = $withPartyJoins(DB::table('documents'))
+            ->where('documents.document_type', 'sales_invoice')
+            ->where('documents.receivable_account_id', $this->accountId)
+            ->whereNull('documents.deleted_at')
+            ->selectRaw("'invoice_total' as source, documents.id as document_id, documents.issue_date, documents.document_number, documents.document_type, documents.status as document_status, {$partyName} as party_name, 'Invoice total' as description, documents.total as amount");
+
+        // Purchase invoice header → credit against this account when it's the supplier's payable account.
+        $purchaseHeaderRows = $withPartyJoins(DB::table('documents'))
+            ->where('documents.document_type', 'purchase_invoice')
+            ->where('documents.payable_account_id', $this->accountId)
+            ->whereNull('documents.deleted_at')
+            ->selectRaw("'invoice_total' as source, documents.id as document_id, documents.issue_date, documents.document_number, documents.document_type, documents.status as document_status, {$partyName} as party_name, 'Invoice total' as description, documents.total as amount");
+
+        // Payment documents can touch this account on any of three legs.
+        $paymentReceivableRows = $withPartyJoins(DB::table('documents'))
+            ->where('documents.document_type', 'payment')
+            ->where('documents.receivable_account_id', $this->accountId)
+            ->whereNull('documents.deleted_at')
+            ->selectRaw("'payment' as source, documents.id as document_id, documents.issue_date, documents.document_number, documents.document_type, documents.status as document_status, {$partyName} as party_name, 'Payment received' as description, documents.total as amount");
+
+        $paymentPayableRows = $withPartyJoins(DB::table('documents'))
+            ->where('documents.document_type', 'payment')
+            ->where('documents.payable_account_id', $this->accountId)
+            ->whereNull('documents.deleted_at')
+            ->selectRaw("'payment' as source, documents.id as document_id, documents.issue_date, documents.document_number, documents.document_type, documents.status as document_status, {$partyName} as party_name, 'Payment made' as description, documents.total as amount");
+
+        $paymentContraRows = $withPartyJoins(DB::table('documents'))
+            ->where('documents.document_type', 'payment')
+            ->where('documents.contra_account_id', $this->accountId)
+            ->whereNull('documents.deleted_at')
+            ->selectRaw("'payment' as source, documents.id as document_id, documents.issue_date, documents.document_number, documents.document_type, documents.status as document_status, {$partyName} as party_name, 'Payment' as description, documents.total as amount");
+
+        $lines = $lineRows
+            ->unionAll($salesHeaderRows)
+            ->unionAll($purchaseHeaderRows)
+            ->unionAll($paymentReceivableRows)
+            ->unionAll($paymentPayableRows)
+            ->unionAll($paymentContraRows)
             ->orderBy($sortColumn, $this->sortDir)
             ->paginate(25);
 
@@ -107,7 +153,7 @@ new #[Layout('components.layout.app')] class extends Component
     <div>
         <div class="border-b border-line px-6 py-4">
             <h2 class="text-sm font-semibold text-ink">Transactions</h2>
-            <p class="mt-0.5 text-xs text-ink-muted">All document lines posted to this account</p>
+            <p class="mt-0.5 text-xs text-ink-muted">All line items and document totals posted to this account</p>
         </div>
 
         <div class="overflow-x-auto">
@@ -159,9 +205,12 @@ new #[Layout('components.layout.app')] class extends Component
                             </td>
                             <td class="px-4 py-3 text-ink-soft">
                                 {{ $line->description ?? '—' }}
+                                @if($line->source !== 'line')
+                                    <span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-surface-alt text-ink-muted">header</span>
+                                @endif
                             </td>
                             <td class="px-4 py-3 text-right tabular-nums font-medium text-ink">
-                                {{ number_format((float) $line->line_total, 2) }}
+                                {{ number_format((float) $line->amount, 2) }}
                             </td>
                         </tr>
                     @empty

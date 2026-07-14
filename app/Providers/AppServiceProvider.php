@@ -6,6 +6,7 @@ use App\Console\Commands\DocsSync;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\AccountGroup;
 use App\Modules\Accounting\Models\AccountType;
+use App\Modules\Billing\Console\BackfillClientReceivableAccounts;
 use App\Modules\Billing\Console\GenerateRecurringInvoices;
 use App\Modules\Billing\Console\ImportFromNinja;
 use App\Modules\Billing\Console\SendReminders;
@@ -53,7 +54,7 @@ class AppServiceProvider extends ServiceProvider
 
         $this->app->bind(ModulePolicy::class, AllModulesPolicy::class);
 
-        $this->commands([DocsSync::class, GenerateRecurringInvoices::class, ImportFromNinja::class, SendReminders::class]);
+        $this->commands([BackfillClientReceivableAccounts::class, DocsSync::class, GenerateRecurringInvoices::class, ImportFromNinja::class, SendReminders::class]);
 
         $this->app->singleton(ExchangeRateService::class, function ($app): ExchangeRateService {
             return new ExchangeRateService($app->make(CurrencySettings::class)->base_currency);

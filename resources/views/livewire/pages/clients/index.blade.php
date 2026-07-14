@@ -3,6 +3,7 @@
 use App\Livewire\Concerns\HasCrudForm;
 use App\Livewire\Concerns\HasCrudTable;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Billing\Services\ClientReceivableAccountService;
 use App\Modules\Core\Models\PaymentTerm;
 use App\Modules\Core\Models\ContactAssignment;
 use App\Modules\Core\Models\Document;
@@ -177,6 +178,11 @@ new #[Layout('components.layout.app')] class extends Component
         ], ['client']);
 
         $this->saveClientRelationshipMetadata($party);
+
+        $clientRel = $party->relationships()->where('relationship_type', 'client')->first();
+        if ($clientRel !== null) {
+            app(ClientReceivableAccountService::class)->getOrCreateForClient($clientRel);
+        }
 
         if ($this->contactFirstName !== '') {
             $personParty = app(PartyService::class)->createPerson([

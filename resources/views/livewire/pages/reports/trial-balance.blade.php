@@ -1,6 +1,7 @@
 <?php
 
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Services\AccountBalanceRollup;
 use App\Modules\Accounting\Services\FinancialYearService;
 use App\Modules\Core\Settings\CurrencySettings;
 use App\Modules\Core\Models\Document;
@@ -42,7 +43,7 @@ new #[Layout('components.layout.app')] class extends Component
             DocumentLine::query()
                 ->join('documents as d', 'd.id', '=', 'document_lines.document_id')
                 ->where('d.document_type', 'sales_invoice')
-                ->whereNotIn('d.status', ['draft', 'cancelled'])
+                ->whereNotIn('d.status', ['draft', 'voided'])
                 ->whereNull('d.deleted_at')
                 ->whereNotNull('document_lines.account_id')
                 ->when($from, fn ($q) => $q->whereDate('d.issue_date', '>=', $from))
@@ -67,7 +68,7 @@ new #[Layout('components.layout.app')] class extends Component
 
             Document::query()
                 ->where('document_type', 'sales_invoice')
-                ->whereNotIn('status', ['draft', 'cancelled'])
+                ->whereNotIn('status', ['draft', 'voided'])
                 ->whereNull('deleted_at')
                 ->whereNotNull('receivable_account_id')
                 ->when($from, fn ($q) => $q->whereDate('issue_date', '>=', $from))
@@ -77,29 +78,54 @@ new #[Layout('components.layout.app')] class extends Component
                 ->get()
                 ->each(fn ($r) => $add($r->receivable_account_id, (float) $r->total, 0.0));
 
+            // Purchase invoices → credit AP
             Document::query()
-                ->where('document_type', 'payment')
+                ->where('document_type', 'purchase_invoice')
+                ->whereIn('status', ['posted', 'partially_paid', 'paid'])
                 ->whereNull('deleted_at')
-                ->whereNotNull('receivable_account_id')
+                ->whereNotNull('payable_account_id')
                 ->when($from, fn ($q) => $q->whereDate('issue_date', '>=', $from))
                 ->when($to, fn ($q) => $q->whereDate('issue_date', '<=', $to))
-                ->selectRaw('receivable_account_id, SUM(total) as total')
-                ->groupBy('receivable_account_id')
+                ->selectRaw('payable_account_id, SUM(total) as total')
+                ->groupBy('payable_account_id')
                 ->get()
-                ->each(fn ($r) => $add($r->receivable_account_id, 0.0, (float) $r->total));
+                ->each(fn ($r) => $add($r->payable_account_id, 0.0, (float) $r->total));
 
+            // Inbound payments (receivable settlements) → credit AR, debit bank
             Document::query()
                 ->where('document_type', 'payment')
+                ->where('direction', 'inbound')
                 ->whereNull('deleted_at')
-                ->whereNotNull('contra_account_id')
                 ->when($from, fn ($q) => $q->whereDate('issue_date', '>=', $from))
                 ->when($to, fn ($q) => $q->whereDate('issue_date', '<=', $to))
-                ->selectRaw('contra_account_id, SUM(total) as total')
-                ->groupBy('contra_account_id')
                 ->get()
-                ->each(fn ($r) => $add($r->contra_account_id, (float) $r->total, 0.0));
+                ->each(function ($p) use ($add) {
+                    if ($p->receivable_account_id !== null) {
+                        $add($p->receivable_account_id, 0.0, (float) $p->total);
+                    }
+                    if ($p->contra_account_id !== null) {
+                        $add($p->contra_account_id, (float) $p->total, 0.0);
+                    }
+                });
 
-            return $acc;
+            // Outbound payments (payable settlements) → debit AP, credit bank
+            Document::query()
+                ->where('document_type', 'payment')
+                ->where('direction', 'outbound')
+                ->whereNull('deleted_at')
+                ->when($from, fn ($q) => $q->whereDate('issue_date', '>=', $from))
+                ->when($to, fn ($q) => $q->whereDate('issue_date', '<=', $to))
+                ->get()
+                ->each(function ($p) use ($add) {
+                    if ($p->payable_account_id !== null) {
+                        $add($p->payable_account_id, (float) $p->total, 0.0);
+                    }
+                    if ($p->contra_account_id !== null) {
+                        $add($p->contra_account_id, 0.0, (float) $p->total);
+                    }
+                });
+
+            return AccountBalanceRollup::rollupToRoots($acc);
         };
 
         $movAcc = $buildAcc($this->dateFrom ?: null, $this->dateTo ?: null);

@@ -58,7 +58,7 @@
                 <p>Contact people are used when selecting recipients for sales invoice emails. Multiple contacts can be added to a client after creation through the client detail page.</p>
 
                 <h2 id="default-receivable-account-and-payment-term">Default receivable account and payment term</h2>
-                <p>The default receivable account and payment term set on a client are stored on the client's relationship record. When you create a sales invoice and select this client, the receivable account and payment term are pre-filled from these defaults. You can override both values on any individual invoice. If no default is set on the client, the system-level defaults from Billing Settings are used.</p>
+                <p>Every client gets its own receivable account, created automatically as a child of the control account configured in Billing Settings — see <a href="chart-of-accounts.html#client-receivable-sub-accounts">Client receivable sub-accounts</a>. The default payment term is also stored on the client's relationship record. When you create a sales invoice and select this client, the receivable account and payment term are pre-filled from these defaults. You can override both values on any individual invoice. If no control account is configured yet, or the client predates this feature, the system-level default from Billing Settings is used until the account is (back)filled.</p>
 
                 <h2 id="client-list-columns">Client list columns</h2>
                 <p>The client index (<code>/clients</code>) shows <strong>Total invoiced</strong> and <strong>Total owing</strong> summary columns. A period filter (financial year, quarter, month, or custom range) controls which invoices are included in these totals. Both figures come from posted sales invoices on the client's party record.</p>
@@ -69,6 +69,7 @@
                     <li>Client profile and billing defaults (editable inline)</li>
                     <li>Full paginated sales invoice history with amounts, statuses, and due dates</li>
                     <li>Running balance and total owing at the top</li>
+                    <li>A link to the client's own receivable account transaction view</li>
                 </ul>
                 <p>Access the detail page by clicking the <strong>View</strong> button on any row in the client list.</p>
 

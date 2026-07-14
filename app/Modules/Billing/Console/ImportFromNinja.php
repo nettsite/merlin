@@ -7,6 +7,7 @@ use App\Modules\Billing\Enums\RecurringFrequency;
 use App\Modules\Billing\Enums\RecurringInvoiceStatus;
 use App\Modules\Billing\Models\RecurringInvoice;
 use App\Modules\Billing\Models\RecurringInvoiceLine;
+use App\Modules\Billing\Services\ClientReceivableAccountService;
 use App\Modules\Core\Models\Address;
 use App\Modules\Core\Models\ContactAssignment;
 use App\Modules\Core\Models\Document;
@@ -14,6 +15,7 @@ use App\Modules\Core\Models\DocumentLine;
 use App\Modules\Core\Models\DocumentRelationship;
 use App\Modules\Core\Models\Party;
 use App\Modules\Core\Models\PartyRelationship;
+use App\Modules\Core\Services\DocumentService;
 use App\Modules\Core\Services\PartyService;
 use Illuminate\Console\Command;
 use Illuminate\Database\Query\Builder;
@@ -54,9 +56,9 @@ class ImportFromNinja extends Command
 
     private int $errored = 0;
 
-    private const ALL_PHASES = ['clients', 'contacts', 'invoices', 'quotes', 'credits', 'recurring'];
+    private const ALL_PHASES = ['clients', 'contacts', 'invoices', 'quotes', 'credits', 'payments', 'recurring'];
 
-    public function handle(PartyService $partyService): int
+    public function handle(PartyService $partyService, DocumentService $documentService): int
     {
         $path = $this->argument('path') ?? $this->ask('InvoiceNinja install path?');
 
@@ -91,6 +93,10 @@ class ImportFromNinja extends Command
             $this->loadClientMap();
         }
 
+        if ($only === 'payments') {
+            $this->loadInvoiceAndCreditMaps();
+        }
+
         $summary = [];
 
         foreach (self::ALL_PHASES as $phase) {
@@ -107,6 +113,7 @@ class ImportFromNinja extends Command
                 'invoices' => $this->importInvoices($isDryRun, $limit),
                 'quotes' => $this->importQuotes($isDryRun, $limit),
                 'credits' => $this->importCredits($isDryRun, $limit),
+                'payments' => $this->importPayments($documentService, $isDryRun, $limit),
                 'recurring' => $this->importRecurring($isDryRun, $limit),
             };
 
@@ -176,10 +183,8 @@ class ImportFromNinja extends Command
                     ], ['client']);
 
                     $rel = $party->relationships->firstWhere('relationship_type', 'client');
-                    $rel->mergeMetadata([
-                        'ninja_id' => $client->id,
-                        'default_receivable_account_id' => $this->receivableAccountId,
-                    ]);
+                    $rel->mergeMetadata(['ninja_id' => $client->id]);
+                    app(ClientReceivableAccountService::class)->getOrCreateForClient($rel);
 
                     if ($client->address1 && $client->city) {
                         Address::create([
@@ -370,12 +375,18 @@ class ImportFromNinja extends Command
                             'notes' => $inv->public_notes ?: null,
                             'terms' => $inv->terms ?: null,
                             'footer' => $inv->footer ?: null,
-                            'receivable_account_id' => $this->receivableAccountId,
+                            'receivable_account_id' => $this->receivableAccountIdFor($partyUuid),
                             'source' => 'import',
                             'metadata' => ['ninja_id' => $inv->id],
                         ]);
 
-                        $this->createDocumentLines($doc->id, $inv->line_items, (bool) $inv->uses_inclusive_taxes);
+                        $this->createDocumentLines(
+                            $doc->id,
+                            $inv->line_items,
+                            (bool) $inv->uses_inclusive_taxes,
+                            (float) ($inv->discount ?? 0),
+                            (bool) ($inv->is_amount_discount ?? false),
+                        );
                         $doc->recalculateTotals();
 
                         $this->invoiceMap[$inv->id] = $doc->id;
@@ -492,7 +503,13 @@ class ImportFromNinja extends Command
                             'metadata' => ['ninja_id' => $row->id],
                         ]);
 
-                        $this->createDocumentLines($doc->id, $row->line_items, (bool) ($row->uses_inclusive_taxes ?? false));
+                        $this->createDocumentLines(
+                            $doc->id,
+                            $row->line_items,
+                            (bool) ($row->uses_inclusive_taxes ?? false),
+                            (float) ($row->discount ?? 0),
+                            (bool) ($row->is_amount_discount ?? false),
+                        );
                         $doc->recalculateTotals();
 
                         $map[$row->id] = $doc->id;
@@ -545,13 +562,6 @@ class ImportFromNinja extends Command
                 continue;
             }
 
-            if ((float) $payment->amount <= 0) {
-                $this->warn("    Payment #{$payment->id}: zero amount — skip");
-                $this->skipped++;
-
-                continue;
-            }
-
             $partyUuid = $this->clientMap[$payment->client_id] ?? null;
 
             if (! $partyUuid) {
@@ -561,9 +571,28 @@ class ImportFromNinja extends Command
                 continue;
             }
 
+            // Ninja's "apply credit" payment type stores 0 on the payment's
+            // own amount field — the real value only exists per-allocation
+            // in paymentables. Checking amount alone here would silently
+            // discard those (real, non-zero) allocations.
+            $allocations = $this->ninja('paymentables')
+                ->where('payment_id', $payment->id)
+                ->whereNull('deleted_at')
+                ->get();
+
+            $hasInvoiceAllocation = $allocations->contains(
+                fn ($a) => $a->paymentable_type === 'invoices' && (float) $a->amount > 0,
+            );
+
+            if ((float) $payment->amount <= 0 && ! $hasInvoiceAllocation) {
+                $this->warn("    Payment #{$payment->id}: zero amount, no allocation — skip");
+                $this->skipped++;
+
+                continue;
+            }
+
             try {
-                DB::transaction(function () use ($payment, $partyUuid, $documentService) {
-                    $amount = (float) $payment->amount;
+                DB::transaction(function () use ($payment, $partyUuid, $allocations, $documentService) {
                     $date = Carbon::parse($payment->date);
                     $reference = $payment->number ?: $payment->transaction_reference ?: null;
 
@@ -575,21 +604,23 @@ class ImportFromNinja extends Command
                         'issue_date' => $date->toDateString(),
                         'reference' => $reference,
                         'currency' => 'ZAR',
-                        'subtotal' => $amount,
+                        'subtotal' => 0,
                         'tax_total' => 0,
-                        'total' => $amount,
+                        'total' => 0,
                         'amount_paid' => 0,
                         'balance_due' => 0,
                         'contra_account_id' => $this->bankAccountId,
-                        'receivable_account_id' => $this->receivableAccountId,
+                        'receivable_account_id' => $this->receivableAccountIdFor($partyUuid),
                         'source' => 'import',
                         'metadata' => ['ninja_id' => $payment->id],
                     ]);
 
-                    $allocations = $this->ninja('paymentables')
-                        ->where('payment_id', $payment->id)
-                        ->whereNull('deleted_at')
-                        ->get();
+                    // Set to what actually landed on invoices below, not
+                    // Ninja's header amount — that field is unreliable (0 for
+                    // "apply credit" payments) and, even for ordinary
+                    // payments, an overpayment gets capped per-invoice below
+                    // without ever reducing the header figure.
+                    $appliedTotal = 0.0;
 
                     foreach ($allocations as $alloc) {
                         $allocAmount = (float) $alloc->amount;
@@ -617,6 +648,7 @@ class ImportFromNinja extends Command
 
                             try {
                                 $documentService->recordPayment($invoice, $allocAmount, $date, $reference);
+                                $appliedTotal += $allocAmount;
                             } catch (\InvalidArgumentException $e) {
                                 // Tolerate overpayment due to rounding; cap at balance_due.
                                 $balance = (float) $invoice->balance_due;
@@ -624,6 +656,7 @@ class ImportFromNinja extends Command
                                 if ($balance > 0 && $allocAmount > $balance) {
                                     $this->warn("      Payment #{$payment->id} exceeds balance on invoice #{$invoice->document_number} ({$allocAmount} > {$balance}); capping.");
                                     $documentService->recordPayment($invoice->fresh(), $balance, $date, $reference);
+                                    $appliedTotal += $balance;
                                 } else {
                                     throw $e;
                                 }
@@ -633,6 +666,8 @@ class ImportFromNinja extends Command
                             $this->line("      Credit #{$alloc->paymentable_id} allocation noted (skipped — no Merlin representation).");
                         }
                     }
+
+                    $paymentDoc->update(['subtotal' => $appliedTotal, 'total' => $appliedTotal]);
                 });
 
                 $this->created++;
@@ -752,10 +787,37 @@ class ImportFromNinja extends Command
     // Helpers
     // -------------------------------------------------------------------------
 
-    private function createDocumentLines(string $documentId, ?string $lineItemsJson, bool $inclusiveTax): void
-    {
+    /**
+     * Ninja applies discounts at two independent levels, neither reflected in
+     * a line's own `line_total` in a way this import previously read: a
+     * per-line discount (item.discount + item.is_amount_discount) and a
+     * document-level discount (invoices.discount + invoices.is_amount_discount)
+     * that applies on top of all lines combined. Left unhandled, reconstructed
+     * line totals overstate Ninja's actual invoice amount, leaving a phantom
+     * balance_due on invoices that are otherwise fully paid. Both are combined
+     * into a single discount_amount per line — DocumentLine::calculateTotals()
+     * only honours one of discount_amount/discount_percent, so a resolved
+     * absolute value is used rather than trying to stack both model fields.
+     *
+     * An amount-based document discount is prorated across lines by their
+     * share of the pre-discount subtotal; a percentage-based one is applied
+     * uniformly to each line's already-line-discounted amount.
+     */
+    private function createDocumentLines(
+        string $documentId,
+        ?string $lineItemsJson,
+        bool $inclusiveTax,
+        float $headerDiscount = 0.0,
+        bool $headerIsAmountDiscount = false,
+    ): void {
         $lineItems = $this->parseJson($lineItemsJson) ?? [];
         $lineNum = 1;
+
+        $preDiscountSubtotal = 0.0;
+        foreach ($lineItems as $item) {
+            $item = (object) $item;
+            $preDiscountSubtotal += (float) ($item->cost ?? 0) * (float) ($item->quantity ?? 1);
+        }
 
         foreach ($lineItems as $item) {
             $item = (object) $item;
@@ -773,6 +835,28 @@ class ImportFromNinja extends Command
                 'unit_price' => $cost,
                 'tax_rate' => $taxRate ?: null,
             ]);
+
+            $lineSubtotal = $cost * $qty;
+
+            $lineDiscount = (float) ($item->discount ?? 0);
+            $lineDiscountAmount = ($item->is_amount_discount ?? false)
+                ? $lineDiscount
+                : $lineSubtotal * $lineDiscount / 100;
+
+            $headerDiscountAmount = 0.0;
+
+            if ($headerDiscount > 0) {
+                if ($headerIsAmountDiscount) {
+                    $share = $preDiscountSubtotal > 0 ? $lineSubtotal / $preDiscountSubtotal : 0;
+                    $headerDiscountAmount = $headerDiscount * $share;
+                } else {
+                    $headerDiscountAmount = ($lineSubtotal - $lineDiscountAmount) * $headerDiscount / 100;
+                }
+            }
+
+            if ($lineDiscountAmount > 0 || $headerDiscountAmount > 0) {
+                $line->discount_amount = round($lineDiscountAmount + $headerDiscountAmount, 2);
+            }
 
             if ($inclusiveTax && $taxRate > 0) {
                 $gross = round($cost * $qty, 2);
@@ -928,6 +1012,21 @@ class ImportFromNinja extends Command
         $this->bankAccountId = $bank->id;
 
         return true;
+    }
+
+    /**
+     * The client's own receivable sub-account, falling back to the global
+     * receivable account (loaded in loadAccountIds()) if the client's
+     * relationship somehow doesn't have one yet.
+     */
+    private function receivableAccountIdFor(string $partyUuid): string
+    {
+        $rel = PartyRelationship::query()
+            ->where('party_id', $partyUuid)
+            ->where('relationship_type', 'client')
+            ->first();
+
+        return $rel?->default_receivable_account_id ?? $this->receivableAccountId;
     }
 
     private function loadClientMap(): void

@@ -30,7 +30,21 @@
                 </table>
 
                 <h2 id="what-gets-imported">What gets imported</h2>
-                <p>The import runs in phases, in dependency order. Ninja clients become Merlin <a href="parties.html">parties</a> with client relationships; their contacts become persons with contact assignments; invoices, quotes, and credits become <code>Document</code> rows of the matching type; payments attach to their invoices; recurring profiles become <a href="recurring-invoices.html">recurring invoices</a>. Internal ID maps (Ninja client id → Merlin party UUID, Ninja invoice id → Merlin document UUID) keep cross-references intact across phases.</p>
+                <p>The import runs in phases, in dependency order. Ninja clients become Merlin <a href="parties.html">parties</a> with client relationships, each getting its own <a href="chart-of-accounts.html#client-receivable-sub-accounts">receivable sub-account</a> if a control account is configured; their contacts become persons with contact assignments; invoices, quotes, and credits become <code>Document</code> rows of the matching type; payments attach to their invoices; recurring profiles become <a href="recurring-invoices.html">recurring invoices</a>. Internal ID maps (Ninja client id → Merlin party UUID, Ninja invoice id → Merlin document UUID) keep cross-references intact across phases.</p>
+
+                <h2 id="discount-reconstruction">Discount reconstruction</h2>
+                <p>Ninja applies discounts at two levels that don't show up anywhere in a naive read of <code>line_items</code>:</p>
+                <ul>
+                    <li><strong>Per-line discount</strong> — each line item carries its own <code>discount</code> / <code>is_amount_discount</code> pair, separate from <code>cost</code> and <code>quantity</code>.</li>
+                    <li><strong>Document-level discount</strong> — <code>invoices.discount</code> / <code>invoices.is_amount_discount</code> (also present on quotes and credits) applies on top of every line combined.</li>
+                </ul>
+                <p>Both are folded into a single <code>DocumentLine.discount_amount</code> per line during import (the model only honours one of <code>discount_amount</code>/<code>discount_percent</code>, so the two sources are resolved to one absolute value rather than stacked as separate fields). An amount-based document discount is prorated across lines by their share of the pre-discount subtotal; a percentage-based one applies uniformly to each line's already-line-discounted amount. Left unhandled, reconstructed totals overstate Ninja's real invoice amount — the invoice ends up with a phantom <code>balance_due</code> even though it's fully paid in Ninja.</p>
+
+                <h2 id="apply-credit-payments">"Apply credit" payments</h2>
+                <p>Ninja represents applying a client's credit balance to an invoice as a <code>payment</code> record with <code>amount = 0</code> on the header — the real value exists only in that payment's <code>paymentables</code> allocation. The payments phase does not use the header <code>amount</code> to decide whether a payment has anything to import; it checks whether any allocation to an invoice is non-zero. The resulting Merlin payment document's <code>total</code> is set to the sum of what was actually applied to invoices (after any overpayment capping — see below), not Ninja's header figure.</p>
+
+                <h2 id="overpayment-capping">Overpayment capping</h2>
+                <p>If a payment's allocation to an invoice exceeds that invoice's remaining balance (rounding in the source data), the amount applied is capped at the balance due rather than rejected. The payment document's <code>total</code> reflects the capped amount actually applied, not the raw allocation — otherwise reports would credit more to accounts receivable than was really settled.</p>
 
                 <div class="callout">
                     <span class="callout-title">Run dry first</span>
