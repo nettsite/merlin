@@ -64,30 +64,40 @@ new #[Layout('components.layout.app')] class extends Component
     protected function store(): void
     {
         $this->validate();
-        Account::create([
-            'account_group_id' => $this->accountGroupId,
-            'parent_id' => $this->parentId ?: null,
-            'code' => $this->code,
-            'name' => $this->name,
-            'description' => $this->description ?: null,
-            'is_active' => $this->isActive,
-            'allow_direct_posting' => $this->allowDirectPosting,
-        ]);
+
+        try {
+            Account::create([
+                'account_group_id' => $this->accountGroupId,
+                'parent_id' => $this->parentId ?: null,
+                'code' => $this->code,
+                'name' => $this->name,
+                'description' => $this->description ?: null,
+                'is_active' => $this->isActive,
+                'allow_direct_posting' => $this->allowDirectPosting,
+            ]);
+        } catch (\InvalidArgumentException $e) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['allowDirectPosting' => $e->getMessage()]);
+        }
     }
 
     protected function update(): void
     {
         $this->validate();
         $account = Account::findOrFail($this->editingId);
-        $account->update([
-            'account_group_id' => $this->accountGroupId,
-            'parent_id' => $this->parentId ?: null,
-            'code' => $this->code,
-            'name' => $this->name,
-            'description' => $this->description ?: null,
-            'is_active' => $this->isActive,
-            'allow_direct_posting' => $this->allowDirectPosting,
-        ]);
+
+        try {
+            $account->update([
+                'account_group_id' => $this->accountGroupId,
+                'parent_id' => $this->parentId ?: null,
+                'code' => $this->code,
+                'name' => $this->name,
+                'description' => $this->description ?: null,
+                'is_active' => $this->isActive,
+                'allow_direct_posting' => $this->allowDirectPosting,
+            ]);
+        } catch (\InvalidArgumentException $e) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['allowDirectPosting' => $e->getMessage()]);
+        }
     }
 
     protected function performDelete(string $id): void
@@ -239,18 +249,24 @@ new #[Layout('components.layout.app')] class extends Component
     <div class="flex gap-6">
         <flux:field>
             <flux:label>Status</flux:label>
-            <flux:select wire:model="isActive">
-                <option value="1">Active</option>
-                <option value="0">Inactive</option>
+            {{-- The `selected` HTML attribute only drives a <select>'s default
+                 option at initial parse — once the element exists in a live DOM,
+                 browsers keep its current .value property regardless of attribute
+                 patches from DOM morphing (confirmed: attribute renders correctly,
+                 display doesn't follow). x-init forces the live property directly. --}}
+            <flux:select wire:model="isActive" wire:key="is-active-{{ $editingId ?? 'new' }}" x-init="$el.value = '{{ $isActive ? '1' : '0' }}'">
+                <option value="1" @selected($isActive)>Active</option>
+                <option value="0" @selected(!$isActive)>Inactive</option>
             </flux:select>
         </flux:field>
 
         <flux:field>
             <flux:label>Allow Direct Posting</flux:label>
-            <flux:select wire:model="allowDirectPosting">
-                <option value="1">Yes</option>
-                <option value="0">No</option>
+            <flux:select wire:model="allowDirectPosting" wire:key="allow-direct-posting-{{ $editingId ?? 'new' }}" x-init="$el.value = '{{ $allowDirectPosting ? '1' : '0' }}'">
+                <option value="1" @selected($allowDirectPosting)>Yes</option>
+                <option value="0" @selected(!$allowDirectPosting)>No</option>
             </flux:select>
+            <flux:error name="allowDirectPosting" />
         </flux:field>
     </div>
 </x-crud.form>

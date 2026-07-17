@@ -25,6 +25,10 @@ new #[Layout('components.layout.app')] class extends Component
 
     public string $statusFilter = '';
 
+    public string $supplierFilter = '';
+
+    public string $paymentFilter = '';
+
     // Upload modal
     public bool $showUpload = false;
 
@@ -79,13 +83,6 @@ new #[Layout('components.layout.app')] class extends Component
     /** @var array<string, mixed> */
     public array $headerForm = [];
 
-    // Payment notification linking
-    public bool $showLinkPaymentNotification = false;
-
-    public ?string $linkingPaymentNotificationId = null;
-
-    public string $linkInvoiceId = '';
-
     public function mount(): void
     {
         $this->authorize('viewAny', Document::class);
@@ -98,6 +95,18 @@ new #[Layout('components.layout.app')] class extends Component
     }
 
     public function updatedStatusFilter(): void
+    {
+        $this->resetPage();
+        $this->selectedIds = [];
+    }
+
+    public function updatedSupplierFilter(): void
+    {
+        $this->resetPage();
+        $this->selectedIds = [];
+    }
+
+    public function updatedPaymentFilter(): void
     {
         $this->resetPage();
         $this->selectedIds = [];
@@ -337,35 +346,6 @@ new #[Layout('components.layout.app')] class extends Component
     // -------------------------------------------------------------------------
     // Payment notification linking
     // -------------------------------------------------------------------------
-
-    public function openLinkPaymentNotification(string $paymentNotificationId): void
-    {
-        $this->authorize('create', Document::class);
-        $this->linkingPaymentNotificationId = $paymentNotificationId;
-        $this->linkInvoiceId = '';
-        $this->showLinkPaymentNotification = true;
-    }
-
-    public function confirmLinkPaymentNotification(): void
-    {
-        $this->validate(['linkInvoiceId' => 'required|exists:documents,id']);
-
-        $paymentNotification = Document::where('document_type', 'payment_notification')->findOrFail($this->linkingPaymentNotificationId);
-        $invoice = Document::purchaseInvoices()->findOrFail($this->linkInvoiceId);
-        $this->authorize('update', $invoice);
-
-        app(PaymentNotificationMatcher::class)->merge($invoice, $paymentNotification, 1.0, 'Manually linked by user.');
-
-        $this->showLinkPaymentNotification = false;
-        $this->linkingPaymentNotificationId = null;
-        session()->flash('success', 'Payment notification linked to invoice.');
-    }
-
-    public function cancelLinkPaymentNotification(): void
-    {
-        $this->showLinkPaymentNotification = false;
-        $this->linkingPaymentNotificationId = null;
-    }
 
     public function confirmSuggestedMatch(string $paymentNotificationId): void
     {
@@ -661,9 +641,24 @@ new #[Layout('components.layout.app')] class extends Component
                     );
             }))
             ->when($this->statusFilter, fn ($q) => $q->where('status', $this->statusFilter))
+            ->when($this->supplierFilter, fn ($q) => $q->where('party_id', $this->supplierFilter))
+            ->when($this->paymentFilter, fn ($q) => match ($this->paymentFilter) {
+                'unpaid' => $q->where('status', 'posted')->where('balance_due', '>', 0),
+                'partially_paid' => $q->where('status', 'partially_paid'),
+                'paid' => $q->where('status', 'paid'),
+                default => $q,
+            })
             ->latest('issue_date')
             ->latest('created_at')
             ->paginate(25);
+
+        // Only suppliers that actually have purchase invoices — never the full
+        // supplier list, so the filter can't offer an option with zero results.
+        $supplierFilterOptions = Party::query()
+            ->whereIn('id', Document::purchaseInvoices()->whereNotNull('party_id')->distinct()->pluck('party_id'))
+            ->with('business')
+            ->get()
+            ->sortBy(fn (Party $party) => $party->displayName);
 
         $detail = null;
         $lines = collect();
@@ -695,18 +690,12 @@ new #[Layout('components.layout.app')] class extends Component
                 ->groupBy('status')
                 ->pluck('count', 'status'),
             'suppliers' => $needsSuppliers ? Party::suppliers()->with('business')->get() : collect(),
+            'supplierFilterOptions' => $supplierFilterOptions,
             'detail' => $detail,
             'lines' => $lines,
             'activities' => $activities,
             'accounts' => $accounts,
             'suggestedPaymentNotification' => $suggestedPaymentNotification,
-            'pendingPaymentNotifications' => Document::where('document_type', 'payment_notification')
-                ->where('status', 'received')
-                ->latest('issue_date')
-                ->get(),
-            'linkableInvoices' => $this->showLinkPaymentNotification
-                ? Document::purchaseInvoices()->with('party.business')->latest('issue_date')->limit(100)->get()
-                : collect(),
             'baseCurrency' => app(CurrencySettings::class)->base_currency,
             'baseCurrencySymbol' => ExchangeRateService::currencySymbol(app(CurrencySettings::class)->base_currency),
             'detailCurrencySymbol' => $detail ? ExchangeRateService::currencySymbol($detail->currency) : '',
@@ -743,32 +732,6 @@ new #[Layout('components.layout.app')] class extends Component
     @endcan
 </div>
 
-{{-- Unmatched payment notifications --}}
-@if($pendingPaymentNotifications->isNotEmpty())
-    <div class="mx-6 mt-4 rounded border border-amber-200 bg-amber-50">
-        <div class="px-4 py-2 text-sm font-semibold text-ink border-b border-amber-200">
-            Unmatched payment notifications ({{ $pendingPaymentNotifications->count() }})
-        </div>
-        <ul class="divide-y divide-amber-200">
-            @foreach($pendingPaymentNotifications as $notification)
-                <li class="flex items-center justify-between gap-4 px-4 py-2 text-sm">
-                    <div class="min-w-0">
-                        <span class="font-medium text-ink">{{ $notification->metadata['payee_name'] ?? 'Unknown payee' }}</span>
-                        <span class="text-ink-muted">
-                            — {{ $notification->currency }} {{ number_format((float) $notification->total, 2) }}
-                            on {{ $notification->issue_date?->format('Y-m-d') }}
-                            @if($notification->metadata['method'] ?? null) via {{ $notification->metadata['method'] }} @endif
-                        </span>
-                    </div>
-                    <flux:button wire:click="openLinkPaymentNotification('{{ $notification->id }}')" size="xs" variant="ghost">
-                        Link to invoice
-                    </flux:button>
-                </li>
-            @endforeach
-        </ul>
-    </div>
-@endif
-
 {{-- Status tabs --}}
 <div class="flex items-center gap-1 px-6 pt-4 border-b border-line overflow-x-auto">
     @php
@@ -803,7 +766,7 @@ new #[Layout('components.layout.app')] class extends Component
 </div>
 
 {{-- Search --}}
-<div class="px-6 py-3 border-b border-line bg-surface-alt">
+<div class="px-6 py-3 border-b border-line bg-surface-alt flex items-center gap-3">
     <flux:input
         wire:model.live.debounce.300ms="search"
         placeholder="Search invoices…"
@@ -811,6 +774,18 @@ new #[Layout('components.layout.app')] class extends Component
         icon="magnifying-glass"
         class="max-w-xs"
     />
+    <flux:select wire:model.live="supplierFilter" size="sm" class="max-w-xs">
+        <option value="">All suppliers</option>
+        @foreach($supplierFilterOptions as $supplier)
+            <option value="{{ $supplier->id }}">{{ $supplier->displayName }}</option>
+        @endforeach
+    </flux:select>
+    <flux:select wire:model.live="paymentFilter" size="sm" class="max-w-xs">
+        <option value="">All payment states</option>
+        <option value="unpaid">Unpaid</option>
+        <option value="partially_paid">Part Paid</option>
+        <option value="paid">Paid</option>
+    </flux:select>
 </div>
 
 {{-- Bulk action bar --}}
@@ -851,6 +826,7 @@ new #[Layout('components.layout.app')] class extends Component
                 <th class="px-4 py-3 text-right text-xs font-medium text-ink-muted uppercase tracking-wide">Balance Due</th>
                 <th class="px-4 py-3 text-left text-xs font-medium text-ink-muted uppercase tracking-wide">Accounts</th>
                 <th class="px-4 py-3 text-left text-xs font-medium text-ink-muted uppercase tracking-wide">Status</th>
+                <th class="px-4 py-3 text-left text-xs font-medium text-ink-muted uppercase tracking-wide">Payment</th>
                 <th class="px-4 py-3 w-32"></th>
             </tr>
         </thead>
@@ -913,6 +889,9 @@ new #[Layout('components.layout.app')] class extends Component
                             </span>
                         @endif
                     </td>
+                    <td class="px-4 py-3">
+                        @include('livewire.pages.purchase-invoices._payment-badge', ['status' => $invoice->status, 'balanceDue' => $invoice->balance_due])
+                    </td>
                     <td class="px-4 py-3 w-32 text-right" @click.stop>
                         <div class="flex items-center justify-end gap-1.5">
                             @if($canPost && !in_array($invoice->status, ['posted', 'partially_paid', 'paid', 'rejected']))
@@ -939,9 +918,9 @@ new #[Layout('components.layout.app')] class extends Component
                 </tr>
             @empty
                 <tr>
-                    <td colspan="9" class="px-4 py-12 text-center">
+                    <td colspan="10" class="px-4 py-12 text-center">
                         <p class="font-medium text-ink">No invoices found.</p>
-                        @if(!$statusFilter && !$search)
+                        @if(!$statusFilter && !$search && !$supplierFilter && !$paymentFilter)
                             <p class="mt-1 text-sm text-ink-muted">Upload an invoice to get started.</p>
                         @endif
                     </td>
@@ -1456,31 +1435,6 @@ new #[Layout('components.layout.app')] class extends Component
         <div class="flex justify-end gap-3">
             <flux:button type="button" variant="ghost" wire:click="$set('showRejectReason', false)">Cancel</flux:button>
             <flux:button type="submit" variant="danger">Reject</flux:button>
-        </div>
-    </form>
-</flux:modal>
-
-{{-- Link payment notification modal --}}
-<flux:modal name="link-payment-notification-modal" wire:model.self="showLinkPaymentNotification" class="w-[420px]">
-    <form wire:submit="confirmLinkPaymentNotification" class="p-6 space-y-4">
-        <flux:heading>Link Payment Notification</flux:heading>
-        <p class="text-sm text-ink-soft">Choose the purchase invoice this payment notification settles.</p>
-        <flux:field>
-            <flux:label>Invoice <span class="text-danger">*</span></flux:label>
-            <flux:select wire:model="linkInvoiceId">
-                <option value="">— Select invoice —</option>
-                @foreach($linkableInvoices as $invoice)
-                    <option value="{{ $invoice->id }}">
-                        {{ $invoice->document_number }} — {{ $invoice->party?->business?->display_name ?? 'No supplier' }}
-                        ({{ $invoice->currency }} {{ number_format((float) $invoice->total, 2) }})
-                    </option>
-                @endforeach
-            </flux:select>
-            <flux:error name="linkInvoiceId" />
-        </flux:field>
-        <div class="flex justify-end gap-3">
-            <flux:button type="button" variant="ghost" wire:click="cancelLinkPaymentNotification">Cancel</flux:button>
-            <flux:button type="submit" variant="primary">Link</flux:button>
         </div>
     </form>
 </flux:modal>

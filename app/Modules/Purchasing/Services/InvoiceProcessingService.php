@@ -27,6 +27,7 @@ class InvoiceProcessingService
         private readonly PaymentNotificationMatcher $paymentNotificationMatcher,
         private readonly DuplicateInvoiceMerger $duplicateInvoiceMerger,
         private readonly PaymentEvidenceRecorder $paymentEvidenceRecorder,
+        private readonly SupplierPayableAccountService $supplierPayableAccountService,
     ) {}
 
     /**
@@ -69,6 +70,17 @@ class InvoiceProcessingService
         // 4. Resolve supplier (no-op if party_id already set)
         $this->supplierResolver->resolve($document, $extracted);
         $document->refresh();
+
+        // 4a. Post to the supplier's own payable sub-account, never the
+        // shared control account directly — an account with sub-accounts
+        // can't be posted to directly (see Account::booted()). Supplier
+        // resolution above always succeeds (falls through to creating a
+        // pending supplier), so party_id is guaranteed set here.
+        $payableAccount = $this->supplierPayableAccountService->getOrCreateForParty($document->party);
+
+        if ($payableAccount !== null) {
+            $document->update(['payable_account_id' => $payableAccount->id]);
+        }
 
         // 5. Resolve currency and exchange rate
         $currency = strtoupper($extracted->currency ?: $this->currencySettings->base_currency);

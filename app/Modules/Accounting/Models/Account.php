@@ -43,6 +43,45 @@ class Account extends Model
         ];
     }
 
+    /**
+     * Enforce that an account with sub-accounts can never be directly
+     * postable, and that gaining a first child automatically closes off
+     * direct posting on the parent — so "any account with sub-accounts is
+     * blocked from direct posting" holds regardless of how the hierarchy
+     * was built (a dedicated sub-account service, manual reparenting, etc.).
+     */
+    protected static function booted(): void
+    {
+        static::saving(function (Account $account): void {
+            if ($account->allow_direct_posting && $account->exists && $account->children()->exists()) {
+                throw new \InvalidArgumentException("Cannot allow direct posting on \"{$account->name}\" — it has sub-accounts.");
+            }
+        });
+
+        static::created(function (Account $account): void {
+            $account->blockParentDirectPosting();
+        });
+
+        static::updated(function (Account $account): void {
+            if ($account->wasChanged('parent_id') && $account->parent_id !== null) {
+                $account->blockParentDirectPosting();
+            }
+        });
+    }
+
+    private function blockParentDirectPosting(): void
+    {
+        if ($this->parent_id === null) {
+            return;
+        }
+
+        $parent = static::find($this->parent_id);
+
+        if ($parent !== null && $parent->allow_direct_posting) {
+            $parent->update(['allow_direct_posting' => false]);
+        }
+    }
+
     // Relations
 
     /** @return BelongsTo<AccountGroup, $this> */

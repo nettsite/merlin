@@ -17,5 +17,7 @@ class DatabaseSeeder extends Seeder
         $this->call(DefaultAdminUserSeeder::class);
         $this->call(DebtorAccountGroupSeeder::class);
         $this->call(PaymentTermSeeder::class);
+        $this->call(BillingEmailTemplateSeeder::class);
+        $this->call(DefaultBillingSettingsSeeder::class);
     }
 }

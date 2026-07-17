@@ -26,30 +26,35 @@ class AccountResolver
         $accountId = null;
         $llmSuggestionId = null;
         $llmConfidence = null;
+        $suggestedAccount = null;
 
-        // 1. History match: same supplier + exact description in a posted document line
+        // 1. History match: same supplier + exact description in a posted document line.
+        // Only accounts still directly postable are eligible — a historical line
+        // may have posted to an account that's since gained sub-accounts.
         if ($partyId !== null) {
             $accountId = DocumentLine::query()
                 ->whereHas('document', fn ($q) => $q->where('party_id', $partyId)
                     ->whereIn('status', Document::POSTED_STATUSES))
+                ->whereHas('account', fn ($q) => $q->postable())
                 ->where('description', $description)
                 ->whereNotNull('account_id')
                 ->orderByDesc('created_at')
                 ->value('account_id');
         }
 
-        // 2. LLM suggestion — always store regardless of whether history matched
+        // 2. LLM suggestion — always stored for display regardless of whether
+        // history matched. Only used to auto-assign account_id when postable.
         if ($extracted->suggestedAccountCode !== null) {
-            $account = Account::where('code', $extracted->suggestedAccountCode)->first();
+            $suggestedAccount = Account::where('code', $extracted->suggestedAccountCode)->first();
 
-            if ($account) {
-                $llmSuggestionId = $account->id;
+            if ($suggestedAccount) {
+                $llmSuggestionId = $suggestedAccount->id;
                 $llmConfidence = $extracted->accountConfidence;
             }
         }
 
         return [
-            'account_id' => $accountId ?? $llmSuggestionId,
+            'account_id' => $accountId ?? ($suggestedAccount?->allow_direct_posting ? $llmSuggestionId : null),
             'llm_account_suggestion' => $llmSuggestionId,
             'llm_confidence' => $llmConfidence,
         ];

@@ -5,8 +5,10 @@ namespace App\Console\Commands;
 use App\Exceptions\InvalidFileTypeException;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Core\Models\Document;
+use App\Modules\Core\Services\IncidentSyncService;
 use App\Modules\Core\Services\Pdf\MagikaService;
 use App\Modules\Core\Settings\CurrencySettings;
+use App\Modules\Purchasing\Services\InvalidPurchasingSettingsIncidentDetector;
 use App\Modules\Purchasing\Services\InvoiceProcessingService;
 use App\Modules\Purchasing\Settings\PurchasingSettings;
 use Illuminate\Console\Command;
@@ -23,8 +25,12 @@ class WatchInvoiceFolderCommand extends Command
 
     protected $description = 'Process all invoice files (PDF, DOCX, XLSX, CSV) found in the watch folder';
 
-    public function handle(InvoiceProcessingService $service, MagikaService $magika): int
-    {
+    public function handle(
+        InvoiceProcessingService $service,
+        MagikaService $magika,
+        InvalidPurchasingSettingsIncidentDetector $configCheck,
+        IncidentSyncService $incidentSync,
+    ): int {
         $folder = $this->resolveFolder();
 
         if (! is_dir($folder)) {
@@ -36,14 +42,40 @@ class WatchInvoiceFolderCommand extends Command
             $this->comment("Watching {$folder} every {$interval}s — Ctrl+C to stop.");
 
             while (true) { // @phpstan-ignore-line
-                $this->scan($folder, $service, $magika);
+                if ($this->settingsAreValid($configCheck)) {
+                    $this->scan($folder, $service, $magika);
+                } else {
+                    $this->error('Purchasing settings invalid — processing paused until fixed.');
+                }
+
+                $incidentSync->sync();
                 sleep($interval);
             }
         }
 
+        if (! $this->settingsAreValid($configCheck)) {
+            $this->error('Purchasing settings invalid — processing paused. No files were processed.');
+            $incidentSync->sync();
+
+            return self::FAILURE;
+        }
+
         $this->scan($folder, $service, $magika);
+        $incidentSync->sync();
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Files stay untouched in the watch folder when settings are invalid —
+     * this is a system-level config problem, not a per-file failure, so
+     * nothing gets moved to failed/. Once fixed, the next run (or next
+     * --watch poll) picks everything up automatically with no manual
+     * intervention needed.
+     */
+    protected function settingsAreValid(InvalidPurchasingSettingsIncidentDetector $configCheck): bool
+    {
+        return $configCheck->check() === null;
     }
 
     protected function scan(string $folder, InvoiceProcessingService $service, MagikaService $magika): void

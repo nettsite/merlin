@@ -1,0 +1,11 @@
+storage/app/
+storage/framework/
+storage/logs/
+vendor/
+node_modules/
+public/
+invoice_queue/
+bootstrap/cache/
+.gstack/
+.claude/
+_ide_helper.php

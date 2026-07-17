@@ -32,8 +32,10 @@ use App\Modules\Core\Policies\AllModulesPolicy;
 use App\Modules\Core\Services\IncidentSyncService;
 use App\Modules\Core\Services\Pdf\MagikaService;
 use App\Modules\Core\Settings\CurrencySettings;
+use App\Modules\Purchasing\Console\BackfillSupplierPayableAccounts;
 use App\Modules\Purchasing\Models\PostingRule;
 use App\Modules\Purchasing\Services\ExchangeRateService;
+use App\Modules\Purchasing\Services\InvalidPurchasingSettingsIncidentDetector;
 use App\Modules\Purchasing\Services\UnpostedInvoicesIncidentDetector;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Relations\Relation;
@@ -54,7 +56,7 @@ class AppServiceProvider extends ServiceProvider
 
         $this->app->bind(ModulePolicy::class, AllModulesPolicy::class);
 
-        $this->commands([BackfillClientReceivableAccounts::class, DocsSync::class, GenerateRecurringInvoices::class, ImportFromNinja::class, SendReminders::class]);
+        $this->commands([BackfillClientReceivableAccounts::class, BackfillSupplierPayableAccounts::class, DocsSync::class, GenerateRecurringInvoices::class, ImportFromNinja::class, SendReminders::class]);
 
         $this->app->singleton(ExchangeRateService::class, function ($app): ExchangeRateService {
             return new ExchangeRateService($app->make(CurrencySettings::class)->base_currency);
@@ -68,6 +70,7 @@ class AppServiceProvider extends ServiceProvider
         // new incident types here.
         $this->app->singleton(IncidentSyncService::class, fn ($app): IncidentSyncService => new IncidentSyncService([
             $app->make(UnpostedInvoicesIncidentDetector::class),
+            $app->make(InvalidPurchasingSettingsIncidentDetector::class),
         ]));
     }
 

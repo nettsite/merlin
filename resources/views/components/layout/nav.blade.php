@@ -15,6 +15,13 @@
         >Purchase Invoices</flux:sidebar.item>
 
         <flux:sidebar.item
+            icon="banknotes"
+            href="{{ route('payment-notifications.index') }}"
+            :current="request()->routeIs('payment-notifications.*')"
+            wire:navigate
+        >Unmatched Payments</flux:sidebar.item>
+
+        <flux:sidebar.item
             icon="adjustments-horizontal"
             href="{{ route('posting-rules.index') }}"
             :current="request()->routeIs('posting-rules.*')"

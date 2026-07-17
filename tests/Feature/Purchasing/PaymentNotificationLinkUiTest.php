@@ -19,48 +19,6 @@ function pnUser(string ...$permissions): User
     return $user;
 }
 
-it('shows unmatched payment notifications on the index', function (): void {
-    $this->actingAs(pnUser('documents-view-any', 'documents-view'));
-
-    Document::factory()->create([
-        'document_type' => 'payment_notification',
-        'status' => 'received',
-        'party_id' => null,
-        'currency' => 'ZAR',
-        'total' => 450.0,
-        'metadata' => ['payee_name' => 'Domains CoZa', 'method' => 'FNB Connect'],
-    ]);
-
-    Livewire::test('pages.purchase-invoices.index')
-        ->assertSee('Unmatched payment notifications')
-        ->assertSee('Domains CoZa');
-});
-
-it('manually links a payment notification to a chosen invoice', function (): void {
-    $this->actingAs(pnUser('documents-view-any', 'documents-view', 'documents-create', 'documents-update'));
-
-    $invoice = Document::factory()->purchaseInvoice()->create();
-
-    $notification = Document::factory()->create([
-        'document_type' => 'payment_notification',
-        'status' => 'received',
-        'party_id' => null,
-        'currency' => 'ZAR',
-        'total' => 450.0,
-        'metadata' => ['payee_name' => 'Domains CoZa'],
-    ]);
-
-    Livewire::test('pages.purchase-invoices.index')
-        ->call('openLinkPaymentNotification', $notification->id)
-        ->assertSet('showLinkPaymentNotification', true)
-        ->set('linkInvoiceId', $invoice->id)
-        ->call('confirmLinkPaymentNotification')
-        ->assertSet('showLinkPaymentNotification', false);
-
-    expect(Document::find($notification->id))->toBeNull()
-        ->and($invoice->fresh()->metadata['payment_notification']['payee_name'] ?? null)->toBe('Domains CoZa');
-});
-
 it('confirms a suggested payment match from the invoice detail flyout', function (): void {
     $this->actingAs(pnUser('documents-view-any', 'documents-view', 'documents-update'));
 

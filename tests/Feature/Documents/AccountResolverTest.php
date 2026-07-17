@@ -122,3 +122,42 @@ it('ignores history from non-posted documents', function (): void {
 
     expect($result['account_id'])->toBeNull(); // not posted, so not used as history
 });
+
+it('ignores history posted to an account that has since gained sub-accounts', function (): void {
+    $service = app(PartyService::class);
+    $supplier = $service->createBusiness(
+        ['business_type' => 'company', 'legal_name' => 'Reclassified Account Supplier'],
+        relationships: ['supplier']
+    );
+
+    $parentAccount = Account::factory()->create(['code' => '5300', 'allow_direct_posting' => true]);
+
+    $postedDoc = Document::factory()->purchaseInvoice()->create([
+        'party_id' => $supplier->id,
+        'status' => 'posted',
+    ]);
+    DocumentLine::factory()->create([
+        'document_id' => $postedDoc->id,
+        'description' => 'Monthly hosting fee',
+        'account_id' => $parentAccount->id,
+    ]);
+
+    // Account gains a child after the historical posting — no longer postable.
+    Account::factory()->create(['parent_id' => $parentAccount->id]);
+
+    $result = $this->resolver->resolve('Monthly hosting fee', $supplier->id, extractedLine(null));
+
+    expect($result['account_id'])->toBeNull();
+});
+
+it('stores a non-postable llm suggestion for display but does not auto-apply it', function (): void {
+    $parentAccount = Account::factory()->create(['code' => '5400', 'allow_direct_posting' => true]);
+    Account::factory()->create(['parent_id' => $parentAccount->id]); // gives it a child
+
+    expect($parentAccount->fresh()->allow_direct_posting)->toBeFalse();
+
+    $result = $this->resolver->resolve('Some expense', null, extractedLine('5400'));
+
+    expect($result['account_id'])->toBeNull()
+        ->and($result['llm_account_suggestion'])->toBe($parentAccount->id);
+});

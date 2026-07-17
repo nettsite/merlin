@@ -1,5 +1,6 @@
 <?php
 
+use App\Modules\Accounting\Models\Account;
 use App\Modules\Core\Models\Document;
 use App\Modules\Core\Models\NotificationIncident;
 use App\Modules\Core\Models\User;
@@ -8,6 +9,13 @@ use Livewire\Livewire;
 use Spatie\Permission\Models\Permission;
 
 uses(RefreshDatabase::class);
+
+beforeEach(function (): void {
+    // These tests exercise UnpostedInvoicesIncidentDetector in isolation — a
+    // valid payable control account keeps InvalidPurchasingSettingsIncidentDetector
+    // quiet so it doesn't add an unexpected second incident.
+    Account::factory()->create(['code' => '2000', 'is_active' => true, 'allow_direct_posting' => true]);
+});
 
 function bellUser(): User
 {

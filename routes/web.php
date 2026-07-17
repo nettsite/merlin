@@ -18,6 +18,7 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
     Route::livewire('suppliers', 'pages.suppliers.index')->name('suppliers.index');
     Route::livewire('suppliers/{id}', 'pages.suppliers.show')->name('suppliers.show');
     Route::livewire('purchase-invoices', 'pages.purchase-invoices.index')->name('purchase-invoices.index');
+    Route::livewire('payment-notifications', 'pages.payment-notifications.index')->name('payment-notifications.index');
     Route::livewire('posting-rules', 'pages.posting-rules.index')->name('posting-rules.index');
 
     // Billing

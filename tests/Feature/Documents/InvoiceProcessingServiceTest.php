@@ -22,6 +22,7 @@ use App\Modules\Purchasing\Services\PaymentEvidenceRecorder;
 use App\Modules\Purchasing\Services\PaymentNotificationMatcher;
 use App\Modules\Purchasing\Services\PaymentNotificationProcessingService;
 use App\Modules\Purchasing\Services\PostingRuleService;
+use App\Modules\Purchasing\Services\SupplierPayableAccountService;
 use App\Modules\Purchasing\Services\SupplierResolver;
 use App\Modules\Purchasing\Settings\PurchasingSettings;
 use Carbon\Carbon;
@@ -77,6 +78,7 @@ beforeEach(function (): void {
         paymentNotificationMatcher: $this->paymentNotificationMatcher,
         duplicateInvoiceMerger: app(DuplicateInvoiceMerger::class),
         paymentEvidenceRecorder: app(PaymentEvidenceRecorder::class),
+        supplierPayableAccountService: app(SupplierPayableAccountService::class),
     );
 });
 
@@ -252,6 +254,42 @@ it('throws when no source document is attached', function (): void {
 
     expect(fn () => $this->service->process($document))
         ->toThrow(RuntimeException::class, 'No source document');
+});
+
+// --- Supplier payable sub-account ---
+
+it('posts the invoice to the resolved supplier\'s own payable sub-account, not the shared control account', function (): void {
+    $control = Account::factory()->create(['code' => '2000', 'allow_direct_posting' => true]);
+
+    $document = Document::factory()->purchaseInvoice()->create(['party_id' => null, 'payable_account_id' => $control->id]);
+    attachFakeMedia($document);
+
+    $this->llmMock->allows('extractInvoice')->andReturn(fakeExtracted([fakeLine()]));
+    $this->service->process($document);
+
+    $doc = $document->fresh();
+
+    expect($doc->payable_account_id)->not->toBe($control->id)
+        ->and($doc->payableAccount->parent_id)->toBe($control->id)
+        ->and($doc->payableAccount->allow_direct_posting)->toBeFalse()
+        ->and($control->fresh()->allow_direct_posting)->toBeFalse();
+});
+
+it('reuses the same supplier sub-account across multiple invoices for the same supplier', function (): void {
+    Account::factory()->create(['code' => '2000', 'allow_direct_posting' => true]);
+
+    $this->llmMock->allows('extractInvoice')->andReturnValues([fakeExtracted([fakeLine()]), fakeExtracted([fakeLine()])]);
+
+    $first = Document::factory()->purchaseInvoice()->create(['party_id' => null]);
+    attachFakeMedia($first);
+    $this->service->process($first);
+
+    // Different invoice number so it isn't treated as a duplicate/resend.
+    $second = Document::factory()->purchaseInvoice()->create(['party_id' => null, 'reference' => 'INV-2024-002']);
+    attachFakeMedia($second);
+    $this->service->process($second);
+
+    expect($first->fresh()->payable_account_id)->toBe($second->fresh()->payable_account_id);
 });
 
 // --- Foreign currency ---

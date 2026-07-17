@@ -3,12 +3,24 @@
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Core\Models\Document;
 use App\Modules\Core\Models\DocumentLine;
+use App\Modules\Core\Models\Party;
 use App\Modules\Core\Models\User;
+use App\Modules\Core\Services\PartyService;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 use Livewire\Livewire;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
 use Spatie\Permission\Models\Permission;
+
+function piSupplier(string $name): Party
+{
+    return app(PartyService::class)->createBusiness([
+        'business_type' => 'company',
+        'legal_name' => $name,
+        'trading_name' => $name,
+        'status' => 'active',
+    ], ['supplier']);
+}
 
 /**
  * UI behaviour tests for the purchase-invoices index Volt page.
@@ -27,6 +39,109 @@ function piUser(string ...$permissions): User
 
     return $user;
 }
+
+// --- Supplier filter ---
+
+it('filters invoices by supplier', function (): void {
+    $this->actingAs(piUser('documents-view-any', 'documents-view'));
+
+    $supplierA = piSupplier('Acme Hosting');
+    $supplierB = piSupplier('Beta Traders');
+
+    $invoiceA = Document::factory()->purchaseInvoice()->create(['party_id' => $supplierA->id]);
+    $invoiceB = Document::factory()->purchaseInvoice()->create(['party_id' => $supplierB->id]);
+
+    Livewire::test('pages.purchase-invoices.index')
+        ->set('supplierFilter', $supplierA->id)
+        ->assertSee($invoiceA->document_number)
+        // The dropdown itself still legitimately lists both suppliers as
+        // options — assert on the table row (document number), not the
+        // supplier name, which would still appear in the <option> list.
+        ->assertDontSee($invoiceB->document_number);
+});
+
+it('only lists suppliers that actually have purchase invoices in the filter dropdown', function (): void {
+    $this->actingAs(piUser('documents-view-any', 'documents-view'));
+
+    $supplierWithInvoice = piSupplier('Acme Hosting');
+    piSupplier('No Invoices Yet Ltd');
+
+    Document::factory()->purchaseInvoice()->create(['party_id' => $supplierWithInvoice->id]);
+
+    Livewire::test('pages.purchase-invoices.index')
+        ->assertSee('Acme Hosting')
+        ->assertDontSee('No Invoices Yet Ltd');
+});
+
+it('resets pagination when the supplier filter changes', function (): void {
+    $this->actingAs(piUser('documents-view-any', 'documents-view'));
+
+    // A single shared payable account avoids exhausting AccountFactory's
+    // unique 4-digit code pool across 30 rows.
+    $payableAccount = Account::factory()->create();
+    Document::factory()->purchaseInvoice()->count(30)->create(['payable_account_id' => $payableAccount->id]);
+    $supplier = piSupplier('Acme Hosting');
+
+    Livewire::test('pages.purchase-invoices.index')
+        ->call('gotoPage', 2)
+        ->assertSet('paginators.page', 2)
+        ->set('supplierFilter', $supplier->id)
+        ->assertSet('paginators.page', 1);
+});
+
+// --- Payment status column & filter ---
+
+it('shows the Unpaid badge for a posted invoice with an outstanding balance', function (): void {
+    $this->actingAs(piUser('documents-view-any', 'documents-view'));
+
+    Document::factory()->purchaseInvoice()->create(['status' => 'posted', 'total' => 500, 'balance_due' => 500]);
+
+    // 'Unpaid' is also a filter-dropdown option, always present regardless of
+    // data — assert on the actual badge markup (its distinguishing classes),
+    // not the bare word.
+    $html = Livewire::test('pages.purchase-invoices.index')->html();
+
+    expect($html)->toContain('bg-red-50 text-danger">Unpaid');
+});
+
+it('shows the Part Paid and Paid badges for their respective statuses', function (): void {
+    $this->actingAs(piUser('documents-view-any', 'documents-view'));
+
+    Document::factory()->purchaseInvoice()->create(['status' => 'partially_paid', 'total' => 500, 'balance_due' => 200]);
+    Document::factory()->purchaseInvoice()->create(['status' => 'paid', 'total' => 500, 'balance_due' => 0]);
+
+    $html = Livewire::test('pages.purchase-invoices.index')->html();
+
+    expect($html)->toContain('bg-amber-50 text-amber-700">Part Paid')
+        ->toContain('bg-emerald-50 text-emerald-800">Paid');
+});
+
+it('shows no payment badge for invoices not yet posted', function (): void {
+    $this->actingAs(piUser('documents-view-any', 'documents-view'));
+
+    $doc = Document::factory()->purchaseInvoice()->create(['status' => 'received']);
+
+    // 'Unpaid'/'Part Paid' also appear as filter-chrome text (payment filter
+    // option, status tab) regardless of data, so assert on the payment
+    // column's actual empty-state markup for this specific row instead of a
+    // page-wide text search.
+    $html = Livewire::test('pages.purchase-invoices.index')->html();
+
+    expect($html)->toContain('text-ink-muted text-xs">—</span>');
+    expect(Document::find($doc->id)->status)->toBe('received');
+});
+
+it('filters invoices by payment state', function (): void {
+    $this->actingAs(piUser('documents-view-any', 'documents-view'));
+
+    $unpaid = Document::factory()->purchaseInvoice()->create(['status' => 'posted', 'total' => 500, 'balance_due' => 500]);
+    $paid = Document::factory()->purchaseInvoice()->create(['status' => 'paid', 'total' => 500, 'balance_due' => 0]);
+
+    Livewire::test('pages.purchase-invoices.index')
+        ->set('paymentFilter', 'unpaid')
+        ->assertSee($unpaid->document_number)
+        ->assertDontSee($paid->document_number);
+});
 
 // --- Extraction failure badge ---
 
