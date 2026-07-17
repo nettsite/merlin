@@ -15,7 +15,7 @@ Merlin reads supplier invoices and posts them to your ledger — automatically. 
 | Layer | Package |
 |---|---|
 | Framework | Laravel 13, PHP 8.4 |
-| Frontend | Livewire 3, Volt, Flux UI, Alpine.js, Tailwind CSS 3 |
+| Frontend | Livewire 4 (single-file classes, no Volt), Flux UI, Alpine.js, Tailwind CSS 3 |
 | Auth | Laravel Breeze (Livewire stack) |
 | Roles & permissions | spatie/laravel-permission |
 | Audit log | spatie/laravel-activitylog |
@@ -53,11 +53,7 @@ EXCHANGERATE_API_KEY=...  # exchangerate-api.com — for foreign currency invoic
 Seed reference data after migrating:
 
 ```bash
-php artisan db:seed --class=RolesAndPermissionsSeeder
-php artisan db:seed --class=ChartOfAccountsSeeder
-php artisan db:seed --class=DefaultAdminUserSeeder
-php artisan db:seed --class=DebtorAccountGroupSeeder
-php artisan db:seed --class=PaymentTermSeeder
+php artisan db:seed
 ```
 
 ## Development
@@ -80,9 +76,9 @@ Business logic lives under `app/Modules/`, grouped by domain:
 
 ```
 app/Modules/
-├── Core/        User, Party, Person, Business, Address, ContactAssignment
+├── Core/        User, Party, Person, Business, Address, ContactAssignment, Document, DocumentLine, LlmLog
 ├── Accounting/  Account, AccountGroup, AccountType, FinancialYearService
-├── Purchasing/  Document, DocumentLine, LlmLog, PostingRule + pipeline services
+├── Purchasing/  PostingRule + invoice/payment-notification pipeline services
 └── Billing/     PaymentTerm, RecurringInvoice + BillingService, RecurringInvoiceService, DueDateCalculator, WorkingDayCalculator
 ```
 
@@ -111,10 +107,10 @@ Thresholds are configurable per business via `PurchasingSettings`.
 
 | Group | Pages |
 |---|---|
-| Expenses | Suppliers, Purchase Invoices, Posting Rules |
+| Expenses | Suppliers, Purchase Invoices, Payment Notifications, Posting Rules |
 | Billing | Clients, Sales Invoices, Quotes, Credit Notes, Recurring Invoices, Payment Terms |
-| Accounting | Accounts, Account Groups |
-| Reports | Expenses by Account, Expenses by Supplier, LLM Performance |
+| Accounting | Bank Statements, Bank Templates, Accounts, Account Groups |
+| Reports | Income Statement, Trial Balance, Balance Sheet, Income by Client/Account, Expenses by Account, Expenses by Supplier, LLM Performance |
 | Settings | General, Purchasing, Billing, Roles, Users, LLM Logs |
 | Emails | NettMail templates, contacts, lists, segments, campaigns |
 

@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Laravel business management app for small businesses. Core feature: LLM-assisted supplier invoice processing (PDFs/DOCX/XLSX/CSV → GL transactions). Previous Filament-based version at `~/Projects/merlin` is **read-only spec** — do not copy Filament files from it.
 
-**Stack:** Laravel 13, Livewire 4, Flux UI (livewire/flux), Alpine.js, Tailwind CSS 3, Pest + PHPUnit 12, Laravel Breeze (Livewire stack) for auth.
+**Stack:** Laravel 13, Livewire 4, Flux UI (livewire/flux), Alpine.js, Tailwind CSS 3, Pest + PHPUnit 12, Laravel Breeze (Livewire stack) for auth. No Volt — all components are Livewire 4 native single-file classes.
 
 ## Commands
 
@@ -17,18 +17,23 @@ php artisan test --compact --filter=TestName   # single test
 vendor/bin/pint --dirty   # format changed PHP files
 npm run build             # build Vite assets (required before any view test will pass)
 
-# Seeders
-php artisan db:seed --class=RolesAndPermissionsSeeder
-php artisan db:seed --class=ChartOfAccountsSeeder
-php artisan db:seed --class=DefaultAdminUserSeeder
-php artisan db:seed --class=DebtorAccountGroupSeeder
-php artisan db:seed --class=PaymentTermSeeder
+# Seeders — DatabaseSeeder::run() now calls all of these in order:
+# RolesAndPermissionsSeeder, ChartOfAccountsSeeder, DefaultAdminUserSeeder,
+# DebtorAccountGroupSeeder, PaymentTermSeeder, BillingEmailTemplateSeeder, DefaultBillingSettingsSeeder
+php artisan db:seed
 
 # Invoice watch folder (polls INVOICE_WATCH_DIR every INVOICE_WATCH_INTERVAL seconds)
 php artisan invoices:watch
 
 # InvoiceNinja v5 migration (path = Ninja install dir; prompts if omitted)
 php artisan ninja:import {path?} [--dry-run] [--only=clients|contacts|invoices|quotes|credits|recurring] [--limit=N]
+
+# One-off data backfills (idempotent, safe to re-run; --dry-run to preview)
+php artisan accounts:backfill-client-receivables
+php artisan accounts:backfill-supplier-payables
+
+# Model retirement probe (also runs daily at 05:30 via schedule)
+php artisan models:health-check
 ```
 
 ## Architecture
@@ -40,9 +45,10 @@ app/Modules/
 ├── Core/
 │   ├── Models/     — User, Role, Permission, Party, Person, Business, Address, ContactAssignment, PartyRelationship,
 │   │               — Document, DocumentLine, DocumentActivity, DocumentRelationship, PaymentTerm, BankTemplate, LlmLog
-│   ├── Services/   — PartyService, DocumentService, LlmService, ModelHealthService,
+│   ├── Services/   — PartyService, DocumentService, LlmService, ModelHealthService, IncidentSyncService,
 │   │               — BankStatementProcessingService, DocumentTextExtractor,
 │   │               — Pdf/MagikaService, Pdf/PdfExtractor
+│   ├── Contracts/  — IncidentDetector (implemented per-module, run by IncidentSyncService)
 │   ├── Jobs/       — ProcessBankStatementDocument (queued)
 │   ├── DTO/        — ExtractedBankStatement, ExtractedBankTransaction, MagikaResult
 │   ├── Settings/   — CurrencySettings (base_currency, locale), CompanySettings
@@ -53,21 +59,30 @@ app/Modules/
 │   └── Settings/   — AccountingSettings (financial_year_start_month)
 ├── Purchasing/
 │   ├── Models/     — PostingRule
-│   ├── Services/   — InvoiceProcessingService, SupplierResolver, AccountResolver,
-│   │               — ExchangeRateService, PostingRuleService
+│   ├── Services/   — InvoiceProcessingService, DocumentService, SupplierResolver, AccountResolver,
+│   │               — SupplierPayableAccountService, ExchangeRateService, PostingRuleService,
+│   │               — DocumentKindClassifier, DuplicateInvoiceMerger,
+│   │               — PaymentNotificationMatcher, PaymentNotificationProcessingService, PaymentEvidenceRecorder,
+│   │               — UnpostedInvoicesIncidentDetector, InvalidPurchasingSettingsIncidentDetector (IncidentDetector impls)
+│   ├── Console/    — BackfillSupplierPayableAccounts (`accounts:backfill-supplier-payables`)
 │   ├── Jobs/       — ProcessInvoiceDocument (queued)
-│   ├── DTO/        — ExtractedInvoice, ExtractedInvoiceLine
+│   ├── DTO/        — ExtractedInvoice, ExtractedInvoiceLine, ExtractedPaymentNotification
 │   └── Settings/   — PurchasingSettings (autopost_confidence, tax_default_rate, etc.)
 └── Billing/
     ├── Models/     — RecurringInvoice, RecurringInvoiceLine, BillingEmailTemplate
     ├── Enums/      — PaymentTermRule, RecurringFrequency, RecurringInvoiceStatus
-    ├── Console/    — GenerateRecurringInvoices, SendReminders, ImportFromNinja
-    └── Services/   — BillingService (PDF generation), RecurringInvoiceService, DueDateCalculator, ProRataCalculator, WorkingDayCalculator (ZA public holidays), PortalInviteService
+    ├── Console/    — GenerateRecurringInvoices, SendReminders, ImportFromNinja, BackfillClientReceivableAccounts (`accounts:backfill-client-receivables`)
+    └── Services/   — BillingService (PDF generation), RecurringInvoiceService, ClientReceivableAccountService,
+                     — InvoiceEmailTemplateService, DueDateCalculator, ProRataCalculator, WorkingDayCalculator (ZA public holidays), PortalInviteService
 
-app/Policies/       — 16 domain policies, all extend AllModulesPolicy
+app/Policies/       — 19 domain policies, all extend AllModulesPolicy
 app/Traits/         — HasDocumentNumber (auto-generates PREFIX-YEAR-NNNNN on create)
 app/Exceptions/     — InvalidDocumentStateException, InvalidFileTypeException, LlmApiException, PdfExtractionException
 ```
+
+**Note:** `Purchasing\Services\DocumentService` (purchase-invoice status transitions) and `Core\Services\DocumentService` (shared document plumbing) are two distinct classes — check the namespace, not just the class name.
+
+**Incident framework:** any class implementing `Core\Contracts\IncidentDetector` gets registered into `IncidentSyncService` (wired in `AppServiceProvider`) and is polled to open/refresh/clear `NotificationIncident` rows — surfaced via the dashboard incident bell. See [[project_incident_notifications]].
 
 **Party model uses Class Table Inheritance:** `Party` is the parent; `Person` and `Business` share its primary key. Use `$party->person` / `$party->business` and `$party->displayName`.
 
@@ -84,7 +99,9 @@ Routes use `Route::livewire()` unless marked *view*. Any test that renders a vie
 | `/suppliers` | `suppliers/index.blade.php` | CRUD |
 | `/suppliers/{id}` | `suppliers/show.blade.php` | Read-only detail |
 | `/purchase-invoices` | `purchase-invoices/index.blade.php` | **Fully custom** — file upload, LLM pipeline, inline line editing, status machine |
+| `/payment-notifications` | `payment-notifications/index.blade.php` | **Fully custom** — unmatched supplier payment notifications, link-to-invoice workflow |
 | `/bank-statements` | `bank-statements/index.blade.php` | **Fully custom** — upload PDF statements, LLM extraction, inline account assignment, reprocess with hint |
+| `/bank-templates` | `bank-templates/index.blade.php` | CRUD |
 | `/posting-rules` | `posting-rules/index.blade.php` | CRUD |
 | `/contacts` | `contacts/index.blade.php` | Read-only list of persons with active contact assignments |
 | `/clients` | `clients/index.blade.php` | CRUD |
@@ -99,6 +116,7 @@ Routes use `Route::livewire()` unless marked *view*. Any test that renders a vie
 | `/roles` | `roles/index.blade.php` | CRUD |
 | `/users` | `users/index.blade.php` | CRUD |
 | `/llm-logs` | `llm-logs/index.blade.php` | Read-only |
+| `/help` | `help/index.blade.php` | AI help chat, reads `storage/app/docs/*.md` (see [[project_help_chat_docs_sync]]) |
 | `/reports` | — | Redirects to `/reports/income-statement` |
 | `/reports/income-statement` | `reports/income-statement.blade.php` | Read-only; ledger-centric, uses FinancialYearService |
 | `/reports/trial-balance` | `reports/trial-balance.blade.php` | Read-only; multi-source account aggregation |
@@ -108,12 +126,10 @@ Routes use `Route::livewire()` unless marked *view*. Any test that renders a vie
 | `/reports/expenses-by-account` | `reports/expenses-by-account.blade.php` | Read-only |
 | `/reports/expenses-by-supplier` | `reports/expenses-by-supplier.blade.php` | Read-only |
 | `/reports/llm-performance` | `reports/llm-performance.blade.php` | Read-only |
-| `/settings/general` | `settings/general.blade.php` | Spatie settings form |
-| `/settings/purchasing` | `settings/purchasing.blade.php` | Spatie settings form |
-| `/settings/billing` | `settings/billing.blade.php` | Spatie settings form |
-| `/settings` | `settings/index.blade.php` | Multi-tab: General / Purchasing / Accounting / Billing |
+| `/settings` | `settings/index.blade.php` | Multi-tab: General / Purchasing / Accounting / Billing. `/settings/general`, `/settings/purchasing`, `/settings/billing` are `Route::redirect` shims to `/settings?tab=...` |
 | `/portal/login` | `portal/auth/login.blade.php` | Guest-only, `auth:portal` guard |
 | `/portal/set-password/{token}` | `portal/auth/set-password.blade.php` | Invite accept / set password |
+| `/documents/media/{media}` | — | Controller (`DocumentMediaController`), not Livewire. Streams private-disk document files behind `Gate::authorize` — never link `getUrl()` directly, see [[project_media_private_disk]] |
 
 ### CRUD Framework
 
@@ -183,7 +199,7 @@ Methods: `markAsReviewed()`, `approve()`, `post()`, `dispute()`, `reject()`, `re
 
 ### Morph Map (AppServiceProvider)
 
-18 aliases registered via `Relation::enforceMorphMap()`. Always add new morph-related models here before writing data.
+20 aliases registered via `Relation::enforceMorphMap()`. Always add new morph-related models here before writing data.
 
 ### `party_relationships.metadata` Convention
 
@@ -216,6 +232,7 @@ Current metadata shapes:
   1. `#[Locked]` — prevents the client from modifying the property at all. Required on any ID, session key, or security-boundary value that the server sets and the client must not change (e.g. `$sessionId`, `$editingId`). Typed Eloquent model properties (`public Post $post`) are locked automatically; plain scalars are not.
   2. `$this->authorize()` inside every mutating action method — `mount()` authorization only gates initial render; subsequent wire calls bypass it. Each public action that writes data must re-check authorization independently, regardless of what `create()` / `edit()` checked before it (e.g. `save()` must authorize, not just `create()`).
 - **Zip uploads: sanitize entry names before `extractTo()`.** PHP's `ZipArchive::extractTo()` does not protect against Zip Slip on Linux. Reject any entry whose name contains `..` or starts with `/` before extracting.
+- **Control accounts (AR/AP) can't take direct postings once they have children.** `Account::booted()` throws `InvalidArgumentException` on save if `allow_direct_posting = true` and the account already has sub-accounts, and auto-flips `allow_direct_posting` to `false` on a parent the moment it gains its first child. Migration `2026_07_14_123738_block_direct_posting_on_accounts_with_children` is the one-off data fix for rows created before this guard existed; new code relies on the model guard, not the migration.
 
 ---
 
