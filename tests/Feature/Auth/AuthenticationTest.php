@@ -60,7 +60,7 @@ class AuthenticationTest extends TestCase
 
         $this->actingAs($user);
 
-        $response = $this->get('/dashboard');
+        $response = $this->get('/');
 
         $response
             ->assertOk()
@@ -79,7 +79,7 @@ class AuthenticationTest extends TestCase
 
         $component
             ->assertHasNoErrors()
-            ->assertRedirect('/');
+            ->assertRedirect(route('login'));
 
         $this->assertGuest();
     }
