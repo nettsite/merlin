@@ -30,7 +30,6 @@ php artisan ninja:import {path?} [--dry-run] [--only=clients|contacts|invoices|q
 
 # One-off data backfills (idempotent, safe to re-run; --dry-run to preview)
 php artisan accounts:backfill-client-receivables
-php artisan accounts:backfill-supplier-payables
 
 # Model retirement probe (also runs daily at 05:30 via schedule)
 php artisan models:health-check
@@ -64,7 +63,6 @@ app/Modules/
 │   │               — DocumentKindClassifier, DuplicateInvoiceMerger,
 │   │               — PaymentNotificationMatcher, PaymentNotificationProcessingService, PaymentEvidenceRecorder,
 │   │               — UnpostedInvoicesIncidentDetector, InvalidPurchasingSettingsIncidentDetector (IncidentDetector impls)
-│   ├── Console/    — BackfillSupplierPayableAccounts (`accounts:backfill-supplier-payables`)
 │   ├── Jobs/       — ProcessInvoiceDocument (queued)
 │   ├── DTO/        — ExtractedInvoice, ExtractedInvoiceLine, ExtractedPaymentNotification
 │   └── Settings/   — PurchasingSettings (autopost_confidence, tax_default_rate, etc.)
