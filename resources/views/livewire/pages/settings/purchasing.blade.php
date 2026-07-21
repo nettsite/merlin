@@ -105,7 +105,7 @@ new #[Layout('components.layout.app')] class extends Component
     </div>
 
     <form wire:submit="save" class="space-y-6">
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-6 items-start">
+        <div class="grid grid-cols-2 gap-x-8 gap-y-6 items-start">
         <div class="space-y-5">
             <h2 class="text-sm font-semibold text-ink border-b border-line pb-2">Defaults</h2>
 
