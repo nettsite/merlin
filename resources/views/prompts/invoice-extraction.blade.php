@@ -8,6 +8,11 @@ You are an accounts payable assistant for a South African business. Extract data
 {!! json_encode($supplier_history, JSON_PRETTY_PRINT) !!}
 
 @endif
+@if(!empty($supplier_payment_notes))
+## Supplier Payment Behaviour (how this specific supplier invoices — use to set "already_paid" below)
+{{ $supplier_payment_notes }}
+
+@endif
 ## Invoice Text
 {{ $invoice_text }}
 
@@ -22,6 +27,11 @@ You are an accounts payable assistant for a South African business. Extract data
 - Detect the invoice currency from explicit labels (USD, GBP, EUR, AUD, etc.) or symbols ($ → USD, £ → GBP, € → EUR, R → ZAR). Use the ISO 4217 three-letter code. Default to "{{ $base_currency }}" only if no currency is shown.
 - All amounts in the JSON must be in the invoice's stated currency — do NOT convert to {{ $base_currency }}.
 - Dates must be in YYYY-MM-DD format
+@if(!empty($supplier_payment_notes))
+- Using the "Supplier Payment Behaviour" note above, decide whether THIS invoice matches the behaviour it describes (e.g. "this supplier always sends the invoice already paid" or "a zero balance means it's settled"). Set "already_paid" to true only if the note's condition is clearly met by this invoice's own content (its balance, totals, or wording) — false otherwise. If the note doesn't clearly apply, set false.
+@else
+- Set "already_paid" to null — no supplier-specific payment behaviour is configured.
+@endif
 - Return ONLY valid JSON matching the schema below. No preamble, no explanation, no markdown fences.
 
 {
@@ -38,6 +48,7 @@ You are an accounts payable assistant for a South African business. Extract data
   "total": 0.00,
   "confidence": 0.00,
   "warnings": [],
+  "already_paid": null,
   "lines": [
     {
       "description": "string",

@@ -42,6 +42,9 @@ new #[Layout('components.layout.app')] class extends Component
     #[Validate('nullable|uuid|exists:payment_terms,id')]
     public string $paymentTermId = '';
 
+    #[Validate('nullable|string|max:1000')]
+    public string $paymentBehaviorNotes = '';
+
     public string $filterStatus = '';
     public string $dateRange = 'this_year';
     public string $dateFrom = '';
@@ -151,7 +154,7 @@ new #[Layout('components.layout.app')] class extends Component
     public function create(): void
     {
         $this->authorize('create', Party::class);
-        $this->reset(['legalName', 'tradingName', 'email', 'phone', 'notes', 'defaultPayableAccountId', 'paymentTermId']);
+        $this->reset(['legalName', 'tradingName', 'email', 'phone', 'notes', 'defaultPayableAccountId', 'paymentTermId', 'paymentBehaviorNotes']);
         $this->status = 'active';
         $this->editingId = null;
         $this->showForm = true;
@@ -171,6 +174,7 @@ new #[Layout('components.layout.app')] class extends Component
         $supplierRel = $party->relationships->firstWhere('relationship_type', 'supplier');
         $this->defaultPayableAccountId = $supplierRel?->default_payable_account_id ?? '';
         $this->paymentTermId = $supplierRel?->payment_term_id ?? '';
+        $this->paymentBehaviorNotes = $supplierRel?->payment_behavior_notes ?? '';
     }
 
     protected function store(): void
@@ -225,6 +229,7 @@ new #[Layout('components.layout.app')] class extends Component
         $rel->mergeMetadata([
             'default_payable_account_id' => $this->defaultPayableAccountId ?: null,
             'payment_term_id' => $this->paymentTermId ?: null,
+            'payment_behavior_notes' => $this->paymentBehaviorNotes ?: null,
         ]);
     }
 
@@ -551,6 +556,13 @@ new #[Layout('components.layout.app')] class extends Component
             @endforeach
         </flux:select>
         <flux:error name="paymentTermId" />
+    </flux:field>
+
+    <flux:field>
+        <flux:label>Payment Behaviour</flux:label>
+        <flux:textarea wire:model="paymentBehaviorNotes" rows="3" placeholder="e.g. &quot;This supplier always sends the invoice already paid — a zero balance means record a payment too&quot;, or &quot;Sends an unpaid invoice, then re-sends a paid copy under a different invoice number.&quot; Leave blank to use automatic detection." />
+        <flux:description>Plain English — read by the AI extraction step to decide whether a new invoice from this supplier should be recorded as already paid. Leave blank to keep the default automatic detection.</flux:description>
+        <flux:error name="paymentBehaviorNotes" />
     </flux:field>
 
     <flux:field>

@@ -66,6 +66,30 @@ it('creates a supplier', function (): void {
     $this->assertDatabaseHas('businesses', ['legal_name' => 'New Supplier Pty Ltd']);
 });
 
+it('saves and reloads the payment behaviour note on the supplier relationship', function (): void {
+    $this->actingAs(supplierUserWith(['parties-view-any', 'parties-create', 'parties-update']));
+
+    $note = 'This supplier always sends the invoice already paid — a zero balance means record a payment too.';
+
+    Livewire::test('pages.suppliers.index')
+        ->call('create')
+        ->set('legalName', 'WHMCS Reseller Pty Ltd')
+        ->set('paymentBehaviorNotes', $note)
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $party = Party::with('relationships')
+        ->whereHas('business', fn ($q) => $q->where('legal_name', 'WHMCS Reseller Pty Ltd'))
+        ->firstOrFail();
+
+    $supplierRel = $party->relationships->firstWhere('relationship_type', 'supplier');
+    expect($supplierRel->payment_behavior_notes)->toBe($note);
+
+    Livewire::test('pages.suppliers.index')
+        ->call('edit', $party->id)
+        ->assertSet('paymentBehaviorNotes', $note);
+});
+
 it('requires legalName on create', function (): void {
     $this->actingAs(supplierUserWith(['parties-view-any', 'parties-create']));
 

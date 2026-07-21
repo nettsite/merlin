@@ -7,6 +7,7 @@ use App\Modules\Core\Models\DocumentLine;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Services\DocumentTextExtractor;
 use App\Modules\Core\Services\LlmService;
+use App\Modules\Core\Services\PartyService;
 use App\Modules\Core\Settings\CompanySettings;
 use App\Modules\Core\Settings\CurrencySettings;
 use App\Modules\Purchasing\DTO\ExtractedInvoice;
@@ -836,4 +837,88 @@ it('uses the invoice own recorded total, not a zero extracted header total, when
     // header total — the stashed evidence amount must match it exactly.
     expect((float) $document->total)->toBeGreaterThan(0.0)
         ->and((float) ($document->metadata['pending_payment']['amount'] ?? 0))->toBe((float) $document->total);
+});
+
+// --- Per-supplier payment-behaviour notes ---
+
+it('uses the LLM-decided already_paid over generic text detection when the supplier has a payment-behaviour note configured', function (): void {
+    $party = app(PartyService::class)->createBusiness([
+        'business_type' => 'company',
+        'legal_name' => 'WHMCS Reseller Pty Ltd',
+        'status' => 'active',
+    ], ['supplier']);
+    $party->relationships->firstWhere('relationship_type', 'supplier')
+        ->mergeMetadata(['payment_behavior_notes' => 'This supplier always sends the invoice already paid.']);
+
+    // Document already has the supplier linked (e.g. a reprocess), so the
+    // note is available before the LLM call — mirrors how supplier history
+    // is only used once the party is already known.
+    $document = Document::factory()->purchaseInvoice()->create(['party_id' => $party->id]);
+    attachFakeMedia($document);
+
+    // Text has NO paid-evidence language the generic classifier would catch —
+    // only the LLM's own already_paid=true (informed by the note) should count.
+    $this->extractorMock->allows('extract')->andReturn('Invoice #999. Total: R100.00.');
+    $this->llmMock->allows('extractInvoice')->andReturn(new ExtractedInvoice(
+        supplierName: 'WHMCS Reseller Pty Ltd',
+        supplierTaxNumber: null,
+        supplierEmail: null,
+        supplierPhone: null,
+        invoiceNumber: '999',
+        issueDate: Carbon::parse('2026-01-01'),
+        dueDate: null,
+        currency: config('currency.base', 'ZAR'),
+        subtotal: 100.0,
+        taxTotal: 0.0,
+        total: 100.0,
+        lines: [fakeLine()],
+        confidence: 0.9,
+        warnings: [],
+        alreadyPaid: true,
+    ));
+
+    $this->service->process($document);
+
+    $document->refresh();
+    expect((float) ($document->metadata['pending_payment']['amount'] ?? 0))->toBe((float) $document->total);
+});
+
+it('ignores a false already_paid from a configured supplier note and does not stash evidence', function (): void {
+    $party = app(PartyService::class)->createBusiness([
+        'business_type' => 'company',
+        'legal_name' => 'Regular Supplier Pty Ltd',
+        'status' => 'active',
+    ], ['supplier']);
+    $party->relationships->firstWhere('relationship_type', 'supplier')
+        ->mergeMetadata(['payment_behavior_notes' => 'This supplier always sends the invoice already paid.']);
+
+    $document = Document::factory()->purchaseInvoice()->create(['party_id' => $party->id]);
+    attachFakeMedia($document);
+
+    // Text DOES contain paid-evidence language the generic classifier would
+    // normally catch — but a configured note means the LLM's own
+    // already_paid decision (false here) takes over instead.
+    $this->extractorMock->allows('extract')->andReturn('Invoice #999. Amount Paid: R100.00. Balance Due: R0.00.');
+    $this->llmMock->allows('extractInvoice')->andReturn(new ExtractedInvoice(
+        supplierName: 'Regular Supplier Pty Ltd',
+        supplierTaxNumber: null,
+        supplierEmail: null,
+        supplierPhone: null,
+        invoiceNumber: '999',
+        issueDate: Carbon::parse('2026-01-01'),
+        dueDate: null,
+        currency: config('currency.base', 'ZAR'),
+        subtotal: 100.0,
+        taxTotal: 0.0,
+        total: 100.0,
+        lines: [fakeLine()],
+        confidence: 0.9,
+        warnings: [],
+        alreadyPaid: false,
+    ));
+
+    $this->service->process($document);
+
+    $document->refresh();
+    expect($document->metadata['pending_payment'] ?? null)->toBeNull();
 });

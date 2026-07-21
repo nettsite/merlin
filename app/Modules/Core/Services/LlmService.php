@@ -42,9 +42,9 @@ class LlmService
      *
      * @param  array<int, array<string, mixed>>  $supplierHistory
      */
-    public function extractInvoice(string $invoiceText, array $supplierHistory = [], ?Model $loggable = null): ExtractedInvoice
+    public function extractInvoice(string $invoiceText, array $supplierHistory = [], ?Model $loggable = null, ?string $supplierPaymentNotes = null): ExtractedInvoice
     {
-        $prompt = $this->buildExtractionPrompt($invoiceText, $supplierHistory);
+        $prompt = $this->buildExtractionPrompt($invoiceText, $supplierHistory, $supplierPaymentNotes);
 
         $fast = null;
         $fastReconciled = false;
@@ -377,13 +377,14 @@ class LlmService
             ->response_payload['text'];
     }
 
-    private function buildExtractionPrompt(string $text, array $history): string
+    private function buildExtractionPrompt(string $text, array $history, ?string $supplierPaymentNotes = null): string
     {
         /** @var View $view */
         $view = view('prompts.invoice-extraction', [
             'invoice_text' => $text,
             'chart_of_accounts' => $this->getCoaForPrompt(),
             'supplier_history' => $history,
+            'supplier_payment_notes' => $supplierPaymentNotes,
             'base_currency' => strtoupper($this->currencySettings->base_currency),
         ]);
 

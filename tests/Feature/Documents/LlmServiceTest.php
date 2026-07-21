@@ -77,6 +77,38 @@ it('extracts line items with account suggestions', function (): void {
         ->and($line->accountConfidence)->toBe(0.92);
 });
 
+it('includes the supplier payment-behaviour note in the prompt and parses already_paid from the response', function (): void {
+    $responseJson = str_replace('"confidence": 0.95', '"confidence": 0.95, "already_paid": true', $this->fixtureJson);
+
+    Http::fake(['api.anthropic.com/*' => Http::response(anthropicResponse($responseJson))]);
+
+    $note = 'This supplier always sends the invoice already paid — a zero balance means record a payment too.';
+    $result = $this->service->extractInvoice('sample invoice text', [], null, $note);
+
+    expect($result->alreadyPaid)->toBeTrue();
+
+    Http::assertSent(function ($request) use ($note) {
+        $sentPrompt = $request->data()['messages'][0]['content'];
+
+        return str_contains($sentPrompt, $note)
+            && str_contains($sentPrompt, 'Supplier Payment Behaviour');
+    });
+});
+
+it('leaves already_paid null when no supplier payment-behaviour note is configured', function (): void {
+    Http::fake(['api.anthropic.com/*' => Http::response(anthropicResponse($this->fixtureJson))]);
+
+    $result = $this->service->extractInvoice('sample invoice text');
+
+    expect($result->alreadyPaid)->toBeNull();
+
+    Http::assertSent(function ($request) {
+        $sentPrompt = $request->data()['messages'][0]['content'];
+
+        return ! str_contains($sentPrompt, 'Supplier Payment Behaviour');
+    });
+});
+
 it('logs every api call to llm_logs', function (): void {
     Http::fake(['api.anthropic.com/*' => Http::response(anthropicResponse($this->fixtureJson))]);
 

@@ -26,6 +26,7 @@ class ExtractedInvoice
         public readonly array $lines,
         public readonly float $confidence,
         public readonly array $warnings,
+        public readonly ?bool $alreadyPaid = null,
     ) {}
 
     /** @param array<string, mixed> $data */
@@ -51,6 +52,7 @@ class ExtractedInvoice
             lines: $lines,
             confidence: (float) ($data['confidence'] ?? 0),
             warnings: $data['warnings'] ?? [],
+            alreadyPaid: isset($data['already_paid']) ? (bool) $data['already_paid'] : null,
         );
     }
 }

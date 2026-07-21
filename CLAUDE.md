@@ -208,7 +208,7 @@ Current metadata shapes:
 
 ```json
 // relationship_type = "supplier"
-{ "default_payable_account_id": "uuid|null", "payment_term_id": "uuid|null" }
+{ "default_payable_account_id": "uuid|null", "payment_term_id": "uuid|null", "payment_behavior_notes": "string|null — plain-English note fed to the LLM extraction prompt to decide already_paid" }
 
 // relationship_type = "client"
 { "default_receivable_account_id": "uuid|null", "payment_term_id": "uuid|null" }

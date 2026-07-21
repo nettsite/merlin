@@ -63,11 +63,14 @@ class InvoiceProcessingService
             return;
         }
 
-        // 2. Build supplier history context if we already know the supplier
+        // 2. Build supplier history context and any configured payment-behaviour
+        // note if we already know the supplier (both no-ops otherwise — a new
+        // supplier isn't resolved until step 4, below).
         $history = $document->party_id ? $this->getSupplierHistory($document->party) : [];
+        $paymentBehaviorNotes = $document->party_id ? $this->getSupplierPaymentBehaviorNotes($document->party) : null;
 
         // 3. Call LLM for structured extraction
-        $extracted = $this->llm->extractInvoice($text, $history, $document);
+        $extracted = $this->llm->extractInvoice($text, $history, $document, $paymentBehaviorNotes);
 
         // 4. Resolve supplier (no-op if party_id already set)
         $this->supplierResolver->resolve($document, $extracted);
@@ -127,7 +130,15 @@ class InvoiceProcessingService
         // paid-evidence language ("receipt", "paid in full", ...), i.e. it's
         // already known to be evidence of payment rather than a new invoice.
         $duplicate = $this->duplicateInvoiceMerger->findDuplicate($document);
-        $hasPaidSignal = $this->classifier->hasPaidSignal($text);
+
+        // A configured supplier payment-behaviour note lets the LLM decide
+        // "already_paid" directly from the note plus this invoice's own
+        // content — more reliable than generic text-pattern matching for a
+        // supplier with a known, fixed invoicing style. Suppliers without a
+        // note configured keep the existing generic detection unchanged.
+        $hasPaidSignal = $paymentBehaviorNotes !== null
+            ? (bool) $extracted->alreadyPaid
+            : $this->classifier->hasPaidSignal($text);
 
         if ($duplicate === null && $hasPaidSignal) {
             $duplicate = $this->duplicateInvoiceMerger->findFuzzyDuplicate($document, $extracted->total);
@@ -330,5 +341,10 @@ class InvoiceProcessingService
                 ])->toArray(),
             ])
             ->toArray();
+    }
+
+    private function getSupplierPaymentBehaviorNotes(Party $supplier): ?string
+    {
+        return $supplier->relationships->firstWhere('relationship_type', 'supplier')?->payment_behavior_notes;
     }
 }

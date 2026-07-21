@@ -58,6 +58,13 @@ class PartyRelationship extends Model
         );
     }
 
+    protected function paymentBehaviorNotes(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => $this->metadata['payment_behavior_notes'] ?? null,
+        );
+    }
+
     /**
      * Merge the given key-value pairs into metadata and save.
      *
