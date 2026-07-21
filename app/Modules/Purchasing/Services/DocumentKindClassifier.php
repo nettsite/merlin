@@ -55,6 +55,11 @@ class DocumentKindClassifier
         '/\bpayment received\b/i',
         '/\bamount paid\b/i',
         '/\breceipt\b/i',
+        // WHMCS-style invoices (used by several suppliers) render a "Paid"/
+        // "Unpaid" status as a diagonal watermark, which pdftotext shreds
+        // into unmatchable fragments. The "Balance" line under the
+        // Transactions table is reliable instead: 0 means paid.
+        '/\bbalance\b\s{1,40}r?\s?0(?:\.00)?\b/i',
     ];
 
     public function classify(string $text): string
