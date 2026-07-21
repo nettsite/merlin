@@ -7,6 +7,7 @@ use App\Modules\Core\Models\DocumentLine;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Services\DocumentTextExtractor;
 use App\Modules\Core\Services\LlmService;
+use App\Modules\Core\Settings\CompanySettings;
 use App\Modules\Core\Settings\CurrencySettings;
 use App\Modules\Purchasing\DTO\ExtractedInvoice;
 use App\Modules\Purchasing\DTO\ExtractedInvoiceLine;
@@ -73,6 +74,7 @@ beforeEach(function (): void {
         postingRuleService: app(PostingRuleService::class),
         currencySettings: app(CurrencySettings::class),
         purchasingSettings: app(PurchasingSettings::class),
+        companySettings: app(CompanySettings::class),
         classifier: app(DocumentKindClassifier::class),
         paymentNotificationProcessor: $this->paymentNotificationProcessor,
         paymentNotificationMatcher: $this->paymentNotificationMatcher,
@@ -316,6 +318,9 @@ it('does not double-count VAT when LLM extracts VAT-inclusive line prices with a
     // LLM extracted unit prices as shown on invoice (VAT-inclusive) and also
     // set tax_rate = 15 on each line, causing the system to add 15% on top of
     // amounts that already include VAT, producing total = R4697.75 instead of R4085.
+    // VAT is only split for a VAT-registered business.
+    app(CompanySettings::class)->fill(['tax_number' => '4123456789'])->save();
+
     $document = Document::factory()->purchaseInvoice()->create();
     attachFakeMedia($document);
 
@@ -361,6 +366,8 @@ it('keeps the authoritative invoice amount on VAT-inclusive lines (no cent drift
     // R700.00 gross. Recomputing VAT as 15% of the rounded ex-VAT (608.70) yields
     // 91.31 → gross 700.01. Deriving VAT by subtraction (700 − 608.70 = 91.30)
     // must keep the line gross at exactly R700.00.
+    app(CompanySettings::class)->fill(['tax_number' => '4830301166'])->save();
+
     $document = Document::factory()->purchaseInvoice()->create();
     attachFakeMedia($document);
 
@@ -399,6 +406,43 @@ it('keeps the authoritative invoice amount on VAT-inclusive lines (no cent drift
         ->and((float) $monitor->tax_amount)->toBe(91.30)
         ->and((float) $document->fresh()->total)->toBe(829.00)
         ->and((float) $document->fresh()->tax_total)->toBe(108.13);
+});
+
+it('never splits VAT off a line when the business has no VAT number configured', function (): void {
+    // Company settings default tax_number is blank — not VAT registered.
+    // Supplier VAT is not recoverable, so the invoiced amount is the full
+    // cost: the line must record the gross R250.00, not the ex-VAT R219.30.
+    $document = Document::factory()->purchaseInvoice()->create();
+    attachFakeMedia($document);
+
+    $line = new ExtractedInvoiceLine('Credit Balance Update', 1, 250.00, 250.00, 14.0, '5210', 0.9, '');
+
+    $extracted = new ExtractedInvoice(
+        supplierName: 'DiaMatrix C.C.',
+        supplierTaxNumber: '4070203098',
+        supplierEmail: null,
+        supplierPhone: null,
+        invoiceNumber: '31921',
+        issueDate: Carbon::parse('2014-06-28'),
+        dueDate: Carbon::parse('2014-07-01'),
+        currency: config('currency.base', 'ZAR'),
+        subtotal: 219.30,
+        taxTotal: 30.70,
+        total: 250.00,
+        lines: [$line],
+        confidence: 0.85,
+        warnings: [],
+    );
+
+    $this->llmMock->allows('extractInvoice')->andReturn($extracted);
+    $this->service->process($document);
+
+    $stored = DocumentLine::where('document_id', $document->id)->first();
+
+    expect((float) $stored->line_total)->toBe(250.00)
+        ->and((float) $stored->tax_amount)->toBe(0.0)
+        ->and($stored->tax_rate)->toBeNull()
+        ->and((float) $document->fresh()->total)->toBe(250.00);
 });
 
 it('sets exchange rate and foreign amounts when invoice is in USD', function (): void {

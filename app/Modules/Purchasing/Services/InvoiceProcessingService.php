@@ -7,6 +7,7 @@ use App\Modules\Core\Models\DocumentLine;
 use App\Modules\Core\Models\Party;
 use App\Modules\Core\Services\DocumentTextExtractor;
 use App\Modules\Core\Services\LlmService;
+use App\Modules\Core\Settings\CompanySettings;
 use App\Modules\Core\Settings\CurrencySettings;
 use App\Modules\Purchasing\Settings\PurchasingSettings;
 use Illuminate\Support\Facades\Log;
@@ -22,6 +23,7 @@ class InvoiceProcessingService
         private readonly PostingRuleService $postingRuleService,
         private readonly CurrencySettings $currencySettings,
         private readonly PurchasingSettings $purchasingSettings,
+        private readonly CompanySettings $companySettings,
         private readonly DocumentKindClassifier $classifier,
         private readonly PaymentNotificationProcessingService $paymentNotificationProcessor,
         private readonly PaymentNotificationMatcher $paymentNotificationMatcher,
@@ -149,11 +151,18 @@ class InvoiceProcessingService
 
         // 7. Create document lines with account resolution
         //
-        // Tax rate precedence:
+        // A blank company VAT/tax number means this business is not VAT
+        // registered — VAT charged by suppliers is not recoverable, so it's
+        // part of the cost of doing business, not a separate input-tax line.
+        // In that case never split tax out: the invoiced amount, whatever it
+        // is, is the full cost.
+        $vatRegistered = trim($this->companySettings->tax_number) !== '';
+        //
+        // Tax rate precedence (VAT-registered businesses only):
         //   1. LLM-provided per-line tax_rate (explicit, most accurate)
         //   2. If the header tax_total > 0 but no per-line rate, default to the purchasing settings rate
         //   3. If the header tax_total is zero, no tax on any line
-        $headerHasTax = $extracted->taxTotal > 0;
+        $headerHasTax = $vatRegistered && $extracted->taxTotal > 0;
 
         // Detect VAT-inclusive line prices: if sum(extracted line totals) ≈ extracted.total
         // and the invoice has tax, the LLM extracted amounts that already include VAT.
@@ -176,6 +185,7 @@ class InvoiceProcessingService
                 );
 
                 $taxRate = match (true) {
+                    ! $vatRegistered => null,
                     $extractedLine->taxRate !== null => $extractedLine->taxRate,
                     $headerHasTax => $this->purchasingSettings->tax_default_rate,
                     default => null,
