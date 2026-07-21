@@ -72,10 +72,18 @@ new #[Layout('components.layout.app')] class extends Component
         $this->saved = true;
     }
 
-    /** @return array<int, array{value: string, label: string}> */
+    /**
+     * Unlike the contra account (posted to directly), this is the AP control
+     * account new suppliers get their own sub-account created under — so it
+     * is deliberately NOT restricted to postable() accounts, since a control
+     * account with existing sub-accounts has allow_direct_posting=false (see
+     * Account::booted()) and would otherwise be excluded from its own list.
+     *
+     * @return array<int, array{value: string, label: string}>
+     */
     public function getPayableAccountOptionsProperty(): array
     {
-        return Account::postable()->active()->orderBy('code')->get(['code', 'name'])
+        return Account::active()->orderBy('code')->get(['code', 'name'])
             ->map(fn (Account $account) => ['value' => $account->code, 'label' => "{$account->code} — {$account->name}"])
             ->all();
     }
