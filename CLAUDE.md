@@ -140,8 +140,10 @@ app/Livewire/Concerns/
 
 resources/views/components/
 ├── layout/app.blade.php, nav.blade.php, top-nav.blade.php
-└── crud/table.blade.php, th.blade.php, form.blade.php   ← flyout modal
+└── crud/table.blade.php, th.blade.php, form.blade.php   ← centered modal, 2-column
 ```
+
+**CRUD form layout rule:** `<x-crud.form>` renders as a centered `<flux:modal>` (`max-w-2xl`), with its slotted `<flux:field>` children laid out in a responsive 2-column grid (`grid-cols-1 sm:grid-cols-2`, single column below `sm`). This is a single shared component — every CRUD page using `<x-crud.form>` gets this automatically, no per-page changes needed. Any field that shouldn't be squeezed to half-width (a `<flux:textarea>`, a field with a long description, etc.) needs `<flux:field class="sm:col-span-2">` explicitly on that field. When a page's create/edit form is duplicated elsewhere (e.g. a list page's inline form AND a detail page's own modal — see Suppliers), don't keep two copies: extract a shared nested Livewire component instead (see [[feedback_shared_form_modal_pattern]]) and wire it with `dispatch()`/`#[On(...)]`, matching `resources/views/livewire/suppliers/form-modal.blade.php`.
 
 Flux UI components (`<flux:input>`, `<flux:select>`, etc.) used directly — no custom field abstraction.
 

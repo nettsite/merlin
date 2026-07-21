@@ -259,7 +259,7 @@ new #[Layout('components.layout.app')] class extends Component
         <flux:error name="name" />
     </flux:field>
 
-    <flux:field>
+    <flux:field class="sm:col-span-2">
         <flux:label>Description</flux:label>
         <flux:textarea wire:model="description" rows="2" />
     </flux:field>

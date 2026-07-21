@@ -625,7 +625,7 @@ new #[Layout('components.layout.app')] class extends Component
         <flux:error name="paymentTermId" />
     </flux:field>
 
-    <flux:field>
+    <flux:field class="sm:col-span-2">
         <flux:label>Notes</flux:label>
         <flux:textarea wire:model="notes" rows="3" placeholder="Internal notes..." />
         <flux:error name="notes" />

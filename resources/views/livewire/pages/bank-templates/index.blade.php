@@ -177,7 +177,7 @@ new #[Layout('components.layout.app')] class extends Component
         <flux:error name="bankName" />
     </flux:field>
 
-    <flux:field>
+    <flux:field class="sm:col-span-2">
         <flux:label>Layout hints</flux:label>
         <flux:textarea wire:model="layoutHints" rows="10" placeholder="Leave blank — generated automatically after the first successful extraction." />
         <flux:description>Plain-text bullet points passed to the AI when reading statements from this bank. Auto-generated and updated after each extraction.</flux:description>
