@@ -2,6 +2,7 @@
 
 namespace App\Modules\Purchasing\Services;
 
+use App\Modules\Billing\Settings\BillingSettings;
 use App\Modules\Core\Models\Document;
 use App\Modules\Core\Services\DocumentService;
 use Carbon\CarbonInterface;
@@ -23,6 +24,7 @@ class PaymentEvidenceRecorder
 
     public function __construct(
         private readonly DocumentService $documentService,
+        private readonly BillingSettings $billingSettings,
     ) {}
 
     public function record(Document $invoice, float $amount, CarbonInterface $date, ?string $reference, string $evidenceSource): void
@@ -74,6 +76,7 @@ class PaymentEvidenceRecorder
             'amount' => $applyAmount,
             'date' => $date->toDateString(),
             'reference' => $reference,
+            'contra_account_id' => $this->billingSettings->default_contra_account_id,
         ], null);
     }
 }

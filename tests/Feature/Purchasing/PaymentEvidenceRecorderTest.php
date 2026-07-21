@@ -1,5 +1,7 @@
 <?php
 
+use App\Modules\Accounting\Models\Account;
+use App\Modules\Billing\Settings\BillingSettings;
 use App\Modules\Core\Models\Document;
 use App\Modules\Core\Models\DocumentLine;
 use App\Modules\Core\Models\User;
@@ -27,6 +29,25 @@ it('caps the applied amount at the outstanding balance due', function (): void {
 
     expect((float) $invoice->balance_due)->toBe(0.0)
         ->and($invoice->status)->toBe('paid');
+});
+
+it('records the configured contra account on the auto-created payment so the credit leg posts', function (): void {
+    $contraAccount = Account::factory()->create();
+    $settings = app(BillingSettings::class);
+    $settings->default_contra_account_id = $contraAccount->id;
+    $settings->save();
+
+    $invoice = Document::factory()->purchaseInvoice()->create(['status' => 'posted']);
+    DocumentLine::factory()->for($invoice)->create(['unit_price' => 1000, 'tax_rate' => 15]);
+    $invoice->refresh();
+
+    $this->recorder->record($invoice, 1150.0, Carbon::now(), 'REF-1', 'test evidence');
+
+    $payment = $invoice->fresh()->childDocuments()
+        ->wherePivot('relationship_type', 'payment_for')
+        ->first();
+
+    expect($payment->contra_account_id)->toBe($contraAccount->id);
 });
 
 it('ignores a zero or negative amount', function (): void {

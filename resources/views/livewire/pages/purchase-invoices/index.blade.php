@@ -1264,10 +1264,10 @@ new #[Layout('components.layout.app')] class extends Component
                                         </td>
                                         <td class="py-2">
                                             <div class="flex gap-1">
-                                                <button wire:click="saveLine" class="text-success hover:text-green-700">
+                                                <button wire:click="saveLine" title="Save changes" aria-label="Save changes" class="text-success hover:text-green-700">
                                                     <svg class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg>
                                                 </button>
-                                                <button wire:click="cancelLine" class="text-ink-muted hover:text-ink">
+                                                <button wire:click="cancelLine" title="Discard changes" aria-label="Discard changes" class="text-ink-muted hover:text-ink">
                                                     <svg class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
                                                 </button>
                                             </div>
