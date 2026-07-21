@@ -6,7 +6,7 @@ use App\Modules\Core\Models\Party;
 use App\Modules\Core\Models\Document;
 use Carbon\Carbon;
 use Livewire\Attributes\Layout;
-use Livewire\Attributes\Validate;
+use Livewire\Attributes\On;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -16,38 +16,9 @@ new #[Layout('components.layout.app')] class extends Component
 
     public string $partyId = '';
 
-    public bool $showEditForm = false;
-
     public string $clientPaymentTermId = '';
 
     public bool $showAddClientForm = false;
-
-    #[Validate('required|string|max:255')]
-    public string $legalName = '';
-
-    #[Validate('nullable|string|max:255')]
-    public string $tradingName = '';
-
-    #[Validate('nullable|email|max:255')]
-    public string $email = '';
-
-    #[Validate('nullable|string|max:50')]
-    public string $phone = '';
-
-    #[Validate('nullable|string|max:1000')]
-    public string $notes = '';
-
-    #[Validate('required|in:active,pending,inactive')]
-    public string $status = 'active';
-
-    #[Validate('nullable|uuid|exists:accounts,id')]
-    public string $defaultPayableAccountId = '';
-
-    #[Validate('nullable|uuid|exists:payment_terms,id')]
-    public string $paymentTermId = '';
-
-    #[Validate('nullable|string|max:1000')]
-    public string $paymentBehaviorNotes = '';
 
     public string $invoiceStatus = '';
     public string $invoiceSortBy = 'issue_date';
@@ -83,56 +54,13 @@ new #[Layout('components.layout.app')] class extends Component
 
     public function openEditForm(): void
     {
-        $party = Party::with(['business', 'relationships'])->findOrFail($this->partyId);
-        $this->authorize('update', $party);
-        $this->legalName = $party->business?->legal_name ?? '';
-        $this->tradingName = $party->business?->trading_name ?? '';
-        $this->email = $party->primary_email ?? '';
-        $this->phone = $party->primary_phone ?? '';
-        $this->notes = $party->notes ?? '';
-        $this->status = $party->status;
-
-        $supplierRel = $party->relationships->firstWhere('relationship_type', 'supplier');
-        $this->defaultPayableAccountId = $supplierRel?->default_payable_account_id ?? '';
-        $this->paymentTermId = $supplierRel?->payment_term_id ?? '';
-        $this->paymentBehaviorNotes = $supplierRel?->payment_behavior_notes ?? '';
-
-        $this->showEditForm = true;
+        $this->dispatch('open-supplier-form', partyId: $this->partyId);
     }
 
-    public function saveEdit(): void
+    #[On('supplier-saved')]
+    public function refreshAfterSupplierSaved(): void
     {
-        $this->validate();
-        $party = Party::with(['business', 'relationships'])->findOrFail($this->partyId);
-        $this->authorize('update', $party);
-
-        $party->business?->update([
-            'legal_name' => $this->legalName,
-            'trading_name' => $this->tradingName ?: $this->legalName,
-        ]);
-        $party->update([
-            'primary_email' => $this->email ?: null,
-            'primary_phone' => $this->phone ?: null,
-            'notes' => $this->notes ?: null,
-            'status' => $this->status,
-        ]);
-
-        $rel = $party->relationships()->where('relationship_type', 'supplier')->first();
-
-        if ($rel !== null) {
-            $rel->mergeMetadata([
-                'default_payable_account_id' => $this->defaultPayableAccountId ?: null,
-                'payment_term_id' => $this->paymentTermId ?: null,
-                'payment_behavior_notes' => $this->paymentBehaviorNotes ?: null,
-            ]);
-        }
-
-        $this->showEditForm = false;
-    }
-
-    public function cancelEdit(): void
-    {
-        $this->showEditForm = false;
+        // No-op: with() below re-queries on every render, this just forces one.
     }
 
     public function addClientRelationship(): void
@@ -430,84 +358,5 @@ new #[Layout('components.layout.app')] class extends Component
         @endif
     </div>
 
-    {{-- Edit flyout --}}
-    <flux:modal wire:model="showEditForm" name="supplier-edit" class="w-full max-w-lg">
-        <form wire:submit="saveEdit" class="flex flex-col gap-4">
-            <flux:heading>Edit Supplier</flux:heading>
-
-            <flux:field>
-                <flux:label>Legal Name <span class="text-danger">*</span></flux:label>
-                <flux:input wire:model="legalName" placeholder="Acme Pty Ltd" />
-                <flux:error name="legalName" />
-            </flux:field>
-
-            <flux:field>
-                <flux:label>Trading Name</flux:label>
-                <flux:input wire:model="tradingName" placeholder="Leave blank to use legal name" />
-                <flux:error name="tradingName" />
-            </flux:field>
-
-            <flux:field>
-                <flux:label>Email</flux:label>
-                <flux:input wire:model="email" type="email" placeholder="accounts@supplier.com" />
-                <flux:error name="email" />
-            </flux:field>
-
-            <flux:field>
-                <flux:label>Phone</flux:label>
-                <flux:input wire:model="phone" placeholder="+27 11 000 0000" />
-                <flux:error name="phone" />
-            </flux:field>
-
-            <flux:field>
-                <flux:label>Status</flux:label>
-                <flux:select wire:model="status">
-                    <option value="active">Active</option>
-                    <option value="pending">Pending</option>
-                    <option value="inactive">Inactive</option>
-                </flux:select>
-                <flux:error name="status" />
-            </flux:field>
-
-            <flux:field>
-                <flux:label>Default Payable Account</flux:label>
-                <flux:select wire:model="defaultPayableAccountId">
-                    <option value="">— Use system default —</option>
-                    @foreach($liabilityAccounts as $account)
-                        <option value="{{ $account->id }}">{{ $account->code }} — {{ $account->name }}</option>
-                    @endforeach
-                </flux:select>
-                <flux:error name="defaultPayableAccountId" />
-            </flux:field>
-
-            <flux:field>
-                <flux:label>Payment Terms</flux:label>
-                <flux:select wire:model="paymentTermId">
-                    <option value="">— Use system default —</option>
-                    @foreach($paymentTerms as $term)
-                        <option value="{{ $term->id }}">{{ $term->name }}</option>
-                    @endforeach
-                </flux:select>
-                <flux:error name="paymentTermId" />
-            </flux:field>
-
-            <flux:field>
-                <flux:label>Payment Behaviour</flux:label>
-                <flux:textarea wire:model="paymentBehaviorNotes" rows="3" placeholder="e.g. &quot;This supplier always sends the invoice already paid — a zero balance means record a payment too&quot;, or &quot;Sends an unpaid invoice, then re-sends a paid copy under a different invoice number.&quot; Leave blank to use automatic detection." />
-                <flux:description>Plain English — read by the AI extraction step to decide whether a new invoice from this supplier should be recorded as already paid. Leave blank to keep the default automatic detection.</flux:description>
-                <flux:error name="paymentBehaviorNotes" />
-            </flux:field>
-
-            <flux:field>
-                <flux:label>Notes</flux:label>
-                <flux:textarea wire:model="notes" rows="3" placeholder="Internal notes..." />
-                <flux:error name="notes" />
-            </flux:field>
-
-            <div class="flex justify-end gap-2 pt-2">
-                <flux:button type="button" wire:click="cancelEdit" variant="ghost">Cancel</flux:button>
-                <flux:button type="submit" variant="primary">Save changes</flux:button>
-            </div>
-        </form>
-    </flux:modal>
+    <livewire:suppliers.form-modal />
 </div>

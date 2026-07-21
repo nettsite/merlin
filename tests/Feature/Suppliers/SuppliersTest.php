@@ -50,18 +50,19 @@ it('lists existing suppliers', function (): void {
         ->assertSee('Visible Supplier Ltd');
 });
 
-it('creates a supplier', function (): void {
+it('creates a supplier via the shared form modal', function (): void {
     $this->actingAs(supplierUserWith(['parties-view-any', 'parties-create']));
 
-    Livewire::test('pages.suppliers.index')
-        ->call('create')
+    Livewire::test('suppliers.form-modal')
+        ->call('open')
         ->assertSet('showForm', true)
         ->set('legalName', 'New Supplier Pty Ltd')
         ->set('email', 'accounts@newsupplier.co.za')
         ->set('status', 'active')
         ->call('save')
         ->assertHasNoErrors()
-        ->assertSet('showForm', false);
+        ->assertSet('showForm', false)
+        ->assertDispatched('supplier-saved');
 
     $this->assertDatabaseHas('businesses', ['legal_name' => 'New Supplier Pty Ltd']);
 });
@@ -71,8 +72,8 @@ it('saves and reloads the payment behaviour note on the supplier relationship', 
 
     $note = 'This supplier always sends the invoice already paid — a zero balance means record a payment too.';
 
-    Livewire::test('pages.suppliers.index')
-        ->call('create')
+    Livewire::test('suppliers.form-modal')
+        ->call('open')
         ->set('legalName', 'WHMCS Reseller Pty Ltd')
         ->set('paymentBehaviorNotes', $note)
         ->call('save')
@@ -85,27 +86,27 @@ it('saves and reloads the payment behaviour note on the supplier relationship', 
     $supplierRel = $party->relationships->firstWhere('relationship_type', 'supplier');
     expect($supplierRel->payment_behavior_notes)->toBe($note);
 
-    Livewire::test('pages.suppliers.index')
-        ->call('edit', $party->id)
+    Livewire::test('suppliers.form-modal')
+        ->call('open', $party->id)
         ->assertSet('paymentBehaviorNotes', $note);
 });
 
 it('requires legalName on create', function (): void {
     $this->actingAs(supplierUserWith(['parties-view-any', 'parties-create']));
 
-    Livewire::test('pages.suppliers.index')
-        ->call('create')
+    Livewire::test('suppliers.form-modal')
+        ->call('open')
         ->set('legalName', '')
         ->call('save')
         ->assertHasErrors(['legalName' => 'required']);
 });
 
-it('edits a supplier', function (): void {
+it('edits a supplier via the shared form modal', function (): void {
     $party = makeSupplier(['legal_name' => 'Original Name Pty Ltd']);
     $this->actingAs(supplierUserWith(['parties-view-any', 'parties-update']));
 
-    Livewire::test('pages.suppliers.index')
-        ->call('edit', $party->id)
+    Livewire::test('suppliers.form-modal')
+        ->call('open', $party->id)
         ->assertSet('showForm', true)
         ->assertSet('legalName', 'Original Name Pty Ltd')
         ->set('legalName', 'Updated Name Pty Ltd')
@@ -117,6 +118,19 @@ it('edits a supplier', function (): void {
         'id' => $party->id,
         'legal_name' => 'Updated Name Pty Ltd',
     ]);
+});
+
+it('dispatches open-supplier-form when creating or editing from the list page', function (): void {
+    $party = makeSupplier();
+    $this->actingAs(supplierUserWith(['parties-view-any', 'parties-create', 'parties-update']));
+
+    Livewire::test('pages.suppliers.index')
+        ->call('create')
+        ->assertDispatched('open-supplier-form');
+
+    Livewire::test('pages.suppliers.index')
+        ->call('edit', $party->id)
+        ->assertDispatched('open-supplier-form', partyId: $party->id);
 });
 
 it('soft-deletes a supplier', function (): void {
@@ -278,38 +292,34 @@ it('approves a supplier from the show page', function (): void {
     $this->assertDatabaseHas('parties', ['id' => $party->id, 'status' => 'active']);
 });
 
-it('edits a supplier from the show page', function (): void {
+it('dispatches open-supplier-form when editing from the show page', function (): void {
     $party = makeSupplier(['legal_name' => 'Before Edit Ltd']);
     $this->actingAs(supplierUserWith(['parties-view-any', 'parties-view', 'parties-update']));
 
     Livewire::test('pages.suppliers.show', ['id' => $party->id])
         ->call('openEditForm')
-        ->assertSet('showEditForm', true)
-        ->assertSet('legalName', 'Before Edit Ltd')
-        ->set('legalName', 'After Edit Ltd')
-        ->call('saveEdit')
-        ->assertHasNoErrors()
-        ->assertSet('showEditForm', false);
-
-    $this->assertDatabaseHas('businesses', ['id' => $party->id, 'legal_name' => 'After Edit Ltd']);
+        ->assertDispatched('open-supplier-form', partyId: $party->id);
 });
 
-it('saves and reloads the payment behaviour note from the show page edit form', function (): void {
-    $party = makeSupplier(['legal_name' => 'Show Page Note Supplier']);
+it('edits a supplier and its payment behaviour note through the shared form modal, reflected back on the show page', function (): void {
+    $party = makeSupplier(['legal_name' => 'Before Edit Ltd']);
     $this->actingAs(supplierUserWith(['parties-view-any', 'parties-view', 'parties-update']));
 
     $note = 'Always sends a single invoice per billing period that already shows Balance $0.00.';
 
-    Livewire::test('pages.suppliers.show', ['id' => $party->id])
-        ->call('openEditForm')
+    Livewire::test('suppliers.form-modal')
+        ->call('open', $party->id)
+        ->assertSet('legalName', 'Before Edit Ltd')
+        ->set('legalName', 'After Edit Ltd')
         ->set('paymentBehaviorNotes', $note)
-        ->call('saveEdit')
+        ->call('save')
         ->assertHasNoErrors();
+
+    $this->assertDatabaseHas('businesses', ['id' => $party->id, 'legal_name' => 'After Edit Ltd']);
 
     $supplierRel = $party->relationships()->where('relationship_type', 'supplier')->first();
     expect($supplierRel->fresh()->payment_behavior_notes)->toBe($note);
 
     Livewire::test('pages.suppliers.show', ['id' => $party->id])
-        ->call('openEditForm')
-        ->assertSet('paymentBehaviorNotes', $note);
+        ->assertSee('After Edit Ltd');
 });
