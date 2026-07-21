@@ -33,7 +33,7 @@
             href="{{ route('settings.purchasing') }}"
             :current="request()->routeIs('settings.purchasing')"
             wire:navigate
-        >Purchasing Settings</flux:sidebar.item>
+        >Settings</flux:sidebar.item>
     </flux:sidebar.group>
 
     <flux:sidebar.group heading="Billing">

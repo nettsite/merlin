@@ -90,13 +90,14 @@ new #[Layout('components.layout.app')] class extends Component
 }; ?>
 
 <div>
-<div class="max-w-2xl mx-auto px-6 py-8">
+<div class="max-w-5xl mx-auto px-6 py-8">
     <div class="mb-6">
-        <h1 class="text-[17px] font-semibold tracking-tight text-ink">Purchasing Settings</h1>
+        <h1 class="text-[17px] font-semibold tracking-tight text-ink">Settings</h1>
         <p class="mt-0.5 text-sm text-ink-muted">Default values for purchase invoice processing</p>
     </div>
 
     <form wire:submit="save" class="space-y-6">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-x-8 gap-y-6 items-start">
         <div class="space-y-5">
             <h2 class="text-sm font-semibold text-ink border-b border-line pb-2">Defaults</h2>
 
@@ -166,6 +167,7 @@ new #[Layout('components.layout.app')] class extends Component
                 <flux:description>0–1 scale. A payment notification (PayPal/FNB Connect receipt) matched to an invoice below this confidence is surfaced for manual confirmation instead of auto-merging.</flux:description>
                 <flux:error name="paymentMatchAutoConfidence" />
             </flux:field>
+        </div>
         </div>
 
         <div class="flex items-center gap-4 pt-2">

@@ -11,7 +11,7 @@
             <flux:navmenu.item href="{{ route('purchase-invoices.index') }}" wire:navigate>Purchase Invoices</flux:navmenu.item>
             <flux:navmenu.item href="{{ route('payment-notifications.index') }}" wire:navigate>Unmatched Payments</flux:navmenu.item>
             <flux:navmenu.item href="{{ route('posting-rules.index') }}" wire:navigate>Posting Rules</flux:navmenu.item>
-            <flux:navmenu.item href="{{ route('settings.purchasing') }}" wire:navigate>Purchasing Settings</flux:navmenu.item>
+            <flux:navmenu.item href="{{ route('settings.purchasing') }}" wire:navigate>Settings</flux:navmenu.item>
         </flux:navmenu>
     </flux:dropdown>
 

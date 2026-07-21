@@ -13,7 +13,7 @@ it('renders the standalone purchasing settings page with the searchable account 
     $response = $this->get(route('settings.purchasing'));
 
     $response->assertOk();
-    $response->assertSee('Purchasing Settings');
+    $response->assertSee('Default values for purchase invoice processing');
     $response->assertSee('Default Payment Contra Account');
     $response->assertSee('Search…');
 });

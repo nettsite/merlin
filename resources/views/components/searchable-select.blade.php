@@ -25,7 +25,7 @@
             this.query = '';
             this.open = false;
         },
-    }}
+    }"
     x-on:click.outside="open = false"
     x-on:keydown.escape="open = false"
     class="relative"
