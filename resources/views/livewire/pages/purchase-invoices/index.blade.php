@@ -496,7 +496,7 @@ new #[Layout('components.layout.app')] class extends Component
             // Default to finalising when the FX rate is still provisional —
             // the actual amount paid fixes the true cost.
             'finalise_rate' => (bool) ($doc->is_foreign_currency && $doc->exchange_rate_provisional),
-            'contra_account_id' => app(\App\Modules\Billing\Settings\BillingSettings::class)->default_contra_account_id ?? '',
+            'contra_account_id' => app(\App\Modules\Purchasing\Settings\PurchasingSettings::class)->default_payment_contra_account_id ?? '',
         ];
         $this->showPaymentModal = true;
     }

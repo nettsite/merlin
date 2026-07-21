@@ -1,11 +1,11 @@
 <?php
 
 use App\Modules\Accounting\Models\Account;
-use App\Modules\Billing\Settings\BillingSettings;
 use App\Modules\Core\Models\Document;
 use App\Modules\Core\Models\DocumentLine;
 use App\Modules\Core\Models\User;
 use App\Modules\Purchasing\Services\PaymentEvidenceRecorder;
+use App\Modules\Purchasing\Settings\PurchasingSettings;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 
@@ -33,8 +33,8 @@ it('caps the applied amount at the outstanding balance due', function (): void {
 
 it('records the configured contra account on the auto-created payment so the credit leg posts', function (): void {
     $contraAccount = Account::factory()->create();
-    $settings = app(BillingSettings::class);
-    $settings->default_contra_account_id = $contraAccount->id;
+    $settings = app(PurchasingSettings::class);
+    $settings->default_payment_contra_account_id = $contraAccount->id;
     $settings->save();
 
     $invoice = Document::factory()->purchaseInvoice()->create(['status' => 'posted']);

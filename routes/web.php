@@ -18,6 +18,7 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
     Route::livewire('purchase-invoices', 'pages.purchase-invoices.index')->name('purchase-invoices.index');
     Route::livewire('payment-notifications', 'pages.payment-notifications.index')->name('payment-notifications.index');
     Route::livewire('posting-rules', 'pages.posting-rules.index')->name('posting-rules.index');
+    Route::livewire('settings/purchasing', 'pages.settings.purchasing')->name('settings.purchasing');
 
     // Billing
     Route::livewire('contacts', 'pages.contacts.index')->name('contacts.index');
@@ -50,7 +51,6 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
     // Settings (unified)
     Route::livewire('settings', 'pages.settings.index')->name('settings.index');
     Route::redirect('settings/general', '/settings?tab=general')->name('settings.general');
-    Route::redirect('settings/purchasing', '/settings?tab=purchasing')->name('settings.purchasing');
     Route::redirect('settings/billing', '/settings?tab=billing')->name('settings.billing');
 
     // Administration

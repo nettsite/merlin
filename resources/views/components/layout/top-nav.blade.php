@@ -4,13 +4,14 @@
     <flux:dropdown>
         <flux:navbar.item
             icon:trailing="chevron-down"
-            :current="request()->is('suppliers*', 'purchase-invoices*', 'payment-notifications*', 'posting-rules*')"
+            :current="request()->is('suppliers*', 'purchase-invoices*', 'payment-notifications*', 'posting-rules*', 'settings/purchasing*')"
         >Expenses</flux:navbar.item>
         <flux:navmenu>
             <flux:navmenu.item href="{{ route('suppliers.index') }}" wire:navigate>Suppliers</flux:navmenu.item>
             <flux:navmenu.item href="{{ route('purchase-invoices.index') }}" wire:navigate>Purchase Invoices</flux:navmenu.item>
             <flux:navmenu.item href="{{ route('payment-notifications.index') }}" wire:navigate>Unmatched Payments</flux:navmenu.item>
             <flux:navmenu.item href="{{ route('posting-rules.index') }}" wire:navigate>Posting Rules</flux:navmenu.item>
+            <flux:navmenu.item href="{{ route('settings.purchasing') }}" wire:navigate>Purchasing Settings</flux:navmenu.item>
         </flux:navmenu>
     </flux:dropdown>
 

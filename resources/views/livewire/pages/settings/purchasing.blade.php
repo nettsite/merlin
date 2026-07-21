@@ -1,5 +1,6 @@
 <?php
 
+use App\Modules\Accounting\Models\Account;
 use App\Modules\Purchasing\Settings\PurchasingSettings;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Validate;
@@ -9,6 +10,9 @@ new #[Layout('components.layout.app')] class extends Component
 {
     #[Validate('required|string|max:20')]
     public string $defaultPayableAccount = '';
+
+    #[Validate('nullable|uuid|exists:accounts,id')]
+    public ?string $defaultPaymentContraAccountId = null;
 
     #[Validate('required|numeric|min:0|max:100')]
     public float|string $taxDefaultRate = 15.00;
@@ -39,6 +43,7 @@ new #[Layout('components.layout.app')] class extends Component
 
         $settings = app(PurchasingSettings::class);
         $this->defaultPayableAccount = $settings->default_payable_account;
+        $this->defaultPaymentContraAccountId = $settings->default_payment_contra_account_id;
         $this->taxDefaultRate = $settings->tax_default_rate;
         $this->taxLabel = $settings->tax_label;
         $this->autopostConfidence = $settings->autopost_confidence;
@@ -54,6 +59,7 @@ new #[Layout('components.layout.app')] class extends Component
 
         $settings = app(PurchasingSettings::class);
         $settings->default_payable_account = $this->defaultPayableAccount;
+        $settings->default_payment_contra_account_id = $this->defaultPaymentContraAccountId ?: null;
         $settings->tax_default_rate = (float) $this->taxDefaultRate;
         $settings->tax_label = $this->taxLabel;
         $settings->autopost_confidence = (float) $this->autopostConfidence;
@@ -64,6 +70,22 @@ new #[Layout('components.layout.app')] class extends Component
         $settings->save();
 
         $this->saved = true;
+    }
+
+    /** @return array<int, array{value: string, label: string}> */
+    public function getPayableAccountOptionsProperty(): array
+    {
+        return Account::postable()->active()->orderBy('code')->get(['code', 'name'])
+            ->map(fn (Account $account) => ['value' => $account->code, 'label' => "{$account->code} — {$account->name}"])
+            ->all();
+    }
+
+    /** @return array<int, array{value: string, label: string}> */
+    public function getContraAccountOptionsProperty(): array
+    {
+        return Account::postable()->active()->orderBy('code')->get(['id', 'code', 'name'])
+            ->map(fn (Account $account) => ['value' => $account->id, 'label' => "{$account->code} — {$account->name}"])
+            ->all();
     }
 }; ?>
 
@@ -80,9 +102,16 @@ new #[Layout('components.layout.app')] class extends Component
 
             <flux:field>
                 <flux:label>Default Payable Account <span class="text-danger">*</span></flux:label>
-                <flux:input wire:model="defaultPayableAccount" placeholder="2000" class="max-w-xs" />
-                <flux:description>Account code used as the default AP account on new invoices</flux:description>
+                <x-searchable-select model="defaultPayableAccount" :options="$this->payableAccountOptions" placeholder="Select an account…" :nullable="false" class="max-w-xs" />
+                <flux:description>Account used as the default AP account on new invoices</flux:description>
                 <flux:error name="defaultPayableAccount" />
+            </flux:field>
+
+            <flux:field>
+                <flux:label>Default Payment Contra Account</flux:label>
+                <x-searchable-select model="defaultPaymentContraAccountId" :options="$this->contraAccountOptions" placeholder="— None —" class="max-w-xs" />
+                <flux:description>Account credited when a purchase invoice payment is recorded — usually the bank account, or Drawings/a loan account if payments are made from a personal card</flux:description>
+                <flux:error name="defaultPaymentContraAccountId" />
             </flux:field>
 
             <div class="grid grid-cols-2 gap-4">

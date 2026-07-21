@@ -9,6 +9,9 @@ class PurchasingSettings extends Settings
     /** Account code used as the default Accounts Payable account on new invoices. */
     public string $default_payable_account = '2000';
 
+    /** Default account credited when a purchase invoice payment is recorded (e.g. bank, or Drawings if paid from a personal card). Null until configured. */
+    public ?string $default_payment_contra_account_id = null;
+
     /** Default tax rate applied to new invoice lines (percentage). */
     public float $tax_default_rate = 15.00;
 

@@ -101,6 +101,7 @@ Routes use `Route::livewire()` unless marked *view*. Any test that renders a vie
 | `/bank-statements` | `bank-statements/index.blade.php` | **Fully custom** — upload PDF statements, LLM extraction, inline account assignment, reprocess with hint |
 | `/bank-templates` | `bank-templates/index.blade.php` | CRUD |
 | `/posting-rules` | `posting-rules/index.blade.php` | CRUD |
+| `/settings/purchasing` | `settings/purchasing.blade.php` | Standalone page (not a Settings tab) — lives under the "Expenses" nav group, not `/settings` |
 | `/contacts` | `contacts/index.blade.php` | Read-only list of persons with active contact assignments |
 | `/clients` | `clients/index.blade.php` | CRUD |
 | `/clients/{id}` | `clients/show.blade.php` | Read-only detail with sales invoice transaction history |
@@ -124,7 +125,7 @@ Routes use `Route::livewire()` unless marked *view*. Any test that renders a vie
 | `/reports/expenses-by-account` | `reports/expenses-by-account.blade.php` | Read-only |
 | `/reports/expenses-by-supplier` | `reports/expenses-by-supplier.blade.php` | Read-only |
 | `/reports/llm-performance` | `reports/llm-performance.blade.php` | Read-only |
-| `/settings` | `settings/index.blade.php` | Multi-tab: General / Purchasing / Accounting / Billing. `/settings/general`, `/settings/purchasing`, `/settings/billing` are `Route::redirect` shims to `/settings?tab=...` |
+| `/settings` | `settings/index.blade.php` | Multi-tab: General / Accounting / Billing / Roles / Email Templates. `/settings/general`, `/settings/billing` are `Route::redirect` shims to `/settings?tab=...`. Purchasing settings moved out to `/settings/purchasing` (see above) |
 | `/portal/login` | `portal/auth/login.blade.php` | Guest-only, `auth:portal` guard |
 | `/portal/set-password/{token}` | `portal/auth/set-password.blade.php` | Invite accept / set password |
 | `/documents/media/{media}` | — | Controller (`DocumentMediaController`), not Livewire. Streams private-disk document files behind `Gate::authorize` — never link `getUrl()` directly, see [[project_media_private_disk]] |

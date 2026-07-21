@@ -8,7 +8,6 @@ use App\Modules\Billing\Services\InvoiceEmailTemplateService;
 use App\Modules\Billing\Settings\BillingSettings;
 use App\Modules\Core\Settings\CompanySettings;
 use App\Modules\Core\Settings\CurrencySettings;
-use App\Modules\Purchasing\Settings\PurchasingSettings;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Url;
@@ -55,21 +54,6 @@ new #[Layout('components.layout.app')] class extends Component
     public string $baseCurrency = '';
 
     public string $locale = '';
-
-    // ── Purchasing ─────────────────────────────────────────────────────────
-    public string $defaultPayableAccount = '';
-
-    public float|string $taxDefaultRate = 15.00;
-
-    public string $taxLabel = '';
-
-    public float|string $autopostConfidence = 0.90;
-
-    public float|string $fallbackConfidence = 0.80;
-
-    public float|string $amountTolerance = 10.0;
-
-    public float|string $descriptionSimilarity = 60.0;
 
     // ── Accounting ─────────────────────────────────────────────────────────
     public int $financialYearStartMonth = 3;
@@ -125,15 +109,6 @@ new #[Layout('components.layout.app')] class extends Component
         $currency = app(CurrencySettings::class);
         $this->baseCurrency = $currency->base_currency;
         $this->locale = $currency->locale;
-
-        $purchasing = app(PurchasingSettings::class);
-        $this->defaultPayableAccount = $purchasing->default_payable_account;
-        $this->taxDefaultRate = $purchasing->tax_default_rate;
-        $this->taxLabel = $purchasing->tax_label;
-        $this->autopostConfidence = $purchasing->autopost_confidence;
-        $this->fallbackConfidence = $purchasing->fallback_confidence;
-        $this->amountTolerance = $purchasing->amount_tolerance;
-        $this->descriptionSimilarity = $purchasing->description_similarity;
 
         $accounting = app(AccountingSettings::class);
         $this->financialYearStartMonth = $accounting->financial_year_start_month;
@@ -194,7 +169,6 @@ new #[Layout('components.layout.app')] class extends Component
 
         match ($this->tab) {
             'general' => $this->saveGeneral(),
-            'purchasing' => $this->savePurchasing(),
             'accounting' => $this->saveAccounting(),
             'billing' => $this->saveBilling(),
             'templates' => $this->saveTemplate(),
@@ -267,31 +241,6 @@ new #[Layout('components.layout.app')] class extends Component
 
         $this->existingLogoUrl = null;
         $this->logo = null;
-    }
-
-    private function savePurchasing(): void
-    {
-        $this->validate([
-            'defaultPayableAccount' => 'required|string|max:20',
-            'taxDefaultRate' => 'required|numeric|min:0|max:100',
-            'taxLabel' => 'required|string|max:20',
-            'autopostConfidence' => 'required|numeric|min:0|max:1',
-            'fallbackConfidence' => 'required|numeric|min:0|max:1',
-            'amountTolerance' => 'required|numeric|min:0',
-            'descriptionSimilarity' => 'required|numeric|min:0|max:100',
-        ]);
-
-        $settings = app(PurchasingSettings::class);
-        $settings->default_payable_account = $this->defaultPayableAccount;
-        $settings->tax_default_rate = (float) $this->taxDefaultRate;
-        $settings->tax_label = $this->taxLabel;
-        $settings->autopost_confidence = (float) $this->autopostConfidence;
-        $settings->fallback_confidence = (float) $this->fallbackConfidence;
-        $settings->amount_tolerance = (float) $this->amountTolerance;
-        $settings->description_similarity = (float) $this->descriptionSimilarity;
-        $settings->save();
-
-        $this->saved = true;
     }
 
     private function saveAccounting(): void
@@ -423,7 +372,7 @@ new #[Layout('components.layout.app')] class extends Component
 
         {{-- Tab bar --}}
         <div class="flex gap-0 px-6">
-            @foreach(['general' => 'General', 'purchasing' => 'Purchasing', 'accounting' => 'Accounting', 'billing' => 'Billing', 'roles' => 'Roles', 'templates' => 'Email Templates'] as $key => $label)
+            @foreach(['general' => 'General', 'accounting' => 'Accounting', 'billing' => 'Billing', 'roles' => 'Roles', 'templates' => 'Email Templates'] as $key => $label)
                 <button
                     type="button"
                     wire:click="$set('tab', '{{ $key }}')"
@@ -779,77 +728,6 @@ new #[Layout('components.layout.app')] class extends Component
                             <flux:description>Default: March (FY runs March – end of February)</flux:description>
                             <flux:error name="financialYearStartMonth" />
                         </flux:field>
-                    </div>
-                </div>
-
-            {{-- ── PURCHASING TAB ──────────────────────────────── --}}
-            @elseif($tab === 'purchasing')
-
-                {{-- Defaults --}}
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-8 py-8">
-                    <div>
-                        <h3 class="text-sm font-semibold text-ink">Defaults</h3>
-                        <p class="mt-1 text-sm text-ink-muted">Default values applied to new purchase invoices.</p>
-                    </div>
-                    <div class="col-span-2 space-y-5">
-                        <flux:field>
-                            <flux:label>Default Payable Account <span class="text-danger">*</span></flux:label>
-                            <flux:input wire:model="defaultPayableAccount" placeholder="2000" class="max-w-xs" />
-                            <flux:description>Account code used as the default AP account on new invoices</flux:description>
-                            <flux:error name="defaultPayableAccount" />
-                        </flux:field>
-
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <flux:field>
-                                <flux:label>Tax Label <span class="text-danger">*</span></flux:label>
-                                <flux:input wire:model="taxLabel" placeholder="VAT" />
-                                <flux:error name="taxLabel" />
-                            </flux:field>
-                            <flux:field>
-                                <flux:label>Default Tax Rate (%) <span class="text-danger">*</span></flux:label>
-                                <flux:input wire:model="taxDefaultRate" type="number" step="0.01" min="0" max="100" />
-                                <flux:error name="taxDefaultRate" />
-                            </flux:field>
-                        </div>
-                    </div>
-                </div>
-
-                {{-- Auto-Posting Thresholds --}}
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-8 py-8">
-                    <div>
-                        <h3 class="text-sm font-semibold text-ink">Auto-Posting Thresholds</h3>
-                        <p class="mt-1 text-sm text-ink-muted">Controls when LLM extractions are auto-posted and when a stronger model is used as fallback.</p>
-                    </div>
-                    <div class="col-span-2 space-y-5">
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <flux:field>
-                                <flux:label>Min. Confidence for Auto-Post <span class="text-danger">*</span></flux:label>
-                                <flux:input wire:model="autopostConfidence" type="number" step="0.01" min="0" max="1" />
-                                <flux:description>0–1 scale</flux:description>
-                                <flux:error name="autopostConfidence" />
-                            </flux:field>
-                            <flux:field>
-                                <flux:label>Min. Fast-Model Confidence (fallback) <span class="text-danger">*</span></flux:label>
-                                <flux:input wire:model="fallbackConfidence" type="number" step="0.01" min="0" max="1" />
-                                <flux:description>Below this, re-run on stronger model</flux:description>
-                                <flux:error name="fallbackConfidence" />
-                            </flux:field>
-                        </div>
-
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <flux:field>
-                                <flux:label>Amount Tolerance (%) <span class="text-danger">*</span></flux:label>
-                                <flux:input wire:model="amountTolerance" type="number" step="0.1" min="0" />
-                                <flux:description>Max % diff for pattern-based auto-posting</flux:description>
-                                <flux:error name="amountTolerance" />
-                            </flux:field>
-                            <flux:field>
-                                <flux:label>Min. Description Similarity (0–100) <span class="text-danger">*</span></flux:label>
-                                <flux:input wire:model="descriptionSimilarity" type="number" step="1" min="0" max="100" />
-                                <flux:description>Min score for line description matching</flux:description>
-                                <flux:error name="descriptionSimilarity" />
-                            </flux:field>
-                        </div>
                     </div>
                 </div>
 
