@@ -104,26 +104,25 @@ new #[Layout('components.layout.app')] class extends Component
         <p class="mt-0.5 text-sm text-ink-muted">Default values for purchase invoice processing</p>
     </div>
 
-    <form wire:submit="save" class="space-y-6">
-        <div class="grid grid-cols-2 gap-x-8 gap-y-6 items-start">
+    <form wire:submit="save" class="space-y-8">
         <div class="space-y-5">
             <h2 class="text-sm font-semibold text-ink border-b border-line pb-2">Defaults</h2>
 
-            <flux:field>
-                <flux:label>Default Payable Account <span class="text-danger">*</span></flux:label>
-                <x-searchable-select model="defaultPayableAccount" :options="$this->payableAccountOptions" placeholder="Select an account…" :nullable="false" class="max-w-xs" />
-                <flux:description>Account used as the default AP account on new invoices</flux:description>
-                <flux:error name="defaultPayableAccount" />
-            </flux:field>
+            <div class="grid grid-cols-2 gap-x-8 gap-y-5">
+                <flux:field>
+                    <flux:label>Default Payable Account <span class="text-danger">*</span></flux:label>
+                    <x-searchable-select model="defaultPayableAccount" :options="$this->payableAccountOptions" placeholder="Select an account…" :nullable="false" />
+                    <flux:description>Account used as the default AP account on new invoices</flux:description>
+                    <flux:error name="defaultPayableAccount" />
+                </flux:field>
 
-            <flux:field>
-                <flux:label>Default Payment Contra Account</flux:label>
-                <x-searchable-select model="defaultPaymentContraAccountId" :options="$this->contraAccountOptions" placeholder="— None —" class="max-w-xs" />
-                <flux:description>Account credited when a purchase invoice payment is recorded — usually the bank account, or Drawings/a loan account if payments are made from a personal card</flux:description>
-                <flux:error name="defaultPaymentContraAccountId" />
-            </flux:field>
+                <flux:field>
+                    <flux:label>Default Payment Contra Account</flux:label>
+                    <x-searchable-select model="defaultPaymentContraAccountId" :options="$this->contraAccountOptions" placeholder="— None —" />
+                    <flux:description>Account credited when a purchase invoice payment is recorded — usually the bank account, or Drawings/a loan account if payments are made from a personal card</flux:description>
+                    <flux:error name="defaultPaymentContraAccountId" />
+                </flux:field>
 
-            <div class="grid grid-cols-2 gap-4">
                 <flux:field>
                     <flux:label>Tax Label <span class="text-danger">*</span></flux:label>
                     <flux:input wire:model="taxLabel" placeholder="VAT" />
@@ -141,41 +140,42 @@ new #[Layout('components.layout.app')] class extends Component
         <div class="space-y-5">
             <h2 class="text-sm font-semibold text-ink border-b border-line pb-2">Auto-Posting Thresholds</h2>
 
-            <flux:field>
-                <flux:label>Min. LLM Confidence for Auto-Post <span class="text-danger">*</span></flux:label>
-                <flux:input wire:model="autopostConfidence" type="number" step="0.01" min="0" max="1" class="max-w-xs" />
-                <flux:description>0–1 scale. Invoices below this confidence score are not auto-posted.</flux:description>
-                <flux:error name="autopostConfidence" />
-            </flux:field>
+            <div class="grid grid-cols-2 gap-x-8 gap-y-5">
+                <flux:field>
+                    <flux:label>Min. LLM Confidence for Auto-Post <span class="text-danger">*</span></flux:label>
+                    <flux:input wire:model="autopostConfidence" type="number" step="0.01" min="0" max="1" />
+                    <flux:description>0–1 scale. Invoices below this confidence score are not auto-posted.</flux:description>
+                    <flux:error name="autopostConfidence" />
+                </flux:field>
 
-            <flux:field>
-                <flux:label>Min. Fast-Model Confidence (fallback) <span class="text-danger">*</span></flux:label>
-                <flux:input wire:model="fallbackConfidence" type="number" step="0.01" min="0" max="1" class="max-w-xs" />
-                <flux:description>0–1 scale. Fast-model extractions below this confidence are re-run on the stronger model.</flux:description>
-                <flux:error name="fallbackConfidence" />
-            </flux:field>
+                <flux:field>
+                    <flux:label>Min. Fast-Model Confidence (fallback) <span class="text-danger">*</span></flux:label>
+                    <flux:input wire:model="fallbackConfidence" type="number" step="0.01" min="0" max="1" />
+                    <flux:description>0–1 scale. Fast-model extractions below this confidence are re-run on the stronger model.</flux:description>
+                    <flux:error name="fallbackConfidence" />
+                </flux:field>
 
-            <flux:field>
-                <flux:label>Amount Tolerance (%) <span class="text-danger">*</span></flux:label>
-                <flux:input wire:model="amountTolerance" type="number" step="0.1" min="0" class="max-w-xs" />
-                <flux:description>Maximum % difference between current and previous invoice line amounts for pattern-based auto-posting.</flux:description>
-                <flux:error name="amountTolerance" />
-            </flux:field>
+                <flux:field>
+                    <flux:label>Amount Tolerance (%) <span class="text-danger">*</span></flux:label>
+                    <flux:input wire:model="amountTolerance" type="number" step="0.1" min="0" />
+                    <flux:description>Maximum % difference between current and previous invoice line amounts for pattern-based auto-posting.</flux:description>
+                    <flux:error name="amountTolerance" />
+                </flux:field>
 
-            <flux:field>
-                <flux:label>Min. Description Similarity (0–100) <span class="text-danger">*</span></flux:label>
-                <flux:input wire:model="descriptionSimilarity" type="number" step="1" min="0" max="100" class="max-w-xs" />
-                <flux:description>Minimum similarity score for line description matching in pattern-based auto-posting.</flux:description>
-                <flux:error name="descriptionSimilarity" />
-            </flux:field>
+                <flux:field>
+                    <flux:label>Min. Description Similarity (0–100) <span class="text-danger">*</span></flux:label>
+                    <flux:input wire:model="descriptionSimilarity" type="number" step="1" min="0" max="100" />
+                    <flux:description>Minimum similarity score for line description matching in pattern-based auto-posting.</flux:description>
+                    <flux:error name="descriptionSimilarity" />
+                </flux:field>
 
-            <flux:field>
-                <flux:label>Min. Confidence for Payment Notification Auto-Match <span class="text-danger">*</span></flux:label>
-                <flux:input wire:model="paymentMatchAutoConfidence" type="number" step="0.01" min="0" max="1" class="max-w-xs" />
-                <flux:description>0–1 scale. A payment notification (PayPal/FNB Connect receipt) matched to an invoice below this confidence is surfaced for manual confirmation instead of auto-merging.</flux:description>
-                <flux:error name="paymentMatchAutoConfidence" />
-            </flux:field>
-        </div>
+                <flux:field>
+                    <flux:label>Min. Confidence for Payment Notification Auto-Match <span class="text-danger">*</span></flux:label>
+                    <flux:input wire:model="paymentMatchAutoConfidence" type="number" step="0.01" min="0" max="1" />
+                    <flux:description>0–1 scale. A payment notification (PayPal/FNB Connect receipt) matched to an invoice below this confidence is surfaced for manual confirmation instead of auto-merging.</flux:description>
+                    <flux:error name="paymentMatchAutoConfidence" />
+                </flux:field>
+            </div>
         </div>
 
         <div class="flex items-center gap-4 pt-2">
