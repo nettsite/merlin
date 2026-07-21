@@ -293,3 +293,23 @@ it('edits a supplier from the show page', function (): void {
 
     $this->assertDatabaseHas('businesses', ['id' => $party->id, 'legal_name' => 'After Edit Ltd']);
 });
+
+it('saves and reloads the payment behaviour note from the show page edit form', function (): void {
+    $party = makeSupplier(['legal_name' => 'Show Page Note Supplier']);
+    $this->actingAs(supplierUserWith(['parties-view-any', 'parties-view', 'parties-update']));
+
+    $note = 'Always sends a single invoice per billing period that already shows Balance $0.00.';
+
+    Livewire::test('pages.suppliers.show', ['id' => $party->id])
+        ->call('openEditForm')
+        ->set('paymentBehaviorNotes', $note)
+        ->call('saveEdit')
+        ->assertHasNoErrors();
+
+    $supplierRel = $party->relationships()->where('relationship_type', 'supplier')->first();
+    expect($supplierRel->fresh()->payment_behavior_notes)->toBe($note);
+
+    Livewire::test('pages.suppliers.show', ['id' => $party->id])
+        ->call('openEditForm')
+        ->assertSet('paymentBehaviorNotes', $note);
+});
