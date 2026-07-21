@@ -129,6 +129,23 @@ it('flags a supplier tax invoice / receipt combo as carrying a paid signal', fun
     expect($this->classifier->hasPaidSignal($text))->toBeTrue();
 });
 
+it('flags a WHMCS-style Balance line as paid even across pdftotext -layout wide column gaps', function (): void {
+    // pdftotext -layout right-aligns the figure in its own column, which can
+    // put 90+ spaces between the "Balance" label and the amount.
+    $text = "Transactions\n\n".
+        str_repeat(' ', 40).'Transaction Date'.str_repeat(' ', 20)."Gateway\n".
+        str_repeat(' ', 60)."No Related Transactions Found\n".
+        str_repeat(' ', 90).'Balance'.str_repeat(' ', 20).'$0.00 USD'."\n";
+
+    expect($this->classifier->hasPaidSignal($text))->toBeTrue();
+});
+
+it('does not flag a WHMCS-style Balance line with a nonzero amount across a wide column gap', function (): void {
+    $text = 'Balance'.str_repeat(' ', 90).'R500.00';
+
+    expect($this->classifier->hasPaidSignal($text))->toBeFalse();
+});
+
 it('does not flag a plain unpaid tax invoice as carrying a paid signal', function (): void {
     $text = <<<'TEXT'
         Tax Invoice #1680798

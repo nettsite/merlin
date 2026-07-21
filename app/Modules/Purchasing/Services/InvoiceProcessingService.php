@@ -244,6 +244,26 @@ class InvoiceProcessingService
 
         $document->recalculateTotals();
 
+        // 7a. This invoice carries paid-evidence language but no earlier
+        // "unpaid" version was found to merge it into — it's a standalone
+        // invoice that arrived already settled (e.g. a supplier tax
+        // invoice/receipt combo, or one pre-paid from an existing account
+        // credit balance, which nets its own header total to 0 — the cost
+        // was still genuinely incurred, so use the document's own recorded
+        // total, not the LLM's post-credit header figure). Stash the
+        // evidence against itself; it's recorded for real once the invoice
+        // is reviewed and posted (see PaymentEvidenceRecorder and
+        // DocumentService::recordPendingPurchasePayment()).
+        if ($hasPaidSignal) {
+            $this->paymentEvidenceRecorder->record(
+                $document,
+                (float) $document->total,
+                $extracted->issueDate ?? now(),
+                $extracted->invoiceNumber,
+                'supplier receipt',
+            );
+        }
+
         // 8. Record LLM extraction activity
         $document->activities()->create([
             'activity_type' => 'llm_extracted',

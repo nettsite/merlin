@@ -58,8 +58,12 @@ class DocumentKindClassifier
         // WHMCS-style invoices (used by several suppliers) render a "Paid"/
         // "Unpaid" status as a diagonal watermark, which pdftotext shreds
         // into unmatchable fragments. The "Balance" line under the
-        // Transactions table is reliable instead: 0 means paid.
-        '/\bbalance\b\s{1,40}r?\s?0(?:\.00)?\b/i',
+        // Transactions table is reliable instead: 0 means paid. Extraction
+        // uses `pdftotext -layout`, which right-aligns the amount in its own
+        // column — the gap between "Balance" and the figure can run to 90+
+        // spaces, so the whitespace run must be unbounded, and the currency
+        // symbol varies (R, $, etc.), so it's matched generically.
+        '/\bbalance\b[^\S\r\n]+[^\s\d]?\s?0(?:\.00)?\b/i',
     ];
 
     public function classify(string $text): string

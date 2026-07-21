@@ -745,3 +745,95 @@ it('does not double-record a payment when both a bank notification and a supplie
             ->where('activity_type', 'payment_evidence_noted')
             ->exists())->toBeTrue();
 });
+
+it('stashes payment evidence against a standalone invoice that arrives already paid with no earlier version to merge into', function (): void {
+    // e.g. a WHMCS invoice pre-settled by an existing account credit balance
+    // — there's no prior "unpaid" invoice for it to be a duplicate/reissue
+    // of, so it must keep its own line(s) and record the evidence against
+    // itself instead of searching for something to merge into.
+    $document = Document::factory()->purchaseInvoice()->create(['party_id' => null]);
+    attachFakeMedia($document);
+
+    $this->extractorMock->allows('extract')->andReturn(<<<'TEXT'
+        Invoice #1730422
+        Sub Total    $18.95 USD
+        Credit       $18.95 USD
+        Total        $0.00 USD
+        Balance      $0.00 USD
+        TEXT);
+    $this->llmMock->allows('extractInvoice')->andReturn(fakeExtracted([fakeLine()], confidence: 0.9));
+
+    $this->service->process($document);
+
+    $document->refresh();
+    expect(DocumentLine::where('document_id', $document->id)->count())->toBe(1)
+        ->and($document->status)->toBe('received')
+        // Evidence is capped to the invoice's own recorded balance (sum of
+        // its lines), not the extracted header total.
+        ->and((float) ($document->metadata['pending_payment']['amount'] ?? 0))->toBe(1000.0)
+        ->and(DocumentActivity::where('document_id', $document->id)
+            ->where('activity_type', 'payment_evidence_pending')
+            ->exists())->toBeTrue();
+
+    // Once reviewed, approved, and posted, the stashed evidence replays and
+    // the invoice settles automatically.
+    $user = User::factory()->create();
+    app(DocumentService::class)->markAsReviewed($document, $user);
+    app(DocumentService::class)->approve($document, $user);
+    app(DocumentService::class)->post($document, $user);
+
+    $document->refresh();
+    expect($document->status)->toBe('paid')
+        ->and((float) $document->balance_due)->toBe(0.0);
+});
+
+it('uses the invoice own recorded total, not a zero extracted header total, when an account credit offsets it to $0', function (): void {
+    // Real bug: WHMCS nets "Total" to $0.00 when an existing account credit
+    // covers the full charge. That's not "amount paid = $0" — the cost was
+    // genuinely incurred (the credit is what settled it) — so the extracted
+    // header total (0.00) must not be used as the payment amount, or
+    // PaymentEvidenceRecorder's `amount <= 0` guard silently no-ops.
+    $document = Document::factory()->purchaseInvoice()->create(['party_id' => null]);
+    attachFakeMedia($document);
+
+    $this->extractorMock->allows('extract')->andReturn(<<<'TEXT'
+        Invoice #1730422
+        Sub Total    $18.95 USD
+        Credit       $18.95 USD
+        Total        $0.00 USD
+        Balance      $0.00 USD
+        TEXT);
+    $this->llmMock->allows('extractInvoice')->andReturn(new ExtractedInvoice(
+        supplierName: 'WHMCS Limited',
+        supplierTaxNumber: 'GB 927 7746 76',
+        supplierEmail: null,
+        supplierPhone: null,
+        invoiceNumber: '1730422',
+        issueDate: Carbon::parse('2014-06-22'),
+        dueDate: Carbon::parse('2014-06-27'),
+        currency: 'USD',
+        subtotal: 18.95,
+        taxTotal: 0.0,
+        total: 0.0,
+        lines: [new ExtractedInvoiceLine(
+            description: 'Monthly Lease',
+            quantity: 1,
+            unitPrice: 18.95,
+            lineTotal: 18.95,
+            taxRate: null,
+            suggestedAccountCode: '5210',
+            accountConfidence: 0.9,
+            accountReason: 'hosting',
+        )],
+        confidence: 0.82,
+        warnings: [],
+    ));
+
+    $this->service->process($document);
+
+    $document->refresh();
+    // The line's real (converted) cost was incurred regardless of the $0
+    // header total — the stashed evidence amount must match it exactly.
+    expect((float) $document->total)->toBeGreaterThan(0.0)
+        ->and((float) ($document->metadata['pending_payment']['amount'] ?? 0))->toBe((float) $document->total);
+});
