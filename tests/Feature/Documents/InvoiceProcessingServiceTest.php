@@ -794,6 +794,12 @@ it('uses the invoice own recorded total, not a zero extracted header total, when
     // genuinely incurred (the credit is what settled it) — so the extracted
     // header total (0.00) must not be used as the payment amount, or
     // PaymentEvidenceRecorder's `amount <= 0` guard silently no-ops.
+    Http::fake(['*' => Http::response([
+        'result' => 'success',
+        'base_code' => config('currency.base', 'ZAR'),
+        'conversion_rates' => [config('currency.base', 'ZAR') => 1.0, 'USD' => 0.054674],
+    ], 200)]);
+
     $document = Document::factory()->purchaseInvoice()->create(['party_id' => null]);
     attachFakeMedia($document);
 
