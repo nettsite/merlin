@@ -83,7 +83,7 @@ class ChartOfAccountsSeeder extends Seeder
             ['group' => '20', 'code' => '2300', 'name' => 'Credit Card — Operating'],
 
             // Equity
-            ['group' => '30', 'code' => '3000', 'name' => "Owner's Equity"],
+            ['group' => '30', 'code' => '3000', 'name' => 'Drawings'],
             ['group' => '30', 'code' => '3100', 'name' => 'Retained Earnings'],
             ['group' => '30', 'code' => '3200', 'name' => 'Current Year Earnings'],
 
