@@ -2,6 +2,11 @@
 
 namespace App\Modules\Core\Services;
 
+use App\Ai\Agents\BankStatementExtractionAgent;
+use App\Ai\Agents\BankTemplateHintsAgent;
+use App\Ai\Agents\InvoiceExtractionAgent;
+use App\Ai\Agents\PaymentNotificationExtractionAgent;
+use App\Ai\Agents\PdfVisionExtractionAgent;
 use App\Exceptions\LlmApiException;
 use App\Exceptions\LlmCreditExhaustedException;
 use App\Modules\Accounting\Models\Account;
@@ -13,11 +18,19 @@ use App\Modules\Purchasing\DTO\ExtractedInvoice;
 use App\Modules\Purchasing\DTO\ExtractedPaymentNotification;
 use App\Modules\Purchasing\Settings\PurchasingSettings;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\RequestException;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
+use Laravel\Ai\Contracts\Agent;
+use Laravel\Ai\Exceptions\InsufficientCreditsException;
+use Laravel\Ai\Exceptions\ProviderConnectionException;
+use Laravel\Ai\Exceptions\ProviderOverloadedException;
+use Laravel\Ai\Exceptions\RateLimitedException;
+use Laravel\Ai\Files\Document as AiDocument;
+use Laravel\Ai\Files\File;
+use Laravel\Ai\Responses\AgentResponse;
+use Throwable;
 
 class LlmService
 {
@@ -25,13 +38,14 @@ class LlmService
         private readonly CurrencySettings $currencySettings,
         private readonly PurchasingSettings $purchasingSettings,
         private readonly ModelHealthService $modelHealth,
+        private readonly InvoiceExtractionAgent $invoiceAgent,
+        private readonly BankStatementExtractionAgent $bankStatementAgent,
+        private readonly PaymentNotificationExtractionAgent $paymentNotificationAgent,
+        private readonly BankTemplateHintsAgent $bankTemplateHintsAgent,
+        private readonly PdfVisionExtractionAgent $pdfVisionAgent,
     ) {}
 
-    private const API_URL = 'https://api.anthropic.com/v1/messages';
-
-    private const MAX_TOKENS = 4096;
-
-    private const MAX_TOKENS_BANK_STATEMENT = 8192;
+    private const REQUEST_TIMEOUT = 110;
 
     /**
      * Extract structured invoice data from raw PDF text.
@@ -50,7 +64,7 @@ class LlmService
         $fastReconciled = false;
 
         try {
-            $fast = $this->extractWith($prompt, config('services.anthropic.model_fast'), $loggable);
+            $fast = $this->extractWith($prompt, config('ai.providers.anthropic.models.fast'), $loggable);
             $fastReconciled = $this->isReconciled($fast);
 
             if ($fastReconciled && $this->meetsConfidenceThreshold($fast)) {
@@ -61,7 +75,7 @@ class LlmService
         }
 
         try {
-            $strong = $this->extractWith($prompt, config('services.anthropic.model'), $loggable);
+            $strong = $this->extractWith($prompt, config('ai.providers.anthropic.models.strong'), $loggable);
         } catch (LlmApiException|\RuntimeException $e) {
             // The strong model failed outright; keep a usable fast result if we have one.
             if ($fast !== null) {
@@ -87,8 +101,9 @@ class LlmService
      */
     private function extractWith(string $prompt, string $model, ?Model $loggable): ExtractedInvoice
     {
-        $log = $this->callApi(
-            messages: [['role' => 'user', 'content' => $prompt]],
+        $log = $this->callAgent(
+            agent: $this->invoiceAgent,
+            prompt: $prompt,
             loggable: $loggable,
             startNs: hrtime(true),
             model: $model,
@@ -160,7 +175,7 @@ class LlmService
         $fastReconciled = false;
 
         try {
-            $fast = $this->extractBankStatementWith($prompt, config('services.anthropic.model_fast'), $loggable);
+            $fast = $this->extractBankStatementWith($prompt, config('ai.providers.anthropic.models.fast'), $loggable);
             $fastReconciled = $fast->isBalanceReconciled();
 
             if ($fastReconciled && $fast->confidence >= $this->purchasingSettings->fallback_confidence) {
@@ -171,7 +186,7 @@ class LlmService
         }
 
         try {
-            $strong = $this->extractBankStatementWith($prompt, config('services.anthropic.model'), $loggable);
+            $strong = $this->extractBankStatementWith($prompt, config('ai.providers.anthropic.models.strong'), $loggable);
         } catch (LlmApiException|\RuntimeException $e) {
             if ($fast !== null) {
                 return $fast;
@@ -189,12 +204,12 @@ class LlmService
 
     private function extractBankStatementWith(string $prompt, string $model, ?Model $loggable): ExtractedBankStatement
     {
-        $log = $this->callApi(
-            messages: [['role' => 'user', 'content' => $prompt]],
+        $log = $this->callAgent(
+            agent: $this->bankStatementAgent,
+            prompt: $prompt,
             loggable: $loggable,
             startNs: hrtime(true),
             model: $model,
-            maxTokens: self::MAX_TOKENS_BANK_STATEMENT,
         );
 
         $extracted = ExtractedBankStatement::fromArray($this->parseJsonResponse($log->response_payload['text']));
@@ -230,16 +245,17 @@ class LlmService
         $prompt = $this->buildPaymentNotificationPrompt($text);
 
         try {
-            return $this->extractPaymentNotificationWith($prompt, config('services.anthropic.model_fast'), $loggable);
+            return $this->extractPaymentNotificationWith($prompt, config('ai.providers.anthropic.models.fast'), $loggable);
         } catch (LlmApiException|\RuntimeException) {
-            return $this->extractPaymentNotificationWith($prompt, config('services.anthropic.model'), $loggable);
+            return $this->extractPaymentNotificationWith($prompt, config('ai.providers.anthropic.models.strong'), $loggable);
         }
     }
 
     private function extractPaymentNotificationWith(string $prompt, string $model, ?Model $loggable): ExtractedPaymentNotification
     {
-        $log = $this->callApi(
-            messages: [['role' => 'user', 'content' => $prompt]],
+        $log = $this->callAgent(
+            agent: $this->paymentNotificationAgent,
+            prompt: $prompt,
             loggable: $loggable,
             startNs: hrtime(true),
             model: $model,
@@ -332,15 +348,16 @@ class LlmService
         ])->render();
 
         try {
-            $log = $this->callApi(
-                messages: [['role' => 'user', 'content' => $prompt]],
+            $log = $this->callAgent(
+                agent: $this->bankTemplateHintsAgent,
+                prompt: $prompt,
                 loggable: $loggable,
                 startNs: hrtime(true),
-                model: config('services.anthropic.model'),
+                model: config('ai.providers.anthropic.models.strong'),
             );
 
             return $log->response_payload['text'] ?? '';
-        } catch (\Throwable) {
+        } catch (Throwable) {
             return '';
         }
     }
@@ -351,30 +368,16 @@ class LlmService
      */
     public function extractRawTextFromPdf(string $absolutePath, ?Model $loggable = null): string
     {
-        $start = hrtime(true);
+        $log = $this->callAgent(
+            agent: $this->pdfVisionAgent,
+            prompt: 'Extract all text from this PDF document.',
+            loggable: $loggable,
+            startNs: hrtime(true),
+            model: config('ai.providers.anthropic.models.strong'),
+            attachments: [AiDocument::fromPath($absolutePath)],
+        );
 
-        $pdfBase64 = base64_encode((string) file_get_contents($absolutePath));
-
-        $messages = [[
-            'role' => 'user',
-            'content' => [
-                [
-                    'type' => 'document',
-                    'source' => [
-                        'type' => 'base64',
-                        'media_type' => 'application/pdf',
-                        'data' => $pdfBase64,
-                    ],
-                ],
-                [
-                    'type' => 'text',
-                    'text' => 'Extract all text from this PDF document. Return only the extracted text, preserving the layout as best as possible. Include all numbers, dates, company names, line items, and totals. Do not summarize or interpret — just extract the text exactly as it appears.',
-                ],
-            ],
-        ]];
-
-        return $this->callApi(messages: $messages, loggable: $loggable, startNs: $start, model: config('services.anthropic.model'))
-            ->response_payload['text'];
+        return $log->response_payload['text'];
     }
 
     private function buildExtractionPrompt(string $text, array $history, ?string $supplierPaymentNotes = null): string
@@ -401,111 +404,97 @@ class LlmService
     }
 
     /**
-     * Send messages to the Anthropic API and return the created log row (whose
-     * response_payload holds the response text). Logs every call — success or
-     * failure — to the llm_logs table.
+     * Invoke the given agent through Anthropic and return the created log row
+     * (whose response_payload holds the response text). Logs every call —
+     * success or failure — to the llm_logs table.
      *
-     * @param  array<int, array<string, mixed>>  $messages
+     * Escalates through ModelHealthService's live fallback ladder only when
+     * Anthropic reports the requested model as retired/not found; any other
+     * error fails fast rather than burning the ladder.
+     *
+     * @param  array<int, File>  $attachments
      */
-    public function callApi(array $messages, ?Model $loggable, int $startNs, string $model, int $maxTokens = self::MAX_TOKENS): LlmLog
+    private function callAgent(Agent $agent, string $prompt, ?Model $loggable, int $startNs, string $model, array $attachments = []): LlmLog
     {
-        // Resolve the requested tier to its live escalation chain: the model
-        // itself plus the fallback rungs below it, with any retired rung skipped.
         $candidates = $this->modelHealth->escalationFrom($model);
         $lastError = "model `{$model}` is unavailable and has no live fallback";
 
         foreach ($candidates as $candidate) {
-            $body = [
-                'model' => $candidate,
-                'max_tokens' => $maxTokens,
-                'messages' => $messages,
-            ];
+            $requestBody = ['model' => $candidate, 'prompt' => $prompt];
 
             try {
-                // 110s keeps the HTTP client inside the queue job's 120s budget;
-                // vision extraction of large PDFs can far exceed the 30s default.
-                $response = Http::connectTimeout(10)
-                    ->timeout(110)
-                    ->withHeaders([
-                        'x-api-key' => config('services.anthropic.key'),
-                        'anthropic-version' => '2023-06-01',
-                        'anthropic-beta' => 'pdfs-2024-09-25',
-                    ])->post(self::API_URL, $body);
-            } catch (ConnectionException $e) {
-                // Transient — do not escalate the ladder for a network blip.
-                $this->log(
-                    loggable: $loggable,
-                    requestBody: $body,
-                    rawResponse: '',
-                    startNs: $startNs,
-                    error: $e->getMessage(),
+                /** @var AgentResponse $response */
+                $response = $agent->prompt(
+                    $prompt,
+                    attachments: $attachments,
+                    provider: 'anthropic',
+                    model: $candidate,
+                    timeout: self::REQUEST_TIMEOUT,
                 );
-                throw new LlmApiException("Anthropic API connection error: {$e->getMessage()}", previous: $e);
-            }
+            } catch (RequestException $e) {
+                $error = $e->response?->json('error.message') ?? $e->getMessage();
 
-            $data = $response->json();
+                // Retired/mistyped model: mark it down, alert once, escalate a rung.
+                if ($e->response?->status() === 404 && $e->response->json('error.type') === 'not_found_error') {
+                    $this->modelHealth->recordUnavailable($candidate, $error);
+                    $lastError = $error;
 
-            if ($response->successful() && isset($data['content'][0]['text'])) {
-                $usage = $data['usage'] ?? [];
+                    continue;
+                }
 
-                Cache::forget('anthropic:credit_exhausted');
-
-                return $this->log(
-                    loggable: $loggable,
-                    requestBody: $body,
-                    rawResponse: $data['content'][0]['text'],
-                    startNs: $startNs,
-                    promptTokens: $usage['input_tokens'] ?? 0,
-                    completionTokens: $usage['output_tokens'] ?? 0,
-                );
-            }
-
-            $error = $data['error']['message'] ?? "HTTP {$response->status()}";
-
-            // Retired/mistyped model: mark it down, alert once, escalate a rung.
-            if ($response->status() === 404 && ($data['error']['type'] ?? null) === 'not_found_error') {
-                $this->modelHealth->recordUnavailable($candidate, $error);
-                $lastError = $error;
-
-                continue;
-            }
-
-            // Credit exhausted — stop all processing until credits are added.
-            if (str_contains($error, 'credit balance is too low')) {
+                // Any other error (bad request, auth, server) is not a
+                // retirement — fail fast rather than burning the fallback ladder.
+                $this->log(loggable: $loggable, requestBody: $requestBody, rawResponse: '', startNs: $startNs, error: $error);
+                throw new LlmApiException("Anthropic API error: {$error}");
+            } catch (InsufficientCreditsException $e) {
+                // Credit exhausted — stop all processing until credits are added.
+                $error = $this->underlyingErrorMessage($e);
                 Cache::forever('anthropic:credit_exhausted', [
                     'message' => $error,
                     'detected_at' => now()->toIso8601String(),
                 ]);
-                $this->log(
-                    loggable: $loggable,
-                    requestBody: $body,
-                    rawResponse: '',
-                    startNs: $startNs,
-                    error: $error,
-                );
+                $this->log(loggable: $loggable, requestBody: $requestBody, rawResponse: '', startNs: $startNs, error: $error);
                 throw new LlmCreditExhaustedException("Anthropic credit exhausted: {$error}");
+            } catch (ProviderConnectionException $e) {
+                // Transient — do not escalate the ladder for a network blip.
+                $error = $this->underlyingErrorMessage($e);
+                $this->log(loggable: $loggable, requestBody: $requestBody, rawResponse: '', startNs: $startNs, error: $error);
+                throw new LlmApiException("Anthropic API connection error: {$error}", previous: $e);
+            } catch (RateLimitedException|ProviderOverloadedException $e) {
+                $error = $this->underlyingErrorMessage($e);
+                $this->log(loggable: $loggable, requestBody: $requestBody, rawResponse: '', startNs: $startNs, error: $error);
+                throw new LlmApiException("Anthropic API error: {$error}");
             }
 
-            // Any other error (rate limit, server, bad request) is not a
-            // retirement — fail fast rather than burning the fallback ladder.
-            $this->log(
+            Cache::forget('anthropic:credit_exhausted');
+
+            return $this->log(
                 loggable: $loggable,
-                requestBody: $body,
-                rawResponse: '',
+                requestBody: $requestBody,
+                rawResponse: $response->text,
                 startNs: $startNs,
-                error: $error,
+                promptTokens: $response->usage->promptTokens,
+                completionTokens: $response->usage->completionTokens,
             );
-            throw new LlmApiException("Anthropic API error: {$error}");
         }
 
-        $this->log(
-            loggable: $loggable,
-            requestBody: ['model' => $model, 'max_tokens' => self::MAX_TOKENS, 'messages' => $messages],
-            rawResponse: '',
-            startNs: $startNs,
-            error: $lastError,
-        );
+        $this->log(loggable: $loggable, requestBody: ['model' => $model, 'prompt' => $prompt], rawResponse: '', startNs: $startNs, error: $lastError);
         throw new LlmApiException("Anthropic API error: {$lastError}");
+    }
+
+    /**
+     * Failover exceptions carry a generic message; the original Anthropic error
+     * detail lives on the wrapped RequestException, if there is one.
+     */
+    private function underlyingErrorMessage(Throwable $e): string
+    {
+        $previous = $e->getPrevious();
+
+        if ($previous instanceof RequestException && $previous->response !== null) {
+            return $previous->response->json('error.message') ?? $e->getMessage();
+        }
+
+        return $previous?->getMessage() ?? $e->getMessage();
     }
 
     /**
@@ -546,39 +535,12 @@ class LlmService
             'loggable_id' => $loggable?->getKey(),
             'prompt_tokens' => $promptTokens,
             'completion_tokens' => $completionTokens,
-            'model' => $requestBody['model'] ?? config('services.anthropic.model'),
+            'model' => $requestBody['model'] ?? config('ai.providers.anthropic.models.strong'),
             'confidence' => null,
             'duration_ms' => $durationMs,
-            'request_payload' => $this->withoutBase64Sources($requestBody),
+            'request_payload' => $requestBody,
             'response_payload' => $error ? null : ['text' => $rawResponse],
             'error' => $error,
         ]);
-    }
-
-    /**
-     * Replace base64 document/image sources with a size placeholder so vision
-     * calls don't persist multi-MB encoded files into llm_logs.
-     *
-     * @param  array<string, mixed>  $requestBody
-     * @return array<string, mixed>
-     */
-    private function withoutBase64Sources(array $requestBody): array
-    {
-        foreach ($requestBody['messages'] ?? [] as $i => $message) {
-            if (! is_array($message['content'] ?? null)) {
-                continue;
-            }
-
-            foreach ($message['content'] as $j => $block) {
-                $data = $block['source']['data'] ?? null;
-
-                if (is_string($data)) {
-                    $requestBody['messages'][$i]['content'][$j]['source']['data'] =
-                        '[base64 omitted: '.strlen($data).' bytes]';
-                }
-            }
-        }
-
-        return $requestBody;
     }
 }

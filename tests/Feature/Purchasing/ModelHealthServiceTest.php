@@ -7,11 +7,11 @@ use Illuminate\Support\Facades\Mail;
 
 beforeEach(function () {
     config([
-        'services.anthropic.model_fast' => 'claude-haiku-4-5',
-        'services.anthropic.model' => 'claude-sonnet-4-6',
-        'services.anthropic.model_backup' => 'claude-opus-4-8',
-        'services.anthropic.alert_recipients' => 'ops@example.com, second@example.com',
-        'services.anthropic.down_ttl' => 3600,
+        'ai.providers.anthropic.models.fast' => 'claude-haiku-4-5',
+        'ai.providers.anthropic.models.strong' => 'claude-sonnet-4-6',
+        'ai.providers.anthropic.models.backup' => 'claude-opus-4-8',
+        'ai.alert_recipients' => 'ops@example.com, second@example.com',
+        'ai.down_ttl' => 3600,
     ]);
     Cache::flush();
 });
@@ -63,7 +63,7 @@ it('re-alerts after the down mark is cleared', function () {
 });
 
 it('does not send when there are no recipients', function () {
-    config(['services.anthropic.alert_recipients' => '']);
+    config(['ai.alert_recipients' => '']);
     Mail::fake();
 
     app(ModelHealthService::class)->recordUnavailable('claude-sonnet-4-6', 'retired');

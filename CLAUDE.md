@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Laravel business management app for small businesses. Core feature: LLM-assisted supplier invoice processing (PDFs/DOCX/XLSX/CSV → GL transactions). Previous Filament-based version at `~/Projects/merlin` is **read-only spec** — do not copy Filament files from it.
 
-**Stack:** Laravel 13, Livewire 4, Flux UI (livewire/flux), Alpine.js, Tailwind CSS 3, Pest + PHPUnit 12, Laravel Breeze (Livewire stack) for auth. No Volt — all components are Livewire 4 native single-file classes.
+**Stack:** Laravel 13, Livewire 4, Flux UI (livewire/flux), Alpine.js, Tailwind CSS 3, Pest + PHPUnit 12, Laravel Breeze (Livewire stack) for auth. No Volt — all components are Livewire 4 native single-file classes. LLM calls go through `laravel/ai` (`Laravel\Ai`), not raw HTTP.
 
 ## Commands
 
@@ -40,6 +40,10 @@ php artisan models:health-check
 ### Domain Structure (`app/Modules/`)
 
 ```
+app/Ai/
+└── Agents/     — InvoiceExtractionAgent, BankStatementExtractionAgent, PaymentNotificationExtractionAgent,
+                — BankTemplateHintsAgent, PdfVisionExtractionAgent (laravel/ai Agent classes; see Invoice Processing Pipeline below)
+
 app/Modules/
 ├── Core/
 │   ├── Models/     — User, Role, Permission, Party, Person, Business, Address, ContactAssignment, PartyRelationship,
@@ -153,7 +157,7 @@ Flux UI components (`<flux:input>`, `<flux:select>`, etc.) used directly — no 
 
 1. **DocumentTextExtractor** — multi-format text extraction (PDF via PdfExtractor, DOCX/XLSX/CSV via `paperdoc-dev/paperdoc-lib`)
 2. **MagikaService** — Rust CLI (`magika`) detects actual file type; rejects unsupported formats
-3. **LlmService** — calls Claude API with `resources/views/prompts/invoice-extraction.blade.php`; returns `ExtractedInvoice` DTO; logs tokens to `LlmLog`. Tries `ANTHROPIC_MODEL_FAST` (Haiku) first; falls back to a full retry on `ANTHROPIC_MODEL` (Sonnet) if the response is invalid JSON, the lines don't reconstruct the invoice `total` (grossing each line up by its effective tax rate — per-line, else the purchasing default — and comparing to `total`; also accepts VAT-inclusive lines that already sum to it), or confidence is below `PurchasingSettings::fallback_confidence` (Settings > Purchasing). Reconciliation is against `total` only (not header subtotal/tax) because VAT-inclusive invoices and shipping-outside-subtotal break header arithmetic. A reconciling fast result is kept over a non-reconciling strong one. The parsed confidence is persisted to the `LlmLog` row. **Separately, `ModelHealthService` provides a model-retirement fallback ladder** `ANTHROPIC_MODEL_FAST` → `ANTHROPIC_MODEL` → `ANTHROPIC_MODEL_BACKUP` (Haiku→Sonnet→Opus): on a `404 not_found_error` the model is marked down in cache (circuit breaker, `down_ttl`), `ANTHROPIC_ALERT_RECIPIENTS` are emailed once, and the call escalates to the next live rung — distinct from the quality fallback above (which retries on bad *output* from a working model). The `models:health-check` command probes every rung daily (05:30) and alerts on retirement proactively
+3. **LlmService** — calls Anthropic via `laravel/ai`'s `InvoiceExtractionAgent` (`app/Ai/Agents/`, structured-output schema, prompt text still rendered from `resources/views/prompts/invoice-extraction.blade.php`); returns `ExtractedInvoice` DTO; logs tokens to `LlmLog`. Tries `ai.providers.anthropic.models.fast` (Haiku) first; falls back to a full retry on `ai.providers.anthropic.models.strong` (Sonnet) if the response is invalid JSON, the lines don't reconstruct the invoice `total` (grossing each line up by its effective tax rate — per-line, else the purchasing default — and comparing to `total`; also accepts VAT-inclusive lines that already sum to it), or confidence is below `PurchasingSettings::fallback_confidence` (Settings > Purchasing). Reconciliation is against `total` only (not header subtotal/tax) because VAT-inclusive invoices and shipping-outside-subtotal break header arithmetic. A reconciling fast result is kept over a non-reconciling strong one. The parsed confidence is persisted to the `LlmLog` row. This quality-based tier loop is hand-rolled in `LlmService` — `laravel/ai`'s own provider failover only fires on transient/error exceptions, it has no concept of "the output didn't reconcile, try a smarter model." **Separately, `ModelHealthService` provides a model-retirement fallback ladder** `ai.providers.anthropic.models.{fast,strong,backup}` (Haiku→Sonnet→Opus): a 404 `RequestException` from the SDK with `error.type === 'not_found_error'` marks the model down in cache (circuit breaker, `ai.down_ttl`), `ai.alert_recipients` are emailed once, and the call escalates to the next live rung — distinct from the quality fallback above (which retries on bad *output* from a working model). `ModelHealthService::probe()` (used by `models:health-check`, daily 05:30) stays on raw `Http::post()` rather than the SDK — it's an isolated diagnostic ping, not part of the extraction path. See [[project_llm_tiered_extraction]] and [[project_anthropic_model_pinning]] in memory for background on why this split exists
 4. **SupplierResolver** — tax number match → name similarity → create pending supplier via `PartyService`
 5. **AccountResolver** — history match → LLM suggestion → manual allocation fallback
 6. **ExchangeRateService** — fetches rate from ExchangeRate-API (24h cache); env `EXCHANGERATE_API_KEY`
@@ -188,6 +192,7 @@ Methods: `markAsReviewed()`, `approve()`, `post()`, `dispute()`, `reject()`, `re
 
 | File | Key env vars / settings |
 |---|---|
+| `config/ai.php` | `laravel/ai` config. `default` = `AI_PROVIDER` (default `anthropic`). `providers.anthropic.models.{fast,strong,backup}` = the model-fallback ladder (`ANTHROPIC_MODEL_FAST`/`ANTHROPIC_MODEL`/`ANTHROPIC_MODEL_BACKUP`) — adding a second vendor (e.g. OpenAI) means adding a `providers.openai` block with its own `models` ladder, no code changes. `alert_recipients`/`down_ttl` feed `ModelHealthService`. `config/services.php`'s `anthropic.key`/`anthropic.model*` block is kept alongside this, unchanged, only for `ModelHealthService::probe()`'s raw diagnostic ping |
 | `config/documents.php` | `INVOICE_WATCH_DIR`, `INVOICE_WATCH_INTERVAL`, `MAGIKA_BINARY`; document type prefixes & statuses |
 | `config/currency.php` | `EXCHANGERATE_API_KEY`; cache TTL 86400s |
 | `config/party.php` | business types, relationship types, contact roles, address types |

@@ -32,9 +32,9 @@ class ModelHealthService
     public function ladder(): array
     {
         return array_values(array_unique(array_filter([
-            (string) config('services.anthropic.model_fast'),
-            (string) config('services.anthropic.model'),
-            (string) config('services.anthropic.model_backup'),
+            (string) config('ai.providers.anthropic.models.fast'),
+            (string) config('ai.providers.anthropic.models.strong'),
+            (string) config('ai.providers.anthropic.models.backup'),
         ])));
     }
 
@@ -45,7 +45,7 @@ class ModelHealthService
      */
     public function recipients(): array
     {
-        $raw = (string) config('services.anthropic.alert_recipients');
+        $raw = (string) config('ai.alert_recipients');
 
         return array_values(array_filter(array_map('trim', explode(',', $raw))));
     }
@@ -81,7 +81,7 @@ class ModelHealthService
      */
     public function recordUnavailable(string $model, string $reason): void
     {
-        $ttl = (int) config('services.anthropic.down_ttl', 3600);
+        $ttl = (int) config('ai.down_ttl', 3600);
         $firstFailure = Cache::add(self::DOWN_PREFIX.$model, $reason, now()->addSeconds($ttl));
 
         Log::warning("Anthropic model unavailable: {$model} — {$reason}");

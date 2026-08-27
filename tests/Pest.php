@@ -1,5 +1,10 @@
 <?php
 
+use GuzzleHttp\Psr7\Response;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\RequestException;
+use Tests\TestCase;
+
 /*
 |--------------------------------------------------------------------------
 | Test Case
@@ -11,8 +16,8 @@
 |
 */
 
-pest()->extend(Tests\TestCase::class)
-    ->use(Illuminate\Foundation\Testing\RefreshDatabase::class)
+pest()->extend(TestCase::class)
+    ->use(RefreshDatabase::class)
     ->in('Feature');
 
 /*
@@ -44,4 +49,18 @@ expect()->extend('toBeOne', function () {
 function something()
 {
     // ..
+}
+
+/**
+ * Build a real Illuminate\Http\Client\RequestException carrying the given
+ * Anthropic-shaped error body, for faking laravel/ai Agent responses that
+ * must simulate a raw (unwrapped) HTTP error from the Anthropic gateway.
+ */
+function fakeAnthropicRequestException(array $errorBody, int $status): RequestException
+{
+    $response = new Illuminate\Http\Client\Response(
+        new Response($status, [], (string) json_encode($errorBody))
+    );
+
+    return new RequestException($response);
 }

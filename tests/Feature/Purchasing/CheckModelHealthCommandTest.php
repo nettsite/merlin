@@ -9,10 +9,10 @@ use Illuminate\Support\Facades\Mail;
 beforeEach(function () {
     config([
         'services.anthropic.key' => 'test-key',
-        'services.anthropic.model_fast' => 'claude-haiku-4-5',
-        'services.anthropic.model' => 'claude-sonnet-4-6',
-        'services.anthropic.model_backup' => 'claude-opus-4-8',
-        'services.anthropic.alert_recipients' => 'ops@example.com',
+        'ai.providers.anthropic.models.fast' => 'claude-haiku-4-5',
+        'ai.providers.anthropic.models.strong' => 'claude-sonnet-4-6',
+        'ai.providers.anthropic.models.backup' => 'claude-opus-4-8',
+        'ai.alert_recipients' => 'ops@example.com',
     ]);
     Cache::flush();
 });

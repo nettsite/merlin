@@ -17,6 +17,7 @@ Merlin reads supplier invoices and posts them to your ledger — automatically. 
 | Framework | Laravel 13, PHP 8.4 |
 | Frontend | Livewire 4 (single-file classes, no Volt), Flux UI, Alpine.js, Tailwind CSS 3 |
 | Auth | Laravel Breeze (Livewire stack) |
+| LLM | laravel/ai (`Laravel\Ai` Agent classes — Anthropic today, multi-vendor ready) |
 | Roles & permissions | spatie/laravel-permission |
 | Audit log | spatie/laravel-activitylog |
 | File storage | spatie/laravel-medialibrary |
@@ -46,6 +47,7 @@ ANTHROPIC_MODEL_FAST=claude-haiku-4-5-20251001
 ANTHROPIC_MODEL_BACKUP=claude-opus-4-8
 ANTHROPIC_ALERT_RECIPIENTS=...  # email(s) alerted when a model is retired/unreachable
 ANTHROPIC_MODEL_DOWN_TTL=3600   # seconds to circuit-break a down model
+AI_PROVIDER=anthropic           # default laravel/ai provider (config/ai.php); Anthropic-only for now
 
 EXCHANGERATE_API_KEY=...  # exchangerate-api.com — for foreign currency invoices
 ```
@@ -75,6 +77,8 @@ php artisan test --compact --filter=TestName
 Business logic lives under `app/Modules/`, grouped by domain:
 
 ```
+app/Ai/Agents/   laravel/ai Agent classes — invoice/bank-statement/payment-notification extraction, PDF vision, bank template hints
+
 app/Modules/
 ├── Core/        User, Party, Person, Business, Address, ContactAssignment, Document, DocumentLine, LlmLog
 ├── Accounting/  Account, AccountGroup, AccountType, FinancialYearService
@@ -88,7 +92,7 @@ All models use UUID primary keys. Polymorphic relationships are registered in `A
 
 1. A PDF, DOCX, XLSX, or CSV is dropped into the watched folder or uploaded manually
 2. Magika detects the actual file type; unsupported formats are rejected
-3. Claude extracts supplier, dates, line items, and amounts — all amounts are stored ex-VAT. Extraction tries `ANTHROPIC_MODEL_FAST` (Haiku) first; falls back to `ANTHROPIC_MODEL` (Sonnet) on bad output, then `ANTHROPIC_MODEL_BACKUP` (Opus) if a model returns a 404 (retired)
+3. Claude (via a `laravel/ai` Agent, see `app/Ai/Agents/`) extracts supplier, dates, line items, and amounts — all amounts are stored ex-VAT. Extraction tries `ANTHROPIC_MODEL_FAST` (Haiku) first; falls back to `ANTHROPIC_MODEL` (Sonnet) on bad output, then `ANTHROPIC_MODEL_BACKUP` (Opus) if a model returns a 404 (retired)
 4. Each line gets a suggested GL account code with a confidence score drawn from posting history and the current chart of accounts
 5. Posting rules evaluate the document; invoices above the confidence threshold are auto-posted
 6. Every extraction is logged — tokens used, confidence score, warnings, supplier match method
