@@ -1,5 +1,6 @@
 <?php
 
+use App\Exceptions\PostedDocumentImmutableException;
 use App\Exceptions\UnbalancedJournalEntryException;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\JournalEntry;
@@ -124,4 +125,92 @@ it('reversing an already-reversed entry is a no-op', function (): void {
 
     expect($second->id)->toBe($first->id)
         ->and(JournalEntry::count())->toBe(2);
+});
+
+it('refuses to save a line on a document with a posted journal entry', function (): void {
+    $doc = journalDocument();
+
+    $line = $doc->lines()->create([
+        'line_number' => 1,
+        'type' => 'service',
+        'description' => 'Original',
+        'account_id' => $this->income->id,
+        'quantity' => 1,
+        'unit_price' => 1000.00,
+        'tax_rate' => null,
+    ]);
+
+    $this->service->post(
+        'sales_invoice_issued',
+        now(),
+        'Posted',
+        [
+            ['account_id' => $this->ar->id, 'debit' => 1000.00],
+            ['account_id' => $this->income->id, 'credit' => 1000.00],
+        ],
+        $doc,
+    );
+
+    $line->description = 'Edited after posting';
+
+    expect(fn () => $line->save())
+        ->toThrow(PostedDocumentImmutableException::class);
+});
+
+it('refuses to delete a line on a document with a posted journal entry', function (): void {
+    $doc = journalDocument();
+
+    $line = $doc->lines()->create([
+        'line_number' => 1,
+        'type' => 'service',
+        'description' => 'Original',
+        'account_id' => $this->income->id,
+        'quantity' => 1,
+        'unit_price' => 1000.00,
+        'tax_rate' => null,
+    ]);
+
+    $this->service->post(
+        'sales_invoice_issued',
+        now(),
+        'Posted',
+        [
+            ['account_id' => $this->ar->id, 'debit' => 1000.00],
+            ['account_id' => $this->income->id, 'credit' => 1000.00],
+        ],
+        $doc,
+    );
+
+    expect(fn () => $line->delete())
+        ->toThrow(PostedDocumentImmutableException::class);
+});
+
+it('allows a saveQuietly() line edit on a posted document (FX finalisation, VAT correction)', function (): void {
+    $doc = journalDocument();
+
+    $line = $doc->lines()->create([
+        'line_number' => 1,
+        'type' => 'service',
+        'description' => 'Original',
+        'account_id' => $this->income->id,
+        'quantity' => 1,
+        'unit_price' => 1000.00,
+        'tax_rate' => null,
+    ]);
+
+    $this->service->post(
+        'sales_invoice_issued',
+        now(),
+        'Posted',
+        [
+            ['account_id' => $this->ar->id, 'debit' => 1000.00],
+            ['account_id' => $this->income->id, 'credit' => 1000.00],
+        ],
+        $doc,
+    );
+
+    $line->description = 'Corrected via trusted system path';
+    $line->saveQuietly();
+
+    expect($line->fresh()->description)->toBe('Corrected via trusted system path');
 });

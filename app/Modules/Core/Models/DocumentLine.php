@@ -2,7 +2,9 @@
 
 namespace App\Modules\Core\Models;
 
+use App\Exceptions\PostedDocumentImmutableException;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\JournalEntry;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -73,6 +75,7 @@ class DocumentLine extends Model
     protected static function booted(): void
     {
         static::saving(function (DocumentLine $line) {
+            $line->guardAgainstPostedMutation();
             $line->calculateTotals();
         });
 
@@ -82,11 +85,41 @@ class DocumentLine extends Model
             }
         });
 
+        static::deleting(function (DocumentLine $line) {
+            $line->guardAgainstPostedMutation();
+        });
+
         static::deleted(function (DocumentLine $line) {
             if (static::$recalculatesDocumentTotals) {
                 Document::find($line->document_id)?->recalculateTotals();
             }
         });
+    }
+
+    /**
+     * Refuses to save/delete a line once its document has a non-reversed
+     * journal entry — this is what makes the journal actually append-only:
+     * without it, editing a posted invoice's line silently leaves the
+     * already-posted ledger entry wrong with nothing to catch it. Bypassed
+     * by saveQuietly() (used by the FX-rate-finalisation and VAT-correction
+     * paths, both of which only ever touch lines on invoices confirmed not
+     * yet posted) and by the bulk relation delete()s used when reprocessing
+     * — both restricted to non-posted documents already, at the service
+     * layer that calls them.
+     */
+    private function guardAgainstPostedMutation(): void
+    {
+        if ($this->document_id === null) {
+            return;
+        }
+
+        $isPosted = JournalEntry::where('document_id', $this->document_id)
+            ->whereNull('reversed_by_id')
+            ->exists();
+
+        if ($isPosted) {
+            throw PostedDocumentImmutableException::forLine($this->document_id);
+        }
     }
 
     // Relations
