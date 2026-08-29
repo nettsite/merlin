@@ -39,6 +39,15 @@ class Document extends Model implements HasMedia
      */
     public const POSTED_STATUSES = ['posted', 'partially_paid', 'paid'];
 
+    /**
+     * Statuses that mean "not recognised as revenue" for sales invoices.
+     * Counterpart to POSTED_STATUSES. Any report filtering sales invoices
+     * must use this rather than re-typing the list — a stale literal here is
+     * what let voided invoices count as revenue on the income statement while
+     * the trial balance correctly excluded them.
+     */
+    public const UNRECOGNISED_SALES_STATUSES = ['draft', 'voided'];
+
     protected $fillable = [
         'document_type',
         'direction',
@@ -59,6 +68,7 @@ class Document extends Model implements HasMedia
         'total',
         'amount_paid',
         'balance_due',
+        'credits_applied',
         'foreign_subtotal',
         'foreign_tax_total',
         'foreign_total',
@@ -91,6 +101,7 @@ class Document extends Model implements HasMedia
             'total' => 'decimal:2',
             'amount_paid' => 'decimal:2',
             'balance_due' => 'decimal:2',
+            'credits_applied' => 'decimal:2',
             'foreign_subtotal' => 'decimal:2',
             'foreign_tax_total' => 'decimal:2',
             'foreign_total' => 'decimal:2',
@@ -307,6 +318,19 @@ class Document extends Model implements HasMedia
 
     // Methods
 
+    /**
+     * The single formula for what is still owed. Every writer of balance_due
+     * must go through here — three independent writers computing it three
+     * different ways is what let an applied credit be silently reversed by
+     * the next payment or line edit.
+     */
+    public function recalculateBalance(): void
+    {
+        $this->balance_due = max(0, (float) $this->total
+            - (float) $this->amount_paid
+            - (float) $this->credits_applied);
+    }
+
     public function recalculateTotals(): void
     {
         $subtotal = (float) $this->lines()->sum('line_total');
@@ -316,7 +340,7 @@ class Document extends Model implements HasMedia
         $this->subtotal = $subtotal;
         $this->tax_total = $taxTotal;
         $this->total = $total;
-        $this->balance_due = $total - (float) $this->amount_paid;
+        $this->recalculateBalance();
 
         if ($this->is_foreign_currency) {
             $this->foreign_subtotal = (float) $this->lines()->sum('foreign_line_total');

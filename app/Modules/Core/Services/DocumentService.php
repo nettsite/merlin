@@ -101,10 +101,20 @@ class DocumentService
     public function applyCreditNote(Document $creditNote, Document $invoice, ?User $by): void
     {
         DB::transaction(function () use ($creditNote, $invoice, $by) {
-            $amount = (float) $creditNote->total;
-            $newBalance = max(0, (float) $invoice->balance_due - $amount);
+            // Clamp the credit to the invoice's remaining (uncredited, unpaid)
+            // headroom, so credits_applied never stores more than the invoice
+            // can actually use — preserves the pre-existing floor-at-zero
+            // behaviour for a credit note larger than the balance due.
+            $headroom = max(0, (float) $invoice->total - (float) $invoice->amount_paid - (float) $invoice->credits_applied);
+            $amount = min((float) $creditNote->total, $headroom);
 
-            $invoice->balance_due = $newBalance;
+            $invoice->credits_applied = (float) $invoice->credits_applied + $amount;
+            $invoice->recalculateBalance();
+
+            if (in_array($invoice->status, ['sent', 'partially_paid'], true)) {
+                $invoice->status = (float) $invoice->balance_due <= 0 ? 'paid' : 'partially_paid';
+            }
+
             $invoice->saveQuietly();
 
             $this->linkDocuments($invoice, $creditNote, 'credited_by');
@@ -344,20 +354,24 @@ class DocumentService
             }
 
             $newAmountPaid = (float) $doc->amount_paid + $amount;
-            $newBalanceDue = (float) $doc->total - $newAmountPaid;
 
-            // Reject overpayment. The 1-cent epsilon tolerates FX rounding
-            // when the rate is finalised from the actual amount paid.
-            if ($newBalanceDue < -0.01) {
+            // Reject overpayment against what's actually still owed (total
+            // less amount already paid AND any credit notes applied). The
+            // 1-cent epsilon tolerates FX rounding when the rate is
+            // finalised from the actual amount paid.
+            $remainingBeforePayment = (float) $doc->total - (float) $doc->amount_paid - (float) $doc->credits_applied;
+
+            if ($amount - $remainingBeforePayment > 0.01) {
                 throw new \InvalidArgumentException(sprintf(
                     'Payment of %.2f exceeds the balance due of %.2f.',
                     $amount,
-                    (float) $doc->total - (float) $doc->amount_paid,
+                    max(0, $remainingBeforePayment),
                 ));
             }
 
             $doc->amount_paid = $newAmountPaid;
-            $doc->balance_due = $newBalanceDue;
+            $doc->recalculateBalance();
+            $newBalanceDue = (float) $doc->balance_due;
 
             if ($doc->is_foreign_currency && (float) $doc->exchange_rate > 0) {
                 $foreignPaid = round($newAmountPaid / (float) $doc->exchange_rate, 2);
