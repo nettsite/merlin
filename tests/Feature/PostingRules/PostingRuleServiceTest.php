@@ -31,6 +31,7 @@ beforeEach(function (): void {
         'document_id' => $this->document->id,
         'description' => 'Monthly hosting fee',
         'account_id' => $this->account->id,
+        'tax_rate' => null,
     ]);
 });
 
@@ -249,6 +250,7 @@ function postedInvoice(mixed $supplier, mixed $account, array $overrides = []): 
         'description' => 'Hosting (01/02/2026 - 28/02/2026)',
         'account_id' => $account->id,
         'unit_price' => 100.00,
+        'tax_rate' => null,
     ]);
 
     return $doc;
@@ -275,6 +277,7 @@ it('auto-posts when all lines match a previous posted invoice', function (): voi
         'description' => 'Hosting (01/03/2026 - 31/03/2026)',
         'account_id' => $this->account->id,
         'unit_price' => 100.00,
+        'tax_rate' => null,
     ]);
 
     app(PostingRuleService::class)->evaluateAndPost($current);
@@ -301,6 +304,7 @@ it('does not pattern-post when there is no previous posted invoice', function ()
         'description' => 'Hosting (01/03/2026 - 31/03/2026)',
         'account_id' => $this->account->id,
         'unit_price' => 100.00,
+        'tax_rate' => null,
     ]);
 
     app(PostingRuleService::class)->evaluateAndPost($current);
@@ -329,6 +333,7 @@ it('blocks pattern post when an extra line is present', function (): void {
         'description' => 'Hosting (01/03/2026 - 31/03/2026)',
         'account_id' => $this->account->id,
         'unit_price' => 100.00,
+        'tax_rate' => null,
     ]);
 
     DocumentLine::factory()->create([
@@ -336,6 +341,7 @@ it('blocks pattern post when an extra line is present', function (): void {
         'description' => 'One-time setup fee',
         'account_id' => $this->account->id,
         'unit_price' => 50.00,
+        'tax_rate' => null,
     ]);
 
     app(PostingRuleService::class)->evaluateAndPost($current);
@@ -392,6 +398,7 @@ it('blocks pattern post when description similarity is too low', function (): vo
         'description' => 'Domain registration renewal annual fee',
         'account_id' => $this->account->id,
         'unit_price' => 100.00,
+        'tax_rate' => null,
     ]);
 
     app(PostingRuleService::class)->evaluateAndPost($current);
@@ -420,6 +427,7 @@ it('blocks pattern post when currencies differ', function (): void {
         'description' => 'Hosting (01/03/2026 - 31/03/2026)',
         'account_id' => $this->account->id,
         'unit_price' => 100.00,
+        'tax_rate' => null,
     ]);
 
     app(PostingRuleService::class)->evaluateAndPost($current);

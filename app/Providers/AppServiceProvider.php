@@ -6,6 +6,8 @@ use App\Console\Commands\DocsSync;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Models\AccountGroup;
 use App\Modules\Accounting\Models\AccountType;
+use App\Modules\Accounting\Models\JournalEntry;
+use App\Modules\Accounting\Models\JournalLine;
 use App\Modules\Billing\Console\BackfillClientReceivableAccounts;
 use App\Modules\Billing\Console\GenerateRecurringInvoices;
 use App\Modules\Billing\Console\ImportFromNinja;
@@ -100,6 +102,8 @@ class AppServiceProvider extends ServiceProvider
             'document_activity' => DocumentActivity::class,
             'document_line' => DocumentLine::class,
             'document_relationship' => DocumentRelationship::class,
+            'journal_entry' => JournalEntry::class,
+            'journal_line' => JournalLine::class,
             'llm_log' => LlmLog::class,
             'party' => Party::class,
             'party_relationship' => PartyRelationship::class,

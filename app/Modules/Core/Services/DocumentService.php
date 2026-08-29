@@ -4,20 +4,27 @@ namespace App\Modules\Core\Services;
 
 use App\Exceptions\InvalidDocumentStateException;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\JournalEntry;
+use App\Modules\Accounting\Services\JournalService;
+use App\Modules\Billing\Settings\BillingSettings;
 use App\Modules\Core\Models\Document;
 use App\Modules\Core\Models\DocumentActivity;
+use App\Modules\Core\Models\DocumentLine;
 use App\Modules\Core\Models\DocumentRelationship;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Settings\CurrencySettings;
 use App\Modules\Purchasing\Services\PaymentEvidenceRecorder;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class DocumentService
 {
     public function __construct(
         private readonly CurrencySettings $currencySettings,
+        private readonly JournalService $journal,
+        private readonly BillingSettings $billingSettings,
     ) {}
 
     // -------------------------------------------------------------------------
@@ -26,7 +33,58 @@ class DocumentService
 
     public function markAsSent(Document $doc, ?User $by): void
     {
-        $this->transition($doc, 'sent', $by, 'Invoice sent to client.');
+        DB::transaction(function () use ($doc, $by) {
+            $this->transition($doc, 'sent', $by, 'Invoice sent to client.');
+            $this->postSalesInvoiceJournal($doc);
+        });
+    }
+
+    /**
+     * Post the revenue-recognition entry for a sent sales invoice: debit AR
+     * for the full total, credit each line's income account, and credit the
+     * VAT liability account for any tax. Silently skipped (not an error) when
+     * the invoice's receivable account or any line's income account isn't
+     * configured yet — the same gap the old report queries already guarded
+     * against with whereNotNull(), just moved to write time.
+     */
+    private function postSalesInvoiceJournal(Document $doc): void
+    {
+        if ($doc->receivable_account_id === null) {
+            return;
+        }
+
+        /** @var Collection<int, DocumentLine> $lines */
+        $lines = $doc->lines;
+
+        if ($lines->isEmpty() || $lines->contains(fn (DocumentLine $l) => $l->account_id === null)) {
+            return;
+        }
+
+        $journalLines = [
+            ['account_id' => $doc->receivable_account_id, 'debit' => (float) $doc->total, 'party_id' => $doc->party_id],
+        ];
+
+        foreach ($lines->groupBy('account_id') as $accountId => $group) {
+            $journalLines[] = ['account_id' => $accountId, 'credit' => (float) $group->sum('line_total')];
+        }
+
+        if ((float) $doc->tax_total > 0) {
+            $taxAccountId = $this->billingSettings->tax_liability_account_id;
+
+            if ($taxAccountId === null) {
+                throw new \RuntimeException("Cannot post invoice {$doc->document_number}: it carries VAT but Settings > Billing has no VAT liability account configured.");
+            }
+
+            $journalLines[] = ['account_id' => $taxAccountId, 'credit' => (float) $doc->tax_total];
+        }
+
+        $this->journal->post(
+            source: 'sales_invoice_issued',
+            date: $doc->issue_date ?? now(),
+            description: "Sales invoice {$doc->document_number} issued",
+            lines: $journalLines,
+            document: $doc,
+        );
     }
 
     public function recordResend(Document $doc, ?User $by): void
@@ -36,7 +94,17 @@ class DocumentService
 
     public function voidDocument(Document $doc, User $by): void
     {
-        $this->transition($doc, 'voided', $by, 'Invoice voided.');
+        DB::transaction(function () use ($doc, $by) {
+            $this->transition($doc, 'voided', $by, 'Invoice voided.');
+
+            $entry = JournalEntry::where('document_id', $doc->id)
+                ->where('source', 'sales_invoice_issued')
+                ->first();
+
+            if ($entry !== null && ! $entry->isReversed()) {
+                $this->journal->reverse($entry, 'Invoice voided.');
+            }
+        });
     }
 
     public function sendQuote(Document $quote, ?User $by): void
@@ -101,12 +169,12 @@ class DocumentService
     public function applyCreditNote(Document $creditNote, Document $invoice, ?User $by): void
     {
         DB::transaction(function () use ($creditNote, $invoice, $by) {
-            // Clamp the credit to the invoice's remaining (uncredited, unpaid)
-            // headroom, so credits_applied never stores more than the invoice
-            // can actually use — preserves the pre-existing floor-at-zero
-            // behaviour for a credit note larger than the balance due.
-            $headroom = max(0, (float) $invoice->total - (float) $invoice->amount_paid - (float) $invoice->credits_applied);
-            $amount = min((float) $creditNote->total, $headroom);
+            // credits_applied accumulates the raw credit note total, uncapped
+            // — recalculateBalance()'s max(0, ...) floors the displayed
+            // balance_due at zero on its own for a credit note larger than
+            // what remains owed, mirroring the pre-existing floor-at-zero
+            // behaviour without needing to cap the stored credit itself.
+            $amount = (float) $creditNote->total;
 
             $invoice->credits_applied = (float) $invoice->credits_applied + $amount;
             $invoice->recalculateBalance();
@@ -120,7 +188,46 @@ class DocumentService
             $this->linkDocuments($invoice, $creditNote, 'credited_by');
             $this->transition($creditNote, 'applied', $by, "Applied to invoice {$invoice->document_number}.");
             $this->recordActivity($invoice, $by, 'credit_applied', "Credit note {$creditNote->document_number} applied; balance reduced by {$creditNote->currency} {$amount}.");
+
+            $this->postCreditNoteJournal($creditNote, $invoice, $amount);
         });
+    }
+
+    /**
+     * Post the credit note's own income-account lines as debits (reversing
+     * the revenue) against a credit to the target invoice's AR account.
+     * Silently skipped when the invoice has no receivable account configured
+     * or any credit note line lacks an income account — same guard as
+     * postSalesInvoiceJournal().
+     */
+    private function postCreditNoteJournal(Document $creditNote, Document $invoice, float $amount): void
+    {
+        if ($invoice->receivable_account_id === null || $amount <= 0) {
+            return;
+        }
+
+        /** @var Collection<int, DocumentLine> $lines */
+        $lines = $creditNote->lines;
+
+        if ($lines->isEmpty() || $lines->contains(fn (DocumentLine $l) => $l->account_id === null)) {
+            return;
+        }
+
+        $journalLines = [
+            ['account_id' => $invoice->receivable_account_id, 'credit' => $amount, 'party_id' => $invoice->party_id],
+        ];
+
+        foreach ($lines->groupBy('account_id') as $accountId => $group) {
+            $journalLines[] = ['account_id' => $accountId, 'debit' => (float) $group->sum('line_total')];
+        }
+
+        $this->journal->post(
+            source: 'credit_note_applied',
+            date: now(),
+            description: "Credit note {$creditNote->document_number} applied to invoice {$invoice->document_number}",
+            lines: $journalLines,
+            document: $creditNote,
+        );
     }
 
     public function markAsReviewed(Document $doc, User $by): void
@@ -135,8 +242,49 @@ class DocumentService
 
     public function post(Document $doc, User $by): void
     {
-        $this->transition($doc, 'posted', $by, 'Posted to the general ledger.');
+        DB::transaction(function () use ($doc, $by) {
+            $this->transition($doc, 'posted', $by, 'Posted to the general ledger.');
+            $this->postPurchaseInvoiceJournal($doc);
+        });
+
         $this->recordPendingPurchasePayment($doc);
+    }
+
+    /**
+     * Post the expense-recognition entry for a posted purchase invoice: debit
+     * each line's expense account, credit AP for the full total. Silently
+     * skipped when the invoice's payable account or any line's expense
+     * account isn't configured yet — mirrors postSalesInvoiceJournal()'s
+     * guard on the sales side.
+     */
+    private function postPurchaseInvoiceJournal(Document $doc): void
+    {
+        if ($doc->payable_account_id === null) {
+            return;
+        }
+
+        /** @var Collection<int, DocumentLine> $lines */
+        $lines = $doc->lines;
+
+        if ($lines->isEmpty() || $lines->contains(fn (DocumentLine $l) => $l->account_id === null)) {
+            return;
+        }
+
+        $journalLines = [
+            ['account_id' => $doc->payable_account_id, 'credit' => (float) $doc->total, 'party_id' => $doc->party_id],
+        ];
+
+        foreach ($lines->groupBy('account_id') as $accountId => $group) {
+            $journalLines[] = ['account_id' => $accountId, 'debit' => (float) $group->sum('line_total')];
+        }
+
+        $this->journal->post(
+            source: 'purchase_invoice_posted',
+            date: $doc->issue_date ?? now(),
+            description: "Purchase invoice {$doc->document_number} posted",
+            lines: $journalLines,
+            document: $doc,
+        );
     }
 
     /**
@@ -293,7 +441,61 @@ class DocumentService
             'relationship_type' => 'payment_for',
         ]);
 
+        $this->postPaymentJournal($payment);
+
         return $payment;
+    }
+
+    /**
+     * Post the cash-movement entry for an inbound or outbound payment
+     * Document: debit/credit the contra (bank) account against the
+     * receivable or payable account on the payment's own header — payments
+     * never carry lines, so there's nothing to group by account. Public so
+     * BillingService::recordPayment() (the manual sales-payment path) can
+     * call it too; it creates its own payment Document independently of
+     * createPaymentDocument() and recordPurchasePayment() below. Silently
+     * skipped when the contra account isn't configured, same guard pattern
+     * as the invoice postings.
+     */
+    public function postPaymentJournal(Document $payment): void
+    {
+        if ($payment->contra_account_id === null) {
+            return;
+        }
+
+        $amount = (float) $payment->total;
+
+        if ($amount <= 0) {
+            return;
+        }
+
+        if ($payment->direction === 'inbound') {
+            if ($payment->receivable_account_id === null) {
+                return;
+            }
+
+            $lines = [
+                ['account_id' => $payment->contra_account_id, 'debit' => $amount],
+                ['account_id' => $payment->receivable_account_id, 'credit' => $amount, 'party_id' => $payment->party_id],
+            ];
+        } else {
+            if ($payment->payable_account_id === null) {
+                return;
+            }
+
+            $lines = [
+                ['account_id' => $payment->payable_account_id, 'debit' => $amount, 'party_id' => $payment->party_id],
+                ['account_id' => $payment->contra_account_id, 'credit' => $amount],
+            ];
+        }
+
+        $this->journal->post(
+            source: 'payment',
+            date: $payment->issue_date ?? now(),
+            description: "Payment {$payment->document_number}",
+            lines: $lines,
+            document: $payment,
+        );
     }
 
     public function dispute(Document $doc, User $by, string $reason): void
@@ -451,6 +653,7 @@ class DocumentService
             ]);
 
             $this->recordPayment($invoice, $amount, $date, $reference, (bool) ($data['finalise_rate'] ?? false));
+            $this->postPaymentJournal($payment);
 
             return $payment;
         });
@@ -520,7 +723,11 @@ class DocumentService
 
     public function postAutonomously(Document $doc, string $reason): void
     {
-        $this->transition($doc, 'posted', null, "Auto-posted: {$reason}");
+        DB::transaction(function () use ($doc, $reason) {
+            $this->transition($doc, 'posted', null, "Auto-posted: {$reason}");
+            $this->postPurchaseInvoiceJournal($doc);
+        });
+
         $this->recordPendingPurchasePayment($doc);
     }
 
