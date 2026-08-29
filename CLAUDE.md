@@ -57,8 +57,9 @@ app/Modules/
 │   ├── Settings/   — CurrencySettings (base_currency, locale), CompanySettings
 │   └── Policies/   — AllModulesPolicy (base; all domain policies extend this)
 ├── Accounting/
-│   ├── Models/     — Account, AccountGroup, AccountType
-│   ├── Services/   — FinancialYearService (fiscal year bounds, month labels)
+│   ├── Models/     — Account, AccountGroup, AccountType, JournalEntry, JournalLine
+│   ├── Services/   — FinancialYearService (fiscal year bounds, month labels),
+│   │               — JournalService (the general ledger — see Journal section below), AccountBalanceRollup (sub-account rollup)
 │   └── Settings/   — AccountingSettings (financial_year_start_month)
 ├── Purchasing/
 │   ├── Models/     — PostingRule
@@ -79,7 +80,8 @@ app/Modules/
 
 app/Policies/       — 19 domain policies, all extend AllModulesPolicy
 app/Traits/         — HasDocumentNumber (auto-generates PREFIX-YEAR-NNNNN on create)
-app/Exceptions/     — InvalidDocumentStateException, InvalidFileTypeException, LlmApiException, PdfExtractionException
+app/Exceptions/     — InvalidDocumentStateException, InvalidFileTypeException, LlmApiException, LlmUnusableOutputException, PdfExtractionException,
+                    — UnbalancedJournalEntryException, PostedDocumentImmutableException
 ```
 
 **Note:** `Purchasing\Services\DocumentService` (purchase-invoice status transitions) and `Core\Services\DocumentService` (shared document plumbing) are two distinct classes — check the namespace, not just the class name.
@@ -115,19 +117,20 @@ Routes use `Route::livewire()` unless marked *view*. Any test that renders a vie
 | `/recurring-invoices` | `recurring-invoices/index.blade.php` | CRUD |
 | `/payment-terms` | `payment-terms/index.blade.php` | CRUD |
 | `/accounts` | `accounts/index.blade.php` | CRUD |
+| `/accounts/{id}` | `accounts/show.blade.php` | Read-only transaction register for one account, sourced from `journal_lines` (see Journal section) |
 | `/account-groups` | `account-groups/index.blade.php` | CRUD |
 | `/roles` | `roles/index.blade.php` | CRUD |
 | `/users` | `users/index.blade.php` | CRUD |
 | `/llm-logs` | `llm-logs/index.blade.php` | Read-only |
 | `/help` | `help/index.blade.php` | AI help chat, reads `storage/app/docs/*.md` (see [[project_help_chat_docs_sync]]) |
 | `/reports` | — | Redirects to `/reports/income-statement` |
-| `/reports/income-statement` | `reports/income-statement.blade.php` | Read-only; ledger-centric, uses FinancialYearService |
-| `/reports/trial-balance` | `reports/trial-balance.blade.php` | Read-only; multi-source account aggregation |
-| `/reports/balance-sheet` | `reports/balance-sheet.blade.php` | Read-only; accounting equation validation |
-| `/reports/income-by-account` | `reports/income-by-account.blade.php` | Read-only; ledger-centric |
-| `/reports/income-by-client` | `reports/income-by-client.blade.php` | Read-only |
-| `/reports/expenses-by-account` | `reports/expenses-by-account.blade.php` | Read-only |
-| `/reports/expenses-by-supplier` | `reports/expenses-by-supplier.blade.php` | Read-only |
+| `/reports/income-statement` | `reports/income-statement.blade.php` | Read-only; sourced from the journal, uses FinancialYearService |
+| `/reports/trial-balance` | `reports/trial-balance.blade.php` | Read-only; sourced from the journal (single grouped query) |
+| `/reports/balance-sheet` | `reports/balance-sheet.blade.php` | Read-only; sourced from the journal; accounting equation validation |
+| `/reports/income-by-account` | `reports/income-by-account.blade.php` | Read-only; reads `document_lines`/`documents` directly, not the journal — needs per-line VAT and invoice counts the journal doesn't preserve at that granularity (see Journal section) |
+| `/reports/income-by-client` | `reports/income-by-client.blade.php` | Read-only; same as above — also needs `balance_due`, a document field with no journal equivalent |
+| `/reports/expenses-by-account` | `reports/expenses-by-account.blade.php` | Read-only; document-based, same reason as income-by-account |
+| `/reports/expenses-by-supplier` | `reports/expenses-by-supplier.blade.php` | Read-only; document-based, same reason as income-by-client |
 | `/reports/llm-performance` | `reports/llm-performance.blade.php` | Read-only |
 | `/settings` | `settings/index.blade.php` | Multi-tab: General / Accounting / Billing / Roles / Email Templates. `/settings/general`, `/settings/billing` are `Route::redirect` shims to `/settings?tab=...`. Purchasing settings moved out to `/settings/purchasing` (see above) |
 | `/portal/login` | `portal/auth/login.blade.php` | Guest-only, `auth:portal` guard |
@@ -188,6 +191,23 @@ Full map (purchase invoices):
 
 Methods: `markAsReviewed()`, `approve()`, `post()`, `dispute()`, `reject()`, `reprocess()` (deletes lines, re-runs pipeline).
 
+### Journal (General Ledger)
+
+`journal_entries` / `journal_lines` are the authoritative double-entry ledger. Before this existed, every report re-derived debits and credits from document headers/lines with its own copy-pasted status filters — that drift is what caused a real bug (voided sales invoices counting as revenue on the income statement). `JournalService` (`app/Modules/Accounting/Services/`) is the **only** writer:
+
+- `post(source, date, description, lines, document?)` — rejects (`UnbalancedJournalEntryException`) unless `sum(debit) === sum(credit)`; idempotent per `(document_id, source)` — a second call for the same event is a no-op returning the existing entry, not a duplicate.
+- `reverse(entry, reason)` — writes a new entry with every line's debit/credit **swapped** (not negated) and stamps `reversed_by_id` on the original. The journal is append-only — nothing ever calls `update()`/`delete()` on a `JournalEntry`/`JournalLine`. **Because reverse() swaps rather than negates, any report computing a signed total must sum `credit − debit` (or `debit − credit`) — never one side alone, or a reversal has no visible effect.**
+
+`DocumentService` posts at every event that changes what's owed — `markAsSent()`/`voidDocument()` (sales revenue, reversed on void), `post()`/`postAutonomously()` (purchase expense), the three places a `payment` Document gets created (`createPaymentDocument()` for bank-statement settlement, `recordPurchasePayment()`, and `BillingService::recordPayment()` via the public `postPaymentJournal()`), and `applyCreditNote()`. Posting is **silently skipped** (not an error) when a document's receivable/payable account or a line's income/expense account isn't configured yet — this mirrors the `whereNotNull()` guards the old report queries already relied on, just moved to write time. A sales invoice with `tax_total > 0` but no `BillingSettings::tax_liability_account_id` configured **does** throw — that's a real Settings gap, not an in-progress document.
+
+**Posted documents' lines are immutable.** `DocumentLine::saving()`/`deleting()` throw `PostedDocumentImmutableException` once the line's document has a non-reversed `JournalEntry` — this is what makes the ledger actually append-only. Bypassed only by `saveQuietly()`, used by the two trusted system paths that legitimately rewrite a posted invoice's line amounts (FX-rate finalisation in `DocumentService::recordPayment()`, and `PaymentNotificationMatcher::applyCorrectedAmount()`) — both already restricted to invoices confirmed not yet posted at the point they run.
+
+**Not every report reads the journal.** `trial-balance`, `balance-sheet`, `income-statement`, and `accounts/{id}` are pure ledger views and read `journal_lines` directly (one grouped query each, in place of the old per-report accumulator queries). `income-by-account`, `income-by-client`, `expenses-by-account`, `expenses-by-supplier` deliberately still read `documents`/`document_lines` — each needs data the journal doesn't preserve at that granularity (invoice counts, `balance_due`, or per-line VAT split out from the invoice total), and neither has the reversal-drift risk the journal exists to fix (sales-side status filtering already excludes voided invoices directly; purchase invoices only ever move forward through `posted`/`partially_paid`/`paid`).
+
+**`credits_applied` on `Document`** stores a credit note's raw, uncapped amount; `Document::recalculateBalance()` is the single formula (`total − amount_paid − credits_applied`, floored at zero) every writer of `balance_due` must go through — `applyCreditNote()`, `recordPayment()`, and `Document::recalculateTotals()` all call it rather than assigning `balance_due` directly, which is what let a credit note get silently reversed by the invoice's next payment before this existed.
+
+**Eloquent `'date'`-cast columns store a full `Y-m-d H:i:s` value**, not a clean date (`fromDateTime()` uses the connection's datetime format regardless of cast type) — every date-column query in this app, including the journal's `entry_date`, must use `whereDate()`, never a raw `where()` comparison, or the stored value's trailing time component silently fails the match.
+
 ### Configuration Files
 
 | File | Key env vars / settings |
@@ -205,7 +225,7 @@ Methods: `markAsReviewed()`, `approve()`, `post()`, `dispute()`, `reject()`, `re
 
 ### Morph Map (AppServiceProvider)
 
-20 aliases registered via `Relation::enforceMorphMap()`. Always add new morph-related models here before writing data.
+22 aliases registered via `Relation::enforceMorphMap()`. Always add new morph-related models here before writing data.
 
 ### `party_relationships.metadata` Convention
 

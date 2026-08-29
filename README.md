@@ -81,7 +81,7 @@ app/Ai/Agents/   laravel/ai Agent classes — invoice/bank-statement/payment-not
 
 app/Modules/
 ├── Core/        User, Party, Person, Business, Address, ContactAssignment, Document, DocumentLine, LlmLog
-├── Accounting/  Account, AccountGroup, AccountType, FinancialYearService
+├── Accounting/  Account, AccountGroup, AccountType, FinancialYearService, JournalEntry/JournalLine + JournalService (GL)
 ├── Purchasing/  PostingRule + invoice/payment-notification pipeline services
 └── Billing/     PaymentTerm, RecurringInvoice + BillingService, RecurringInvoiceService, DueDateCalculator, WorkingDayCalculator
 ```
