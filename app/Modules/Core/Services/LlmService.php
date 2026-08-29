@@ -9,6 +9,7 @@ use App\Ai\Agents\PaymentNotificationExtractionAgent;
 use App\Ai\Agents\PdfVisionExtractionAgent;
 use App\Exceptions\LlmApiException;
 use App\Exceptions\LlmCreditExhaustedException;
+use App\Exceptions\LlmUnusableOutputException;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Core\DTO\ExtractedBankStatement;
 use App\Modules\Core\Models\Document;
@@ -70,13 +71,19 @@ class LlmService
             if ($fastReconciled && $this->meetsConfidenceThreshold($fast)) {
                 return $fast;
             }
-        } catch (LlmApiException|\RuntimeException) {
+        } catch (LlmCreditExhaustedException $e) {
+            // Stop all processing until credits are added — never burn a
+            // second billable call on the strong model for this reason.
+            throw $e;
+        } catch (LlmApiException|LlmUnusableOutputException) {
             // Fall through to the stronger model.
         }
 
         try {
             $strong = $this->extractWith($prompt, config('ai.providers.anthropic.models.strong'), $loggable);
-        } catch (LlmApiException|\RuntimeException $e) {
+        } catch (LlmCreditExhaustedException $e) {
+            throw $e;
+        } catch (LlmApiException|LlmUnusableOutputException $e) {
             // The strong model failed outright; keep a usable fast result if we have one.
             if ($fast !== null) {
                 return $fast;
@@ -181,13 +188,17 @@ class LlmService
             if ($fastReconciled && $fast->confidence >= $this->purchasingSettings->fallback_confidence) {
                 return $fast;
             }
-        } catch (LlmApiException|\RuntimeException) {
+        } catch (LlmCreditExhaustedException $e) {
+            throw $e;
+        } catch (LlmApiException|LlmUnusableOutputException) {
             // Fall through to stronger model.
         }
 
         try {
             $strong = $this->extractBankStatementWith($prompt, config('ai.providers.anthropic.models.strong'), $loggable);
-        } catch (LlmApiException|\RuntimeException $e) {
+        } catch (LlmCreditExhaustedException $e) {
+            throw $e;
+        } catch (LlmApiException|LlmUnusableOutputException $e) {
             if ($fast !== null) {
                 return $fast;
             }
@@ -246,7 +257,9 @@ class LlmService
 
         try {
             return $this->extractPaymentNotificationWith($prompt, config('ai.providers.anthropic.models.fast'), $loggable);
-        } catch (LlmApiException|\RuntimeException) {
+        } catch (LlmCreditExhaustedException $e) {
+            throw $e;
+        } catch (LlmApiException|LlmUnusableOutputException) {
             return $this->extractPaymentNotificationWith($prompt, config('ai.providers.anthropic.models.strong'), $loggable);
         }
     }
@@ -510,7 +523,7 @@ class LlmService
 
         if (! is_array($data)) {
             Log::debug('LlmService: invalid JSON response', ['raw' => substr($raw, 0, 500)]);
-            throw new \RuntimeException('LLM returned invalid JSON.');
+            throw new LlmUnusableOutputException('LLM returned invalid JSON.');
         }
 
         return $data;
