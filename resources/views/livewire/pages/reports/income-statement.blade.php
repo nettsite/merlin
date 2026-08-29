@@ -2,6 +2,7 @@
 
 use App\Modules\Accounting\Services\FinancialYearService;
 use App\Modules\Core\Settings\CurrencySettings;
+use App\Modules\Core\Models\Document;
 use App\Modules\Core\Models\DocumentLine;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
@@ -45,10 +46,10 @@ new #[Layout('components.layout.app')] class extends Component
                 : $q->whereNotIn('documents.status', $statuses)->get()->keyBy('account_id');
         };
 
-        $revenueYtd = $fetchLines('sales_invoice', ['draft', 'cancelled'], false, '4', $fyStart, $today);
-        $revenueMonth = $fetchLines('sales_invoice', ['draft', 'cancelled'], false, '4', $monthStart, $today);
-        $expensesYtd = $fetchLines('purchase_invoice', ['posted', 'partially_paid', 'paid'], true, '5', $fyStart, $today);
-        $expensesMonth = $fetchLines('purchase_invoice', ['posted', 'partially_paid', 'paid'], true, '5', $monthStart, $today);
+        $revenueYtd = $fetchLines('sales_invoice', Document::UNRECOGNISED_SALES_STATUSES, false, '4', $fyStart, $today);
+        $revenueMonth = $fetchLines('sales_invoice', Document::UNRECOGNISED_SALES_STATUSES, false, '4', $monthStart, $today);
+        $expensesYtd = $fetchLines('purchase_invoice', Document::POSTED_STATUSES, true, '5', $fyStart, $today);
+        $expensesMonth = $fetchLines('purchase_invoice', Document::POSTED_STATUSES, true, '5', $monthStart, $today);
 
         $mergeSection = function ($ytdMap, $monthMap): \Illuminate\Support\Collection {
             return $ytdMap->keys()->merge($monthMap->keys())->unique()

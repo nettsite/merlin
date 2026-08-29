@@ -37,7 +37,7 @@ new #[Layout('components.layout.app')] class extends Component
                 SUM(documents.balance_due) as outstanding
             ')
             ->where('documents.document_type', 'sales_invoice')
-            ->whereNotIn('documents.status', ['draft', 'cancelled'])
+            ->whereNotIn('documents.status', Document::UNRECOGNISED_SALES_STATUSES)
             ->when($this->dateFrom, fn ($q) => $q->whereDate('documents.issue_date', '>=', $this->dateFrom))
             ->when($this->dateTo, fn ($q) => $q->whereDate('documents.issue_date', '<=', $this->dateTo))
             ->groupBy('documents.party_id', 'businesses.trading_name', 'businesses.legal_name')

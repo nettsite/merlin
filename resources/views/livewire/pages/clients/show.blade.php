@@ -338,7 +338,6 @@ new #[Layout('components.layout.app')] class extends Component
                     'sent' => 'Sent',
                     'paid' => 'Paid',
                     'overdue' => 'Overdue',
-                    'cancelled' => 'Cancelled',
                 ];
             @endphp
             @foreach($tabs as $status => $label)
