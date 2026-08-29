@@ -45,8 +45,13 @@ class AccountBalanceRollup
 
         foreach ($acc as $id => $totals) {
             $rootId = $id;
+            $visited = [];
 
-            while (($parentOf[$rootId] ?? null) !== null) {
+            // Guard against a parent_id cycle (a reparenting mistake) hanging
+            // this loop forever: stop walking the moment an id repeats,
+            // rather than trusting the hierarchy is acyclic.
+            while (($parentOf[$rootId] ?? null) !== null && ! isset($visited[$rootId])) {
+                $visited[$rootId] = true;
                 $rootId = $parentOf[$rootId];
             }
 

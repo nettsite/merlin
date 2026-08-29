@@ -61,11 +61,11 @@ class DocumentService
         }
 
         $journalLines = [
-            ['account_id' => $doc->receivable_account_id, 'debit' => (float) $doc->total, 'party_id' => $doc->party_id],
+            ['account_id' => $doc->receivable_account_id, 'debit' => (float) $doc->total, 'party_id' => $doc->party_id, 'description' => 'Invoice total'],
         ];
 
         foreach ($lines->groupBy('account_id') as $accountId => $group) {
-            $journalLines[] = ['account_id' => $accountId, 'credit' => (float) $group->sum('line_total')];
+            $journalLines[] = ['account_id' => $accountId, 'credit' => (float) $group->sum('line_total'), 'description' => $group->first()->description];
         }
 
         if ((float) $doc->tax_total > 0) {
@@ -75,7 +75,7 @@ class DocumentService
                 throw new \RuntimeException("Cannot post invoice {$doc->document_number}: it carries VAT but Settings > Billing has no VAT liability account configured.");
             }
 
-            $journalLines[] = ['account_id' => $taxAccountId, 'credit' => (float) $doc->tax_total];
+            $journalLines[] = ['account_id' => $taxAccountId, 'credit' => (float) $doc->tax_total, 'description' => 'VAT'];
         }
 
         $this->journal->post(
@@ -214,11 +214,11 @@ class DocumentService
         }
 
         $journalLines = [
-            ['account_id' => $invoice->receivable_account_id, 'credit' => $amount, 'party_id' => $invoice->party_id],
+            ['account_id' => $invoice->receivable_account_id, 'credit' => $amount, 'party_id' => $invoice->party_id, 'description' => "Credit note {$creditNote->document_number}"],
         ];
 
         foreach ($lines->groupBy('account_id') as $accountId => $group) {
-            $journalLines[] = ['account_id' => $accountId, 'debit' => (float) $group->sum('line_total')];
+            $journalLines[] = ['account_id' => $accountId, 'debit' => (float) $group->sum('line_total'), 'description' => $group->first()->description];
         }
 
         $this->journal->post(
@@ -271,11 +271,11 @@ class DocumentService
         }
 
         $journalLines = [
-            ['account_id' => $doc->payable_account_id, 'credit' => (float) $doc->total, 'party_id' => $doc->party_id],
+            ['account_id' => $doc->payable_account_id, 'credit' => (float) $doc->total, 'party_id' => $doc->party_id, 'description' => 'Invoice total'],
         ];
 
         foreach ($lines->groupBy('account_id') as $accountId => $group) {
-            $journalLines[] = ['account_id' => $accountId, 'debit' => (float) $group->sum('line_total')];
+            $journalLines[] = ['account_id' => $accountId, 'debit' => (float) $group->sum('line_total'), 'description' => $group->first()->description];
         }
 
         $this->journal->post(
@@ -475,8 +475,8 @@ class DocumentService
             }
 
             $lines = [
-                ['account_id' => $payment->contra_account_id, 'debit' => $amount],
-                ['account_id' => $payment->receivable_account_id, 'credit' => $amount, 'party_id' => $payment->party_id],
+                ['account_id' => $payment->contra_account_id, 'debit' => $amount, 'description' => 'Payment received'],
+                ['account_id' => $payment->receivable_account_id, 'credit' => $amount, 'party_id' => $payment->party_id, 'description' => 'Payment received'],
             ];
         } else {
             if ($payment->payable_account_id === null) {
@@ -484,8 +484,8 @@ class DocumentService
             }
 
             $lines = [
-                ['account_id' => $payment->payable_account_id, 'debit' => $amount, 'party_id' => $payment->party_id],
-                ['account_id' => $payment->contra_account_id, 'credit' => $amount],
+                ['account_id' => $payment->payable_account_id, 'debit' => $amount, 'party_id' => $payment->party_id, 'description' => 'Payment made'],
+                ['account_id' => $payment->contra_account_id, 'credit' => $amount, 'description' => 'Payment made'],
             ];
         }
 

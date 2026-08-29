@@ -52,110 +52,59 @@ new #[Layout('components.layout.app')] class extends Component
     }
 
     /**
-     * Builds the 6-way unioned transaction register for the current account.
-     * Pass $filterByContra = false to compute the set of contra accounts actually
-     * present in the (date-filtered) dataset, so the filter dropdown never offers
-     * an option that would return zero rows.
+     * Builds the transaction register for the current account directly from
+     * the journal — one query in place of the old 6-way UNION across raw
+     * document headers/lines. Pass $filterByContra = false to compute the
+     * set of contra accounts actually present in the (date-filtered)
+     * dataset, so the filter dropdown never offers an option that would
+     * return zero rows.
+     *
+     * "Contra account" only has a single answer when a journal entry has
+     * exactly one other line (a 2-line entry — the common case: a payment,
+     * or a purchase invoice line against its AP total). An entry with more
+     * lines (e.g. a sales invoice spanning several income accounts) has no
+     * single contra, shown as "Various" — same as the old header rows.
      */
-    private function buildTransactionUnion(bool $filterByContra): \Illuminate\Database\Query\Builder
+    private function buildTransactionQuery(bool $filterByContra): \Illuminate\Database\Query\Builder
     {
         $partyName = 'COALESCE(businesses.legal_name, CONCAT(persons.first_name, \' \', persons.last_name))';
 
-        $withPartyJoins = fn ($query) => $query
+        // Correlated subquery: the account_id of the entry's one other line,
+        // or NULL when there isn't exactly one.
+        $contraSubquery = 'select ol.account_id from journal_lines ol
+            where ol.journal_entry_id = journal_lines.journal_entry_id
+                and ol.id != journal_lines.id
+                and (
+                    select count(*) from journal_lines ol2
+                    where ol2.journal_entry_id = journal_lines.journal_entry_id
+                        and ol2.id != journal_lines.id
+                ) = 1';
+
+        return DB::table('journal_lines')
+            ->join('journal_entries', 'journal_entries.id', '=', 'journal_lines.journal_entry_id')
+            ->leftJoin('documents', 'documents.id', '=', 'journal_entries.document_id')
             ->leftJoin('businesses', 'businesses.id', '=', 'documents.party_id')
-            ->leftJoin('persons', 'persons.id', '=', 'documents.party_id');
-
-        $withDateRange = fn ($query) => $query
-            ->when($this->dateFrom, fn ($q) => $q->whereDate('documents.issue_date', '>=', $this->dateFrom))
-            ->when($this->dateTo, fn ($q) => $q->whereDate('documents.issue_date', '<=', $this->dateTo));
-
-        // The contra is a computed COALESCE expression, so it needs a raw equality check bound to contraAccountId.
-        $withContraCoalesce = fn ($query, $coalesceExpr) => $filterByContra
-            ? $query->when($this->contraAccountId, fn ($q) => $q->whereRaw("{$coalesceExpr} = ?", [$this->contraAccountId]))
-            : $query;
-
-        // No single account applies (line splits across the invoice), so any contra filter excludes these rows entirely.
-        $withContraExcluded = fn ($query) => $filterByContra
-            ? $query->when($this->contraAccountId, fn ($q) => $q->whereRaw('1 = 0'))
-            : $query;
-
-        $withContraColumn = fn ($query, $column) => $filterByContra
-            ? $query->when($this->contraAccountId, fn ($q) => $q->where($column, $this->contraAccountId))
-            : $query;
-
-        // Individual line-item postings (expense/income allocations). The contra
-        // is the invoice header's control account (payable for purchases, receivable for sales).
-        $lineRows = $withContraCoalesce(
-            $withDateRange($withPartyJoins(
-                DB::table('document_lines')->join('documents', 'documents.id', '=', 'document_lines.document_id')
-            ))
-                ->leftJoin('accounts as contra_accounts', function ($join) {
-                    $join->on(DB::raw('COALESCE(documents.payable_account_id, documents.receivable_account_id)'), '=', 'contra_accounts.id');
-                })
-                ->where('document_lines.account_id', $this->accountId)
-                ->whereNull('document_lines.deleted_at'),
-            'COALESCE(documents.payable_account_id, documents.receivable_account_id)'
-        )
-            ->selectRaw("'line' as source, documents.id as document_id, documents.issue_date, documents.document_number, documents.document_type, documents.status as document_status, {$partyName} as party_name, document_lines.description as description, document_lines.line_total as amount, contra_accounts.id as contra_account_id, contra_accounts.name as contra_account_name");
-
-        // Sales invoice header → debit against this account when it's the client's receivable account.
-        // The contra is spread across multiple income-account lines, so it can't be reduced to one account.
-        $salesHeaderRows = $withContraExcluded(
-            $withDateRange($withPartyJoins(DB::table('documents')))
-                ->where('documents.document_type', 'sales_invoice')
-                ->where('documents.receivable_account_id', $this->accountId)
-                ->whereNull('documents.deleted_at')
-        )
-            ->selectRaw("'invoice_total' as source, documents.id as document_id, documents.issue_date, documents.document_number, documents.document_type, documents.status as document_status, {$partyName} as party_name, 'Invoice total' as description, documents.total as amount, NULL as contra_account_id, 'Various' as contra_account_name");
-
-        // Purchase invoice header → credit against this account when it's the supplier's payable account.
-        $purchaseHeaderRows = $withContraExcluded(
-            $withDateRange($withPartyJoins(DB::table('documents')))
-                ->where('documents.document_type', 'purchase_invoice')
-                ->where('documents.payable_account_id', $this->accountId)
-                ->whereNull('documents.deleted_at')
-        )
-            ->selectRaw("'invoice_total' as source, documents.id as document_id, documents.issue_date, documents.document_number, documents.document_type, documents.status as document_status, {$partyName} as party_name, 'Invoice total' as description, documents.total as amount, NULL as contra_account_id, 'Various' as contra_account_name");
-
-        // Payment documents can touch this account on any of three legs.
-        $paymentReceivableRows = $withContraColumn(
-            $withDateRange($withPartyJoins(DB::table('documents')))
-                ->leftJoin('accounts as contra_accounts', 'contra_accounts.id', '=', 'documents.contra_account_id')
-                ->where('documents.document_type', 'payment')
-                ->where('documents.receivable_account_id', $this->accountId)
-                ->whereNull('documents.deleted_at'),
-            'documents.contra_account_id'
-        )
-            ->selectRaw("'payment' as source, documents.id as document_id, documents.issue_date, documents.document_number, documents.document_type, documents.status as document_status, {$partyName} as party_name, 'Payment received' as description, documents.total as amount, contra_accounts.id as contra_account_id, contra_accounts.name as contra_account_name");
-
-        $paymentPayableRows = $withContraColumn(
-            $withDateRange($withPartyJoins(DB::table('documents')))
-                ->leftJoin('accounts as contra_accounts', 'contra_accounts.id', '=', 'documents.contra_account_id')
-                ->where('documents.document_type', 'payment')
-                ->where('documents.payable_account_id', $this->accountId)
-                ->whereNull('documents.deleted_at'),
-            'documents.contra_account_id'
-        )
-            ->selectRaw("'payment' as source, documents.id as document_id, documents.issue_date, documents.document_number, documents.document_type, documents.status as document_status, {$partyName} as party_name, 'Payment made' as description, documents.total as amount, contra_accounts.id as contra_account_id, contra_accounts.name as contra_account_name");
-
-        $paymentContraRows = $withContraCoalesce(
-            $withDateRange($withPartyJoins(DB::table('documents')))
-                ->leftJoin('accounts as contra_accounts', function ($join) {
-                    $join->on(DB::raw('COALESCE(documents.receivable_account_id, documents.payable_account_id)'), '=', 'contra_accounts.id');
-                })
-                ->where('documents.document_type', 'payment')
-                ->where('documents.contra_account_id', $this->accountId)
-                ->whereNull('documents.deleted_at'),
-            'COALESCE(documents.receivable_account_id, documents.payable_account_id)'
-        )
-            ->selectRaw("'payment' as source, documents.id as document_id, documents.issue_date, documents.document_number, documents.document_type, documents.status as document_status, {$partyName} as party_name, 'Payment' as description, documents.total as amount, contra_accounts.id as contra_account_id, contra_accounts.name as contra_account_name");
-
-        return $lineRows
-            ->unionAll($salesHeaderRows)
-            ->unionAll($purchaseHeaderRows)
-            ->unionAll($paymentReceivableRows)
-            ->unionAll($paymentPayableRows)
-            ->unionAll($paymentContraRows);
+            ->leftJoin('persons', 'persons.id', '=', 'documents.party_id')
+            ->leftJoin('accounts as contra_accounts', function ($join) use ($contraSubquery) {
+                $join->on('contra_accounts.id', '=', DB::raw("({$contraSubquery})"));
+            })
+            ->where('journal_lines.account_id', $this->accountId)
+            ->when($this->dateFrom, fn ($q) => $q->whereDate('journal_entries.entry_date', '>=', $this->dateFrom))
+            ->when($this->dateTo, fn ($q) => $q->whereDate('journal_entries.entry_date', '<=', $this->dateTo))
+            ->when($filterByContra && $this->contraAccountId, fn ($q) => $q->whereRaw("({$contraSubquery}) = ?", [$this->contraAccountId]))
+            ->selectRaw("
+                journal_entries.source,
+                journal_entries.entry_date as issue_date,
+                documents.id as document_id,
+                documents.document_number,
+                documents.document_type,
+                documents.status as document_status,
+                {$partyName} as party_name,
+                journal_lines.description as description,
+                (case when journal_lines.debit > 0 then journal_lines.debit else journal_lines.credit end) as amount,
+                contra_accounts.id as contra_account_id,
+                contra_accounts.name as contra_account_name
+            ");
     }
 
     public function with(): array
@@ -166,7 +115,7 @@ new #[Layout('components.layout.app')] class extends Component
         // dataset — never the full chart of accounts. Computed without the contra filter
         // itself applied, so selecting one option doesn't hide its siblings.
         $availableContraAccountIds = DB::query()
-            ->fromSub($this->buildTransactionUnion(filterByContra: false), 'contra_candidates')
+            ->fromSub($this->buildTransactionQuery(filterByContra: false), 'contra_candidates')
             ->whereNotNull('contra_account_id')
             ->distinct()
             ->pluck('contra_account_id');
@@ -180,7 +129,7 @@ new #[Layout('components.layout.app')] class extends Component
             default => 'issue_date',
         };
 
-        $lines = $this->buildTransactionUnion(filterByContra: true)
+        $lines = $this->buildTransactionQuery(filterByContra: true)
             ->orderBy($sortColumn, $this->sortDir)
             ->paginate(25);
 
@@ -309,9 +258,6 @@ new #[Layout('components.layout.app')] class extends Component
                             </td>
                             <td class="px-4 py-3 text-ink-soft">
                                 {{ $line->description ?? '—' }}
-                                @if($line->source !== 'line')
-                                    <span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-surface-alt text-ink-muted">header</span>
-                                @endif
                             </td>
                             <td class="px-4 py-3 text-ink-soft">
                                 {{ $line->contra_account_name ?? '—' }}
