@@ -36,8 +36,10 @@
 │   │                 MagikaResult
 │   └── Settings/   — CompanySettings, CurrencySettings
 ├── Accounting/
-│   ├── Models/     — Account, AccountGroup, AccountType
-│   ├── Services/   — FinancialYearService
+│   ├── Models/     — Account, AccountGroup, AccountType, JournalEntry,
+│   │                 JournalLine
+│   ├── Services/   — FinancialYearService, JournalService (general
+│   │                 ledger), AccountBalanceRollup
 │   └── Settings/   — AccountingSettings
 ├── Purchasing/
 │   ├── Models/     — PostingRule
@@ -58,7 +60,7 @@
                     <thead><tr><th>Module</th><th>Responsibility</th><th>Key models</th></tr></thead>
                     <tbody>
                         <tr><td>Core</td><td>Users, contacts, shared party directory, the document model and LLM infrastructure used by all other modules</td><td>User, Party, Person, Business, Document, DocumentLine, LlmLog, BankTemplate</td></tr>
-                        <tr><td>Accounting</td><td>General ledger structure</td><td>Account, AccountGroup, AccountType</td></tr>
+                        <tr><td>Accounting</td><td>Chart of accounts and the general ledger — see <a href="journal.html">Journal</a></td><td>Account, AccountGroup, AccountType, JournalEntry, JournalLine</td></tr>
                         <tr><td>Purchasing</td><td>Supplier invoice ingestion pipeline and posting rules; delegates LLM and document services to Core</td><td>PostingRule, ExtractedInvoice</td></tr>
                         <tr><td>Billing</td><td>Sales invoices, recurring billing, and payment terms</td><td>PaymentTerm, RecurringInvoice</td></tr>
                     </tbody>
@@ -69,7 +71,7 @@
                 <p>Because Spatie packages default to integer primary keys in their published migrations, those migrations must be updated to use <code>uuidMorphs</code> instead of <code>morphs</code> when the project uses UUID keys. This has already been done for all Spatie packages in this project.</p>
 
                 <h2 id="the-morph-map">The morph map</h2>
-                <p>Merlin registers 18 short-string aliases for every model that participates in polymorphic relationships, via <code>Relation::enforceMorphMap()</code> in <code>AppServiceProvider::boot()</code>. This prevents stored morph strings (in audit logs, permissions, media, and activity records) from becoming invalid if a class is renamed or moved to a different namespace.</p>
+                <p>Merlin registers 22 short-string aliases for every model that participates in polymorphic relationships, via <code>Relation::enforceMorphMap()</code> in <code>AppServiceProvider::boot()</code>. This prevents stored morph strings (in audit logs, permissions, media, and activity records) from becoming invalid if a class is renamed or moved to a different namespace.</p>
                 <p>Examples: <code>'user'</code> → <code>User::class</code>, <code>'document'</code> → <code>Document::class</code>, <code>'party'</code> → <code>Party::class</code>. When adding a new model that will be used in a polymorphic relationship, register its alias in the morph map <em>before</em> writing any data.</p>
 
                 <h2 id="volt-pages-and-the-crud-framework">Volt pages and the CRUD framework</h2>
@@ -88,13 +90,17 @@
                 <ul>
                     <li><code>LlmService</code> — calls the Claude API; used by both the invoice and bank statement pipelines. Implements the Haiku→Sonnet quality fallback and the <code>ModelHealthService</code> model-retirement circuit breaker.</li>
                     <li><code>BankStatementProcessingService</code> — orchestrates bank statement extraction: text extraction → LLM → one <code>DocumentLine</code> per transaction, with suggested GL account and optional linked sales invoice. Its <code>process()</code> method only <em>appends</em> lines; callers must delete existing lines before reprocessing.</li>
-                    <li><code>DocumentService</code> (Core) — owns status transitions and reprocessing for bank statements.</li>
+                    <li><code>DocumentService</code> (Core) — owns status transitions and reprocessing for all document types, and posts to the general ledger via <code>JournalService</code> at every transition that changes what's owed (sending a sales invoice, posting a purchase invoice, recording a payment, applying a credit note).</li>
                 </ul>
                 <p>Key services in the Purchasing module:</p>
                 <ul>
                     <li><code>InvoiceProcessingService</code> — orchestrates the full seven-step invoice pipeline (text extraction → Magika → LLM → supplier resolution → account resolution → exchange rates → posting rules). Its <code>process(Document $doc)</code> method only <em>appends</em> lines.</li>
                 </ul>
-                <p>See <a href="invoice-pipeline.html">The Invoice Pipeline</a> for a full description of each pipeline step, <a href="bank-statements.html">Bank Statements</a> for the statement extraction pipeline, and <a href="document-lifecycle.html">Document Lifecycle</a> for the status transition map.</p>
+                <p>Key service in the Accounting module:</p>
+                <ul>
+                    <li><code>JournalService</code> — the sole writer of <code>journal_entries</code>/<code>journal_lines</code>. Balanced-or-reject, idempotent per document and event, reverses by writing a mirrored entry rather than mutating history. See <a href="journal.html">Journal (General Ledger)</a>.</li>
+                </ul>
+                <p>See <a href="invoice-pipeline.html">The Invoice Pipeline</a> for a full description of each pipeline step, <a href="bank-statements.html">Bank Statements</a> for the statement extraction pipeline, <a href="document-lifecycle.html">Document Lifecycle</a> for the status transition map, and <a href="journal.html">Journal (General Ledger)</a> for how postings work.</p>
             </article>
         </main>
 

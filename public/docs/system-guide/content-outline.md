@@ -496,6 +496,36 @@ Source: `app/Modules/Accounting/Models/{AccountGroup,AccountType}.php`,
 - **Managing account groups** — CRUD on `/account-groups`.
 - **Permissions** — `account-groups-view-any|view|create|update|delete|restore|force-delete`.
 
+### journal.html — Journal (General Ledger)
+Source: `app/Modules/Accounting/{Models/JournalEntry.php,Models/JournalLine.php,Services/JournalService.php}`,
+`app/Modules/Core/Services/DocumentService.php`, `app/Modules/Core/Models/DocumentLine.php`.
+
+- **Why a journal** — `journal_entries`/`journal_lines` replaced per-report
+  re-derivation from `documents`/`document_lines` after that duplication let a
+  voided sales invoice's revenue leak through one report while correctly
+  disappearing from others.
+- **Shape of an entry** — `journal_entries` (document_id, entry_date, source,
+  description, reversed_by_id) / `journal_lines` (journal_entry_id, account_id,
+  party_id, debit, credit, description). `JournalService::post()` rejects an
+  unbalanced entry and is idempotent per (document_id, source).
+- **Append-only** — no `update()`/`delete()` on either table.
+  `JournalService::reverse()` swaps debit/credit on a new entry and stamps
+  `reversed_by_id` on the original.
+- **Posted documents are immutable** — `DocumentLine::saving()`/`deleting()`
+  throw `PostedDocumentImmutableException` once the document has a
+  non-reversed entry. Bypassed by `saveQuietly()` (FX finalisation, VAT
+  correction), both restricted to not-yet-posted invoices.
+- **What posts and when** — table of event → DocumentService method → entry
+  shape (sales invoice sent/voided, purchase invoice posted, payment,
+  credit note applied).
+- **Skip vs. fail** — missing account config skips posting silently (mirrors
+  the old report-time `whereNotNull` guards); a VAT-carrying sales invoice
+  with no configured VAT liability account throws instead.
+- **Which reports read the journal** — trial-balance/balance-sheet/
+  income-statement/account-transaction-view do; the four by-account/by-client/
+  by-supplier analytical reports deliberately don't (need invoice counts,
+  balance_due, or per-line VAT the journal doesn't preserve).
+
 ---
 
 ## Reports
