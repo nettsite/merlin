@@ -17,7 +17,7 @@ class ClaudeChatService
     public function __construct()
     {
         $this->apiKey = config('services.anthropic.key');
-        $this->model = config('services.anthropic.model', 'claude-sonnet-4-6');
+        $this->model = config('services.anthropic.model_fast', 'claude-haiku-4-5-20251001');
     }
 
     /**
@@ -33,7 +33,7 @@ class ClaudeChatService
             ->withHeaders([
                 'x-api-key' => $this->apiKey,
                 'anthropic-version' => '2023-06-01',
-                'anthropic-beta' => 'prompt-caching-2024-07-31',
+                'anthropic-beta' => 'prompt-caching-2024-07-31,extended-cache-ttl-2025-04-11',
             ])
             ->post(self::API_URL, [
                 'model' => $this->model,
@@ -42,7 +42,7 @@ class ClaudeChatService
                     [
                         'type' => 'text',
                         'text' => $this->systemPrompt($docs),
-                        'cache_control' => ['type' => 'ephemeral'],
+                        'cache_control' => ['type' => 'ephemeral', 'ttl' => '1h'],
                     ],
                 ],
                 'messages' => $messages,
