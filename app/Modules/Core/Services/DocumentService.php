@@ -3,9 +3,9 @@
 namespace App\Modules\Core\Services;
 
 use App\Exceptions\InvalidDocumentStateException;
-use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Services\JournalService;
 use App\Modules\Billing\Settings\BillingSettings;
+use App\Modules\Core\Models\BankReconciliationMatch;
 use App\Modules\Core\Models\Document;
 use App\Modules\Core\Models\DocumentActivity;
 use App\Modules\Core\Models\DocumentLine;
@@ -275,6 +275,15 @@ class DocumentService
         $this->transition($doc, 'reviewed', $by, 'Marked as reviewed.');
     }
 
+    /**
+     * Close a bank/credit-card statement out once its lines are reconciled.
+     * Never posts anything — statements are evidence, not a posting source.
+     */
+    public function markStatementReconciled(Document $doc, User $by): void
+    {
+        $this->transition($doc, 'reconciled', $by, 'Reconciliation complete.');
+    }
+
     public function approve(Document $doc, User $by): void
     {
         $this->transition($doc, 'approved', $by, 'Approved for payment.');
@@ -328,162 +337,87 @@ class DocumentService
     }
 
     /**
-     * Post a bank/credit-card statement and settle any invoice-linked lines.
-     *
-     * For each credit line with a linked_document_id, calls recordPayment()
-     * on the linked sales invoice and creates a DocumentRelationship so the
-     * invoice's payment history shows this statement as the source.
+     * Record that a bank/credit-card statement line has been reconciled
+     * against a document — an existing payment recorded before the
+     * statement arrived, in the common case, or one just created for this
+     * line (see reconcileToGlAccount()). No posting happens here: the
+     * matched document is assumed already posted, or was posted by whatever
+     * created it. This method only records the link. updateOrCreate() so
+     * re-confirming (or correcting) a match is idempotent.
      */
-    public function postBankStatement(Document $doc, User $by): void
+    public function matchReconciliation(DocumentLine $statementLine, Document $document, User $by): BankReconciliationMatch
     {
-        DB::transaction(function () use ($doc, $by) {
-            $this->transition($doc, 'posted', $by, 'Posted to the general ledger.');
+        if (! in_array($statementLine->document->document_type, ['bank_statement', 'credit_card_statement'], true)) {
+            throw new \InvalidArgumentException('matchReconciliation only accepts lines on a bank or credit card statement.');
+        }
 
-            $advanceAccountId = Account::where('code', '2400')->value('id');
+        return BankReconciliationMatch::updateOrCreate(
+            ['statement_line_id' => $statementLine->id],
+            ['document_id' => $document->id, 'matched_by' => $by->id, 'matched_at' => now()],
+        );
+    }
 
-            foreach ($doc->lines()->with('linkedDocument')->get() as $line) {
-                // Only process credits (money received into the bank account).
-                if ((float) $line->unit_price <= 0) {
-                    continue;
-                }
-
-                $invoice = $line->linkedDocument;
-
-                // If no explicit link or the linked invoice is already settled,
-                // fall back to the newest outstanding invoice predating this transaction.
-                if ($invoice === null || ! in_array($invoice->status, ['sent', 'partially_paid'])) {
-                    $txDate = isset($line->metadata['transaction_date'])
-                        ? Carbon::parse($line->metadata['transaction_date'])
-                        : ($doc->issue_date ?? now());
-
-                    $invoice = Document::salesInvoices()
-                        ->whereIn('status', ['sent', 'partially_paid'])
-                        ->where('balance_due', '>', 0)
-                        ->whereDate('issue_date', '<=', $txDate)
-                        ->orderByDesc('issue_date')
-                        ->first();
-
-                    if ($invoice === null) {
-                        // No invoice to match — post to Over and Advance Payments.
-                        $line->account_id = $advanceAccountId;
-                        $line->saveQuietly();
-
-                        continue;
-                    }
-
-                    $line->linked_document_id = $invoice->id;
-                    $line->saveQuietly();
-                }
-
-                $amount = abs((float) $line->unit_price);
-                $balanceDue = (float) $invoice->balance_due;
-
-                if ($amount <= 0 || $balanceDue <= 0) {
-                    continue;
-                }
-
-                $excess = max(0.0, $amount - $balanceDue);
-                $applyAmount = $excess > 0.01 ? $balanceDue : $amount;
-
-                $this->createPaymentDocument($invoice, $applyAmount, $doc->issue_date ?? now(), $doc->reference, $doc->contra_account_id);
-
-                $this->recordPayment(
-                    doc: $invoice,
-                    amount: $applyAmount,
-                    date: $doc->issue_date ?? now(),
-                    reference: $doc->reference,
-                );
-
-                $this->linkDocuments($doc, $invoice, 'payment_for');
-
-                if ($excess > 0.01) {
-                    // Shrink the matched line to the applied amount so the AR
-                    // account is only credited by what was actually cleared.
-                    $line->unit_price = $applyAmount;
-                    $line->line_total = $applyAmount;
-                    $line->saveQuietly();
-
-                    // Create an unallocated-receipt line for the excess. No
-                    // account assigned — user must allocate manually. Both lines
-                    // together still sum to the original bank credit, so the
-                    // bank account reconciles.
-                    $nextLineNumber = $doc->lines()->max('line_number') + 1;
-                    $doc->lines()->create([
-                        'line_number' => $nextLineNumber,
-                        'type' => 'service',
-                        'description' => "Unallocated receipt — excess over invoice {$invoice->document_number}",
-                        'quantity' => 1,
-                        'unit_price' => $excess,
-                        'line_total' => $excess,
-                        'tax_rate' => null,
-                        'tax_amount' => 0,
-                        'account_id' => $advanceAccountId,
-                        'linked_document_id' => null,
-                        'metadata' => [
-                            'unallocated_receipt' => true,
-                            'source_invoice_id' => $invoice->id,
-                            'source_invoice_number' => $invoice->document_number,
-                            'original_credit_amount' => $amount,
-                        ],
-                    ]);
-
-                    $currency = $doc->currency ?? $this->currencySettings->base_currency;
-                    $this->recordActivity(
-                        $doc, null, 'overpayment_noted',
-                        sprintf(
-                            '%s %.2f received against invoice %s (balance due %.2f): %.2f applied, %.2f split to unallocated receipt line.',
-                            $currency, $amount, $invoice->document_number ?? $invoice->id,
-                            $balanceDue, $applyAmount, $excess,
-                        ),
-                        [
-                            'invoice_id' => $invoice->id,
-                            'invoice_number' => $invoice->document_number,
-                            'credit_amount' => $amount,
-                            'applied_amount' => $applyAmount,
-                            'unallocated_amount' => $excess,
-                            'currency' => $currency,
-                        ],
-                    );
-                }
-            }
-        });
+    public function unmatchReconciliation(DocumentLine $statementLine): void
+    {
+        BankReconciliationMatch::where('statement_line_id', $statementLine->id)->delete();
     }
 
     /**
-     * Create an inbound payment document for a bank-statement settlement,
-     * linked to the invoice it settles. Mirrors BillingService::recordPayment()'s
-     * payment document, but for the bank-statement reconciliation path, which
-     * previously mutated the invoice directly without leaving a payment record
-     * (so the balance sheet never credited AR or debited bank for it).
+     * For a statement line with no corresponding document at all — a bank
+     * charge, interest, or anything else nobody recorded ahead of time —
+     * create a payment Document as the housing record and post a plain
+     * two-line entry directly (this account vs the statement's bank
+     * account), then mark the line reconciled against it. Bypasses
+     * postPaymentJournal() because that method requires a receivable or
+     * payable account; a bank charge has neither.
      */
-    private function createPaymentDocument(Document $invoice, float $amount, CarbonInterface $date, ?string $reference, ?string $contraAccountId): Document
+    public function reconcileToGlAccount(DocumentLine $statementLine, string $glAccountId, User $by): Document
     {
-        $payment = Document::create([
-            'document_type' => 'payment',
-            'direction' => 'inbound',
-            'status' => 'posted',
-            'party_id' => $invoice->party_id,
-            'issue_date' => $date->toDateString(),
-            'currency' => $invoice->currency,
-            'exchange_rate' => $invoice->exchange_rate ?? 1.0,
-            'subtotal' => $amount,
-            'tax_total' => 0,
-            'total' => $amount,
-            'receivable_account_id' => $invoice->receivable_account_id,
-            'contra_account_id' => $contraAccountId,
-            'source' => 'system',
-            'reference' => $reference,
-        ]);
+        $statement = $statementLine->document;
+        $amount = abs((float) $statementLine->unit_price);
+        $direction = (float) $statementLine->unit_price >= 0 ? 'inbound' : 'outbound';
+        $date = isset($statementLine->metadata['transaction_date'])
+            ? Carbon::parse($statementLine->metadata['transaction_date'])
+            : ($statement->issue_date ?? now());
 
-        DocumentRelationship::create([
-            'parent_document_id' => $invoice->id,
-            'child_document_id' => $payment->id,
-            'relationship_type' => 'payment_for',
-        ]);
+        return DB::transaction(function () use ($statementLine, $statement, $glAccountId, $amount, $direction, $date, $by): Document {
+            $entry = Document::create([
+                'document_type' => 'payment',
+                'direction' => $direction,
+                'status' => 'posted',
+                'issue_date' => $date->toDateString(),
+                'currency' => $statement->currency,
+                'exchange_rate' => 1.0,
+                'subtotal' => $amount,
+                'tax_total' => 0,
+                'total' => $amount,
+                'contra_account_id' => $statement->contra_account_id,
+                'reference' => $statementLine->description,
+                'source' => 'reconciliation',
+            ]);
 
-        $this->postPaymentJournal($payment);
+            $lines = $direction === 'inbound'
+                ? [
+                    ['account_id' => $statement->contra_account_id, 'debit' => $amount, 'description' => $statementLine->description],
+                    ['account_id' => $glAccountId, 'credit' => $amount, 'description' => $statementLine->description],
+                ]
+                : [
+                    ['account_id' => $glAccountId, 'debit' => $amount, 'description' => $statementLine->description],
+                    ['account_id' => $statement->contra_account_id, 'credit' => $amount, 'description' => $statementLine->description],
+                ];
 
-        return $payment;
+            $this->journal->post(
+                source: 'reconciliation_gl_entry',
+                date: $date,
+                description: "Reconciled: {$statementLine->description}",
+                lines: $lines,
+                document: $entry,
+            );
+
+            $this->matchReconciliation($statementLine, $entry, $by);
+
+            return $entry;
+        });
     }
 
     /**
@@ -493,9 +427,8 @@ class DocumentService
      * never carry lines, so there's nothing to group by account. Public so
      * BillingService::recordPayment() (the manual sales-payment path) can
      * call it too; it creates its own payment Document independently of
-     * createPaymentDocument() and recordPurchasePayment() below. Silently
-     * skipped when the contra account isn't configured, same guard pattern
-     * as the invoice postings.
+     * recordPurchasePayment() below. Silently skipped when the contra
+     * account isn't configured, same guard pattern as the invoice postings.
      */
     public function postPaymentJournal(Document $payment): void
     {
@@ -877,17 +810,20 @@ class DocumentService
                 'issued' => ['applied'],
                 'applied' => [],
             ],
+            // Statements never post to the ledger — they're reconciliation
+            // evidence. 'reconciled' just closes the statement out once its
+            // lines are matched; nothing in the journal depends on it.
             'bank_statement' => [
                 'queued' => ['received'],
-                'received' => ['reviewed', 'posted'],
-                'reviewed' => ['posted'],
-                'posted' => [],
+                'received' => ['reviewed', 'reconciled'],
+                'reviewed' => ['reconciled'],
+                'reconciled' => [],
             ],
             'credit_card_statement' => [
                 'queued' => ['received'],
-                'received' => ['reviewed', 'posted'],
-                'reviewed' => ['posted'],
-                'posted' => [],
+                'received' => ['reviewed', 'reconciled'],
+                'reviewed' => ['reconciled'],
+                'reconciled' => [],
             ],
         ];
     }

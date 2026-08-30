@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class DocumentLine extends Model
@@ -146,6 +147,12 @@ class DocumentLine extends Model
     public function llmSuggestedAccount(): BelongsTo
     {
         return $this->belongsTo(Account::class, 'llm_account_suggestion');
+    }
+
+    /** @return HasOne<BankReconciliationMatch, $this> */
+    public function reconciliationMatch(): HasOne
+    {
+        return $this->hasOne(BankReconciliationMatch::class, 'statement_line_id');
     }
 
     // Calculations

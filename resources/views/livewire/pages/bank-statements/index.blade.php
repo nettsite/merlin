@@ -1,7 +1,9 @@
 <?php
 
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Billing\Services\BillingService;
 use App\Modules\Core\Jobs\ProcessBankStatementDocument;
+use App\Modules\Core\Models\BankReconciliationMatch;
 use App\Modules\Core\Models\BankTemplate;
 use App\Modules\Core\Models\Document;
 use App\Modules\Core\Models\DocumentLine;
@@ -9,6 +11,8 @@ use App\Modules\Core\Services\DocumentService;
 use App\Modules\Core\Services\Pdf\MagikaService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
+use Carbon\CarbonInterface;
+use Illuminate\Support\Carbon;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 use Livewire\WithFileUploads;
@@ -48,12 +52,12 @@ new #[Layout('components.layout.app')] class extends Component
 
     public string $reprocessHint = '';
 
-    // Inline line editing
-    public ?string $editingLineId = null;
+    // Reconciliation — per-line "create & match" pickers
+    public ?string $creatingForLineId = null;
 
-    public string $editingLineAccountId = '';
+    public string $createInvoiceId = '';
 
-    public string $editingLineLinkedDocumentId = '';
+    public string $createGlAccountId = '';
 
     public function mount(): void
     {
@@ -182,8 +186,7 @@ new #[Layout('components.layout.app')] class extends Component
     {
         $this->authorize('view', Document::findOrFail($id));
         $this->detailId = $id;
-        $this->editingLineId = null;
-        $this->editingLineAccountId = '';
+        $this->creatingForLineId = null;
         $this->showDetail = true;
     }
 
@@ -191,47 +194,183 @@ new #[Layout('components.layout.app')] class extends Component
     {
         $this->showDetail = false;
         $this->detailId = null;
-        $this->editingLineId = null;
+        $this->creatingForLineId = null;
     }
 
     // -------------------------------------------------------------------------
-    // Inline line account editing
+    // Reconciliation
     // -------------------------------------------------------------------------
 
-    public function editLine(string $lineId): void
+    /**
+     * Confirm a line against a specific document — either the one the
+     * extraction suggested, or one picked from the candidate list.
+     */
+    public function matchLine(string $lineId, string $documentId): void
     {
         $line = DocumentLine::findOrFail($lineId);
         $this->authorize('update', $line->document);
-        $this->editingLineId = $lineId;
-        $this->editingLineAccountId = $line->account_id ?? '';
-        $this->editingLineLinkedDocumentId = $line->linked_document_id ?? '';
+
+        /** @var \App\Modules\Core\Models\User $user */
+        $user = Auth::user();
+        app(DocumentService::class)->matchReconciliation($line, Document::findOrFail($documentId), $user);
     }
 
-    public function saveLine(): void
+    /**
+     * Confirm every line that already has a suggested match — the
+     * one-click batch path for a statement where most lines line up
+     * against payments already recorded.
+     */
+    public function confirmAllSuggested(): void
     {
-        $line = DocumentLine::findOrFail($this->editingLineId);
+        $statement = Document::findOrFail($this->detailId);
+        $this->authorize('update', $statement);
+
+        /** @var \App\Modules\Core\Models\User $user */
+        $user = Auth::user();
+        $svc = app(DocumentService::class);
+
+        foreach ($statement->lines as $line) {
+            if ($line->reconciliationMatch !== null) {
+                continue;
+            }
+
+            $suggestion = $this->suggestedMatchFor($line, $statement);
+
+            if ($suggestion !== null) {
+                $svc->matchReconciliation($line, $suggestion, $user);
+            }
+        }
+    }
+
+    public function unmatchLine(string $lineId): void
+    {
+        $line = DocumentLine::findOrFail($lineId);
+        $this->authorize('update', $line->document);
+        app(DocumentService::class)->unmatchReconciliation($line);
+    }
+
+    public function openCreateForLine(string $lineId): void
+    {
+        $line = DocumentLine::findOrFail($lineId);
+        $this->authorize('update', $line->document);
+        $this->creatingForLineId = $lineId;
+        $this->createInvoiceId = '';
+        $this->createGlAccountId = '';
+    }
+
+    public function cancelCreateForLine(): void
+    {
+        $this->creatingForLineId = null;
+        $this->createInvoiceId = '';
+        $this->createGlAccountId = '';
+    }
+
+    /**
+     * Create the payment nobody recorded ahead of time, against the invoice
+     * this line belongs to, and match the line to it in one step. A credit
+     * line pays a sales invoice; a debit line pays a purchase invoice.
+     */
+    public function createPaymentForLine(string $lineId): void
+    {
+        $line = DocumentLine::findOrFail($lineId);
+        $statement = $line->document;
+        $this->authorize('update', $statement);
+
+        $this->validate(['createInvoiceId' => 'required|uuid|exists:documents,id']);
+
+        $invoice = Document::findOrFail($this->createInvoiceId);
+        $amount = abs((float) $line->unit_price);
+        $date = $this->lineTransactionDate($line, $statement);
+        /** @var \App\Modules\Core\Models\User $user */
+        $user = Auth::user();
+
+        $data = [
+            'amount' => $amount,
+            'date' => $date->toDateString(),
+            'reference' => $statement->reference,
+            'contra_account_id' => $statement->contra_account_id,
+        ];
+
+        $payment = $line->unit_price >= 0
+            ? app(BillingService::class)->recordPayment($invoice, $data, $user)
+            : app(DocumentService::class)->recordPurchasePayment($invoice, $data, $user);
+
+        app(DocumentService::class)->matchReconciliation($line, $payment, $user);
+
+        $this->creatingForLineId = null;
+        $this->createInvoiceId = '';
+    }
+
+    /**
+     * A line with no invoice behind it at all — a bank charge, interest, a
+     * card fee. Posts a plain two-line entry to the chosen GL account and
+     * matches the line to it.
+     */
+    public function postLineToGlAccount(string $lineId): void
+    {
+        $line = DocumentLine::findOrFail($lineId);
         $this->authorize('update', $line->document);
 
-        $this->validate([
-            'editingLineAccountId'       => 'nullable|uuid|exists:accounts,id',
-            'editingLineLinkedDocumentId' => 'nullable|uuid|exists:documents,id',
-        ]);
+        $this->validate(['createGlAccountId' => 'required|uuid|exists:accounts,id']);
 
-        $line->update([
-            'account_id'         => $this->editingLineAccountId ?: null,
-            'linked_document_id' => $this->editingLineLinkedDocumentId ?: null,
-        ]);
+        /** @var \App\Modules\Core\Models\User $user */
+        $user = Auth::user();
+        app(DocumentService::class)->reconcileToGlAccount($line, $this->createGlAccountId, $user);
 
-        $this->editingLineId = null;
-        $this->editingLineAccountId = '';
-        $this->editingLineLinkedDocumentId = '';
+        $this->creatingForLineId = null;
+        $this->createGlAccountId = '';
     }
 
-    public function cancelEditLine(): void
+    public function reconcileStatement(string $id): void
     {
-        $this->editingLineId = null;
-        $this->editingLineAccountId = '';
-        $this->editingLineLinkedDocumentId = '';
+        $doc = Document::findOrFail($id);
+        $this->authorize('update', $doc);
+        /** @var \App\Modules\Core\Models\User $user */
+        $user = Auth::user();
+        app(DocumentService::class)->markStatementReconciled($doc, $user);
+
+        if ($this->detailId === $id) {
+            $this->closeDetail();
+        }
+    }
+
+    private function lineTransactionDate(DocumentLine $line, Document $statement): CarbonInterface
+    {
+        return isset($line->metadata['transaction_date'])
+            ? Carbon::parse($line->metadata['transaction_date'])
+            : ($statement->issue_date ?? now());
+    }
+
+    /**
+     * The best existing, unmatched document on this statement's bank
+     * account within tolerance of this line's amount and date — the
+     * candidate the reconciliation screen leads with. Prefers the
+     * extraction's own suggestion (linked_document_id, matched on invoice
+     * number in the statement text) when it's still unmatched.
+     */
+    private function suggestedMatchFor(DocumentLine $line, Document $statement): ?Document
+    {
+        if ($line->linkedDocument !== null && $line->linkedDocument->document_type === 'sales_invoice') {
+            return null; // an invoice isn't a payment — surfaced separately as "create payment for this invoice"
+        }
+
+        $amount = abs((float) $line->unit_price);
+        $direction = $line->unit_price >= 0 ? 'inbound' : 'outbound';
+        $date = $this->lineTransactionDate($line, $statement);
+        $matchedDocumentIds = BankReconciliationMatch::pluck('document_id');
+
+        // Ordering by date proximity in SQL needs a dialect-specific date-diff
+        // function (DATEDIFF on MariaDB, julianday() on SQLite); the ±5 day
+        // window keeps the candidate set small enough to just sort in PHP.
+        return Document::where('contra_account_id', $statement->contra_account_id)
+            ->where('direction', $direction)
+            ->whereNotIn('id', $matchedDocumentIds)
+            ->whereBetween('total', [$amount - 0.01, $amount + 0.01])
+            ->whereDate('issue_date', '>=', $date->copy()->subDays(5))
+            ->whereDate('issue_date', '<=', $date->copy()->addDays(5))
+            ->get()
+            ->sortBy(fn (Document $candidate) => abs($date->diffInDays($candidate->issue_date, false)))
+            ->first();
     }
 
     // -------------------------------------------------------------------------
@@ -247,26 +386,13 @@ new #[Layout('components.layout.app')] class extends Component
         app(DocumentService::class)->markAsReviewed($doc, $user);
     }
 
-    public function post(string $id): void
-    {
-        $doc = Document::findOrFail($id);
-        $this->authorize('update', $doc);
-        /** @var \App\Modules\Core\Models\User $user */
-        $user = Auth::user();
-        app(DocumentService::class)->postBankStatement($doc, $user);
-
-        if ($this->detailId === $id) {
-            $this->closeDetail();
-        }
-    }
-
     public function openReprocess(string $id): void
     {
         $doc = Document::findOrFail($id);
         $this->authorize('update', $doc);
 
-        if ($doc->status === 'posted') {
-            $this->addError('reprocess', 'Cannot reprocess a posted statement.');
+        if ($doc->status === 'reconciled') {
+            $this->addError('reprocess', 'Cannot reprocess a reconciled statement.');
 
             return;
         }
@@ -283,6 +409,11 @@ new #[Layout('components.layout.app')] class extends Component
 
         $hint = trim($this->reprocessHint) ?: null;
 
+        // Match rows point at line IDs, and DocumentLine soft-deletes — the
+        // FK's cascadeOnDelete() only fires on a real DELETE, so old matches
+        // must be cleared explicitly or they'd point at lines re-extraction
+        // is about to replace.
+        BankReconciliationMatch::whereIn('statement_line_id', $doc->lines()->pluck('id'))->delete();
         $doc->lines()->delete();
         $doc->update([
             'status' => 'queued',
@@ -323,7 +454,7 @@ new #[Layout('components.layout.app')] class extends Component
             ->paginate(25);
 
         $detail = $this->detailId
-            ? Document::with(['lines.account', 'lines.linkedDocument.party', 'contraAccount', 'bankTemplate', 'media'])
+            ? Document::with(['lines.account', 'lines.linkedDocument.party', 'lines.reconciliationMatch.document.party', 'contraAccount', 'bankTemplate', 'media'])
                 ->find($this->detailId)
             : null;
 
@@ -332,6 +463,31 @@ new #[Layout('components.layout.app')] class extends Component
             ->with('party')
             ->orderBy('document_number')
             ->get();
+
+        $outstandingPurchaseInvoices = Document::purchaseInvoices()
+            ->whereIn('status', ['posted', 'partially_paid'])
+            ->with('party')
+            ->orderBy('document_number')
+            ->get();
+
+        $suggestions = collect();
+        $reconciliation = null;
+
+        if ($detail !== null) {
+            foreach ($detail->lines as $line) {
+                if ($line->reconciliationMatch === null) {
+                    $suggestions[$line->id] = $this->suggestedMatchFor($line, $detail);
+                }
+            }
+
+            $unreconciledLines = $detail->lines->filter(fn (DocumentLine $l) => $l->reconciliationMatch === null);
+
+            $reconciliation = [
+                'reconciled_total' => (float) $detail->lines->filter(fn (DocumentLine $l) => $l->reconciliationMatch !== null)->sum('unit_price'),
+                'unreconciled_total' => (float) $unreconciledLines->sum('unit_price'),
+                'unreconciled_count' => $unreconciledLines->count(),
+            ];
+        }
 
         return [
             'rows'               => $rows,
@@ -347,7 +503,10 @@ new #[Layout('components.layout.app')] class extends Component
             'allAccounts'        => Account::active()->postable()->orderBy('code')->get(),
             'bankTemplates'      => BankTemplate::active()->orderBy('name')->get(),
             'outstandingInvoices' => $outstandingInvoices,
-            'statuses'           => ['queued', 'received', 'reviewed', 'posted'],
+            'outstandingPurchaseInvoices' => $outstandingPurchaseInvoices,
+            'suggestions'        => $suggestions,
+            'reconciliation'     => $reconciliation,
+            'statuses'           => ['queued', 'received', 'reviewed', 'reconciled'],
         ];
     }
 }; ?>
@@ -362,7 +521,7 @@ new #[Layout('components.layout.app')] class extends Component
                 <option value="queued">Queued</option>
                 <option value="received">Received</option>
                 <option value="reviewed">Reviewed</option>
-                <option value="posted">Posted</option>
+                <option value="reconciled">Reconciled</option>
             </flux:select>
         </div>
         @can('create', \App\Modules\Core\Models\Document::class)
@@ -420,26 +579,17 @@ new #[Layout('components.layout.app')] class extends Component
                                 'bg-surface-alt text-ink-muted' => $stmt->status === 'queued',
                                 'bg-warning/10 text-warning-600' => $stmt->status === 'received',
                                 'bg-info/10 text-info-600' => $stmt->status === 'reviewed',
-                                'bg-success/10 text-success-600' => $stmt->status === 'posted',
+                                'bg-success/10 text-success-600' => $stmt->status === 'reconciled',
                             ])>
                                 {{ ucfirst($stmt->status) }}
                             </span>
                         </td>
                         <td class="px-4 py-3 text-right" wire:click.stop="">
                             <div class="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                @if(in_array($stmt->status, ['received', 'reviewed']))
+                                @if($stmt->status === 'received')
                                     @can('update', $stmt)
-                                        @if($stmt->status === 'received')
-                                            <flux:button wire:click="markReviewed('{{ $stmt->id }}')" size="sm" variant="ghost" icon="check">
-                                                Review
-                                            </flux:button>
-                                        @endif
-                                        <flux:button
-                                            wire:click="post('{{ $stmt->id }}')"
-                                            wire:confirm="Post this statement to the general ledger? This cannot be undone."
-                                            size="sm" variant="ghost" icon="check-badge"
-                                        >
-                                            Post
+                                        <flux:button wire:click="markReviewed('{{ $stmt->id }}')" size="sm" variant="ghost" icon="check">
+                                            Review
                                         </flux:button>
                                     @endcan
                                 @endif
@@ -580,7 +730,7 @@ new #[Layout('components.layout.app')] class extends Component
                             'bg-surface-alt text-ink-muted' => $detail->status === 'queued',
                             'bg-warning/10 text-warning-600' => $detail->status === 'received',
                             'bg-info/10 text-info-600' => $detail->status === 'reviewed',
-                            'bg-success/10 text-success-600' => $detail->status === 'posted',
+                            'bg-success/10 text-success-600' => $detail->status === 'reconciled',
                         ])>
                             {{ ucfirst($detail->status) }}
                         </span>
@@ -592,7 +742,7 @@ new #[Layout('components.layout.app')] class extends Component
                         @endif
 
                         @can('update', $detail)
-                            @if($detail->status !== 'posted')
+                            @if($detail->status !== 'reconciled')
                                 <flux:button
                                     wire:click="openReprocess('{{ $detail->id }}')"
                                     size="sm" variant="ghost" icon="arrow-path"
@@ -610,11 +760,11 @@ new #[Layout('components.layout.app')] class extends Component
                                     </flux:button>
                                 @endif
                                 <flux:button
-                                    wire:click="post('{{ $detail->id }}')"
-                                    wire:confirm="Post this statement to the general ledger? Lines without an account will be posted uncoded. This cannot be undone."
+                                    wire:click="reconcileStatement('{{ $detail->id }}')"
+                                    wire:confirm="{{ ($reconciliation['unreconciled_count'] ?? 0) > 0 ? ($reconciliation['unreconciled_count']).' line(s) are still unmatched. Close this statement out anyway?' : 'Close this statement out as reconciled?' }}"
                                     size="sm" variant="primary" icon="check-badge"
                                 >
-                                    Post
+                                    Mark Reconciled
                                 </flux:button>
                             @endcan
                         @endif
@@ -622,8 +772,8 @@ new #[Layout('components.layout.app')] class extends Component
                 </div>
 
                 {{-- Balances --}}
-                @if($detail->metadata['opening_balance'] ?? null)
-                    <div class="flex gap-6 text-sm">
+                <div class="flex flex-wrap gap-6 text-sm">
+                    @if($detail->metadata['opening_balance'] ?? null)
                         <div>
                             <span class="text-ink-muted">Opening</span>
                             <span class="ml-2 font-medium tabular-nums">{{ number_format((float)$detail->metadata['opening_balance'], 2) }}</span>
@@ -643,8 +793,28 @@ new #[Layout('components.layout.app')] class extends Component
                                 Balance mismatch
                             </div>
                         @endif
-                    </div>
-                @endif
+                    @endif
+                    @if($reconciliation)
+                        <div>
+                            <span class="text-ink-muted">Reconciled</span>
+                            <span class="ml-2 font-medium tabular-nums">{{ number_format($reconciliation['reconciled_total'], 2) }}</span>
+                        </div>
+                        <div>
+                            <span class="text-ink-muted">Unreconciled</span>
+                            <span @class(['ml-2 font-medium tabular-nums', 'text-warning' => $reconciliation['unreconciled_count'] > 0])>
+                                {{ number_format($reconciliation['unreconciled_total'], 2) }}
+                                ({{ $reconciliation['unreconciled_count'] }} line{{ $reconciliation['unreconciled_count'] === 1 ? '' : 's' }})
+                            </span>
+                        </div>
+                        @if($detail->status !== 'reconciled' && $suggestions->filter(fn ($s) => $s !== null)->isNotEmpty())
+                            @can('update', $detail)
+                                <flux:button wire:click="confirmAllSuggested" size="sm" variant="ghost" icon="check-circle">
+                                    Confirm All Suggested ({{ $suggestions->filter(fn ($s) => $s !== null)->count() }})
+                                </flux:button>
+                            @endcan
+                        @endif
+                    @endif
+                </div>
 
                 {{-- Transactions table --}}
                 <div class="overflow-x-auto">
@@ -656,7 +826,7 @@ new #[Layout('components.layout.app')] class extends Component
                                 <th class="px-3 py-2 text-right text-xs font-medium text-ink-muted uppercase tracking-wide">Debit</th>
                                 <th class="px-3 py-2 text-right text-xs font-medium text-ink-muted uppercase tracking-wide">Credit</th>
                                 <th class="px-3 py-2 text-right text-xs font-medium text-ink-muted uppercase tracking-wide">Balance</th>
-                                <th class="px-3 py-2 text-left text-xs font-medium text-ink-muted uppercase tracking-wide">Allocation</th>
+                                <th class="px-3 py-2 text-left text-xs font-medium text-ink-muted uppercase tracking-wide">Match</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -686,60 +856,76 @@ new #[Layout('components.layout.app')] class extends Component
                                         @php($runningBalance = $line->metadata['running_balance'] ?? null)
                                         {{ $runningBalance !== null ? number_format((float) $runningBalance, 2) : '—' }}
                                     </td>
-                                    <td class="px-3 py-2 min-w-48">
-                                        @if($detail->status !== 'posted')
-                                            @if($editingLineId === $line->id)
-                                                <div class="space-y-1">
-                                                    @if($isCredit($line))
-                                                        {{-- Credit: allocate to invoice --}}
-                                                        <flux:select wire:model="editingLineLinkedDocumentId" size="sm">
-                                                            <option value="">— No invoice —</option>
-                                                            @foreach($outstandingInvoices as $inv)
-                                                                <option value="{{ $inv->id }}">
-                                                                    {{ $inv->document_number }} · {{ $inv->party?->displayName }} · {{ number_format((float)$inv->balance_due, 2) }}
-                                                                </option>
-                                                            @endforeach
-                                                        </flux:select>
-                                                        <flux:select wire:model="editingLineAccountId" size="sm">
-                                                            <option value="">— GL account —</option>
-                                                            @foreach($allAccounts as $account)
-                                                                <option value="{{ $account->id }}">{{ $account->display_name }}</option>
-                                                            @endforeach
-                                                        </flux:select>
-                                                    @else
-                                                        {{-- Debit: GL account only --}}
-                                                        <flux:select wire:model="editingLineAccountId" size="sm">
-                                                            <option value="">— Unallocated —</option>
-                                                            @foreach($allAccounts as $account)
-                                                                <option value="{{ $account->id }}">{{ $account->display_name }}</option>
-                                                            @endforeach
-                                                        </flux:select>
-                                                    @endif
-                                                    <div class="flex gap-1">
-                                                        <flux:button wire:click="saveLine" size="sm" variant="primary" icon="check" />
-                                                        <flux:button wire:click="cancelEditLine" size="sm" variant="ghost" icon="x-mark" />
-                                                    </div>
+                                    <td class="px-3 py-2 min-w-64">
+                                        @if($line->reconciliationMatch)
+                                            {{-- Matched: read-only, with an unmatch escape hatch --}}
+                                            <div class="flex items-center gap-2">
+                                                <flux:icon.check-circle class="size-3.5 text-success shrink-0" />
+                                                <div>
+                                                    <span class="text-xs font-medium text-ink">{{ $line->reconciliationMatch->document->document_number ?? $line->reconciliationMatch->document->reference }}</span>
+                                                    <span class="text-xs text-ink-muted ml-1">{{ $line->reconciliationMatch->document->party?->displayName }}</span>
                                                 </div>
-                                            @else
-                                                <button wire:click="editLine('{{ $line->id }}')" class="text-left w-full">
-                                                    @if($isCredit($line) && $line->linkedDocument)
-                                                        <span class="text-xs font-medium text-ink">{{ $line->linkedDocument->document_number }}</span>
-                                                        <span class="text-xs text-ink-muted ml-1">{{ $line->linkedDocument->party?->displayName }}</span>
-                                                    @elseif($line->account)
-                                                        <span class="text-xs text-ink-soft">{{ $line->account->display_name }}</span>
-                                                    @else
-                                                        <span class="text-xs text-ink-muted italic">Click to allocate…</span>
-                                                    @endif
-                                                </button>
-                                            @endif
+                                                @if($detail->status !== 'reconciled')
+                                                    @can('update', $detail)
+                                                        <flux:button wire:click="unmatchLine('{{ $line->id }}')" size="xs" variant="ghost" icon="x-mark" />
+                                                    @endcan
+                                                @endif
+                                            </div>
+                                        @elseif($detail->status === 'reconciled')
+                                            <span class="text-xs text-ink-muted italic">Unmatched</span>
+                                        @elseif($creatingForLineId === $line->id)
+                                            <div class="space-y-1.5 py-1">
+                                                @if($isCredit($line))
+                                                    <flux:select wire:model="createInvoiceId" size="sm">
+                                                        <option value="">— Pay a sales invoice —</option>
+                                                        @foreach($outstandingInvoices as $inv)
+                                                            <option value="{{ $inv->id }}">
+                                                                {{ $inv->document_number }} · {{ $inv->party?->displayName }} · {{ number_format((float)$inv->balance_due, 2) }}
+                                                            </option>
+                                                        @endforeach
+                                                    </flux:select>
+                                                    <flux:button wire:click="createPaymentForLine('{{ $line->id }}')" size="sm" variant="ghost" icon="plus" class="w-full">Create Payment & Match</flux:button>
+                                                @else
+                                                    <flux:select wire:model="createInvoiceId" size="sm">
+                                                        <option value="">— Pay a purchase invoice —</option>
+                                                        @foreach($outstandingPurchaseInvoices as $inv)
+                                                            <option value="{{ $inv->id }}">
+                                                                {{ $inv->document_number }} · {{ $inv->party?->displayName }} · {{ number_format((float)$inv->balance_due, 2) }}
+                                                            </option>
+                                                        @endforeach
+                                                    </flux:select>
+                                                    <flux:button wire:click="createPaymentForLine('{{ $line->id }}')" size="sm" variant="ghost" icon="plus" class="w-full">Create Payment & Match</flux:button>
+                                                @endif
+                                                <flux:select wire:model="createGlAccountId" size="sm">
+                                                    <option value="">— Post to GL account —</option>
+                                                    @foreach($allAccounts as $account)
+                                                        <option value="{{ $account->id }}">{{ $account->display_name }}</option>
+                                                    @endforeach
+                                                </flux:select>
+                                                <flux:button wire:click="postLineToGlAccount('{{ $line->id }}')" size="sm" variant="ghost" icon="plus" class="w-full">Post & Match</flux:button>
+                                                <flux:button wire:click="cancelCreateForLine" size="sm" variant="ghost" class="w-full">Cancel</flux:button>
+                                            </div>
+                                        @elseif($suggestions[$line->id] ?? null)
+                                            @php($suggestion = $suggestions[$line->id])
+                                            <div class="space-y-1">
+                                                <div class="text-xs">
+                                                    <span class="text-ink-muted">Suggested:</span>
+                                                    <span class="font-medium text-ink">{{ $suggestion->document_number ?? $suggestion->reference }}</span>
+                                                    <span class="text-ink-muted">{{ $suggestion->party?->displayName }}</span>
+                                                </div>
+                                                <div class="flex gap-1">
+                                                    @can('update', $detail)
+                                                        <flux:button wire:click="matchLine('{{ $line->id }}', '{{ $suggestion->id }}')" size="xs" variant="primary" icon="check">Confirm</flux:button>
+                                                        <flux:button wire:click="openCreateForLine('{{ $line->id }}')" size="xs" variant="ghost">Other…</flux:button>
+                                                    @endcan
+                                                </div>
+                                            </div>
                                         @else
-                                            {{-- Posted: read-only --}}
-                                            @if($isCredit($line) && $line->linkedDocument)
-                                                <span class="text-xs font-medium text-ink">{{ $line->linkedDocument->document_number }}</span>
-                                                <span class="text-xs text-ink-muted ml-1">{{ $line->linkedDocument->party?->displayName }}</span>
-                                            @else
-                                                <span class="text-xs text-ink-soft">{{ $line->account?->display_name ?? '—' }}</span>
-                                            @endif
+                                            @can('update', $detail)
+                                                <flux:button wire:click="openCreateForLine('{{ $line->id }}')" size="sm" variant="ghost">
+                                                    <span class="text-ink-muted italic">Unmatched — click to match…</span>
+                                                </flux:button>
+                                            @endcan
                                         @endif
                                     </td>
                                 </tr>

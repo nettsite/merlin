@@ -176,7 +176,60 @@ March income statement unchanged, July shows the reversal, invoice balance zero,
 
 ---
 
-## Phase 2 — Bank statements become evidence (3 days)
+## Phase 2 — Bank statements become evidence (3 days) — **DONE 2026-08-30**
+
+Landed on `main`. `postBankStatement()` and `createPaymentDocument()` deleted outright — F5 (the
+newest-first date-heuristic auto-allocation, the missing amount check, the hard-coded `'2400'`
+account) is gone with them, not patched. Statements now transition
+`queued → received → reviewed → reconciled`; `reconciled` posts nothing, it only closes the
+statement out. 672/672 tests green (was 664), `vendor/bin/pint --dirty` clean, `npm run build` run.
+
+**Two deviations from the literal plan text, both decided during implementation:**
+
+- **2.2 skipped.** `statement_from`/`statement_to`/`opening_balance`/`closing_balance` were
+  already being captured into `documents.metadata` by `BankStatementProcessingService` before
+  this phase started — no new columns needed. The reconciliation summary reads them from there.
+- **"Journal documents" (2.4) became payment-typed documents posted directly via
+  `JournalService::post()`, bypassing `postPaymentJournal()`.** This app has no `journal`
+  document type yet — that's the type you described wanting to add in the design conversation,
+  and building it is its own piece of work, not something to slip into this phase unannounced.
+  `DocumentService::reconcileToGlAccount()` reuses the existing `payment` document type as the
+  housing record (numbering, policies, everything already works) but posts a plain two-line
+  entry directly, since `postPaymentJournal()` hard-requires a receivable/payable account that a
+  bank charge or interest line doesn't have.
+
+### 2.3 — reconciliation table
+`bank_reconciliation_matches` (`statement_line_id` unique, `document_id`, `matched_by`,
+`matched_at`, `note`), model `BankReconciliationMatch`, `DocumentLine::reconciliationMatch()`
+`hasOne`. Deliberately not `document_lines.linked_document_id` — that column is still written by
+the LLM extraction as a raw suggestion (unchanged) and is now read as the reconciliation screen's
+starting suggestion, not the confirmed match itself.
+
+### 2.4 — reconciliation screen
+Rebuilt `bank-statements/index.blade.php`'s detail flyout. Per unmatched line: a computed
+suggestion (existing document on the same contra account, same direction, amount within a cent,
+date within ±5 days — sorted in PHP rather than SQL, since date-diff ordering has no portable
+syntax across MariaDB and the SQLite test database) with Confirm, or "Other…" to open the create
+form; matched lines show the document + an Unmatch escape hatch. **Confirm All Suggested** batch-
+confirms every line with a computed suggestion in one click. The old inline `editLine`/`saveLine`
+account-only editor was deleted — it existed solely to feed `postBankStatement()`, which no
+longer exists, and its `account_id` write had no accounting effect once posting stopped reading it.
+
+### 2.5 — unchanged
+`BankStatementExtractionAgent`, `ProcessBankStatementDocument`, `BankStatementProcessingService`
+untouched — they populate lines and metadata exactly as before; only what happens to those lines
+downstream changed. `requires_review` also untouched — it flags "extracted without a template",
+orthogonal to reconciliation state, not repurposed.
+
+### 2.6 — tests
+`BankStatementProcessingService` had zero test references (F19) — now covers extraction creates
+no postings, linking a suggested invoice number doesn't settle it, and reprocessing replaces
+lines. `BankStatementSettlementTest.php` rewritten for the new model: no ledger writes on import,
+create-payment-and-match, match-against-existing-payment (no new document), post-to-GL-account,
+unmatch, and close-out-as-reconciled. One bug caught by these tests, unrelated to the redesign
+itself: the job `GenerateBankTemplateHints` resolves a real `LlmService` from the container on
+dispatch, so a test exercising `process()` without `Queue::fake()` was hitting the live Anthropic
+API and running ~25x slower — no prior test had exercised `process()` to surface this.
 
 ### 2.1 Delete the auto-allocation
 Remove `postBankStatement()` (`DocumentService.php:297`) and the bank-statement branch of
@@ -349,7 +402,7 @@ otherwise.
 |---|---|
 | 0 · Decide before building | 0.25 |
 | 1 · Remove void | 1.5 |
-| 2 · Bank statements → reconciliation | 3.0 |
+| 2 · Bank statements → reconciliation | 3.0 (done) |
 | 3 · Floor the payment-match threshold | 0.25 |
 | 4 · `postings` view, delete journal | 2.5 |
 | 5 · Split mutable columns | 2.0 |
@@ -367,12 +420,12 @@ and deliver the correctness wins; 4–6 are the structural payoff.
 
 | # | Finding | How |
 |---|---|---|
-| F5 | Bank settlement guesses which invoice got paid | feature deleted (2.1) |
+| F5 | Bank settlement guesses which invoice got paid | feature deleted (Phase 2) |
 | F7 | Payment notifications merge on 50% name match | settings floored at the definitive tier (Phase 3) |
 | F3 | No ledger / reports re-invent double entry | `postings` view (Phase 4) |
-| F19 (half) | `BankStatementProcessingService` untested | covered in 2.6 |
+| F19 | `BankStatementProcessingService` untested | fully closed — Phase 2.6 |
 
-**Already fixed on PR #2:** F1, F2, F4, F12, F17, F19 (`FinancialYearService`).
+**Already fixed on PR #2:** F1, F2, F4, F12, F17, F19 (`FinancialYearService` half).
 
 **Untouched — still open after this plan:** F6 (posting rules auto-post on `similar_text`),
 F8 (numbering and payment races), F9 (unbounded prompt growth), F10 (FX failure discards paid
