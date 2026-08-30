@@ -71,17 +71,37 @@ deferred until this redesign lands. Consequences: **no data migration anywhere i
 — no voided invoices to convert, no balances to backfill — and schema changes can drop and
 recreate freely.
 
-### 0.1 Benchmark the view before committing to it
-Build the `postings` view as a throwaway and time the trial balance against the current
-`journal_lines` query. The database is empty, so seed synthetic volume first — roughly 2 000
-invoices, 8 000 lines, 3 000 payments via factories.
-- **Within ~2x on that volume** -> proceed with the view.
-- **Worse** -> keep a physical postings table written by one service, still deleting the
-  per-report derivations. The rest of this plan is unaffected either way.
-- Views cannot be indexed and neither MariaDB nor SQLite has materialised views. This is the
-  single decision that could invalidate Phase 4.
+### 0.1 Benchmark the view — **DONE 2026-08-30: PASS, proceed with the view**
 
-### 0.2 Confirm scope on payment notifications
+Method: scratch `merlin_bench` database, chart of accounts seeded, synthetic volume bulk-loaded
+with matching `journal_*` rows so both sides read identical data. Twelve-branch `postings` view
+(sales AR/income/VAT, purchase expense/AP, payment in/out, credit note). Median of 9–12 runs.
+Scratch database dropped afterwards; the working `merlin` database was never written to.
+
+| Volume | Trial-balance render — journal | via `postings` view | ratio |
+|---|---|---|---|
+| 6 000 docs / 17 800 journal lines | 40 ms | 100 ms | 2.50x |
+| 24 000 docs / 71 200 journal lines | 200 ms | 381 ms | **1.91x** |
+
+**The ratio does not degrade with volume — it improved.** Both scale roughly linearly; the
+journal's cumulative-balance query degrades faster than the view's, closing the gap. At 1.91x on
+four years of synthetic activity the gate is met.
+
+Two side findings, both worth acting on:
+
+- **Review finding F11 is wrong for these queries.** Adding the recommended composite index
+  `documents (document_type, status, issue_date)` made the view *slower* (381 ms -> 417 ms), and
+  `whereDate()` versus a raw date comparison made no measurable difference (53 ms vs 52 ms). A
+  report that aggregates every row in a period is a scan by nature; no index helps it. F11 should
+  be re-scoped to the *list* screens that filter to a handful of rows, or dropped.
+- **The cumulative query is the expensive half** (145 ms of the journal's 200 ms). The trial
+  balance runs two aggregates — movement window and cumulative — where one pass with conditional
+  `SUM(CASE WHEN entry_date >= ? THEN debit END)` would do. Roughly halves the render either way.
+
+Fallback trigger: revisit if document volume passes ~50 000, at which point either collapse the
+two aggregates into one or materialise `postings` into a table written by one service.
+
+### 0.2 Confirm scope on payment notifications — **open, needs a decision**
 Phase 3 applies principle 1 to `PaymentEvidenceRecorder`, which currently creates GL payments
 unattended from fuzzy-matched receipts. Confirm this is wanted — it is the same pattern being
 removed from bank statements, but it is extra work and removes a labour saving.
@@ -204,6 +224,14 @@ Columns named `entry_date, account_id, party_id, debit, credit, document_id, sou
 what the reports already select.
 - SQL must run on both MariaDB (prod) and SQLite (tests). Portable `UNION ALL` only.
 
+**Prerequisite — the VAT account must move onto the document.** The VAT leg needs
+`BillingSettings::tax_liability_account_id`, which lives in the `settings` table as a JSON
+payload and cannot be read from a view portably. Add `tax_account_id` to `documents`, stamped at
+issue time, alongside the `receivable_account_id` / `payable_account_id` / `contra_account_id`
+columns that are already there. This is more correct than reading the setting anyway: it captures
+which VAT account was in force when the invoice was issued, so changing the setting later cannot
+retroactively re-post historical invoices. The benchmark view hard-coded the id to get a timing.
+
 ### 4.2 Point the reports at it
 `trial-balance`, `balance-sheet`, `income-statement`, `accounts/show` already query
 `SUM(journal_lines.debit)` / `SUM(journal_lines.credit)` grouped by `account_id`. Swap the table
@@ -311,7 +339,7 @@ and deliver the correctness wins; 4–6 are the structural payoff.
 
 **Untouched — still open after this plan:** F6 (posting rules auto-post on `similar_text`),
 F8 (numbering and payment races), F9 (unbounded prompt growth), F10 (FX failure discards paid
-LLM work), F11 (missing composite index — and see the view's index caveat), F13 (per-line query
+LLM work), F11 (**measured in 0.1 and does not hold for the reports** — re-scope to list screens or drop), F13 (per-line query
 fan-out), F14 (unindexable sha256 dedupe), F15 (client-writable sort/perPage), F16 (279-line
 `process()`), F18 (unbounded duplicate matching), F20 (stale settings in daemon).
 
