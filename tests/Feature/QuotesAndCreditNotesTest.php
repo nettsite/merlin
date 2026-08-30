@@ -1,6 +1,7 @@
 <?php
 
 use App\Exceptions\InvalidDocumentStateException;
+use App\Modules\Accounting\Models\Account;
 use App\Modules\Core\Models\Document;
 use App\Modules\Core\Models\DocumentLine;
 use App\Modules\Core\Models\DocumentRelationship;
@@ -8,6 +9,7 @@ use App\Modules\Core\Models\Party;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Services\DocumentService;
 use App\Modules\Core\Services\PartyService;
+use Livewire\Livewire;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -345,4 +347,114 @@ it('rejects a payment that exceeds the credited balance', function (): void {
 
     expect(fn () => app(DocumentService::class)->recordPayment($invoice->fresh(), 800.00, now()))
         ->toThrow(InvalidArgumentException::class);
+});
+
+// ── Credit notes as the sole reversal (never void) ─────────────────────────────
+
+it('creates a draft credit note pre-filled from the invoice, full or partial', function (): void {
+    $client = quoteClient();
+    $invoice = Document::create([
+        'document_type' => 'sales_invoice',
+        'direction' => 'outbound',
+        'status' => 'draft',
+        'party_id' => $client->id,
+        'issue_date' => '2026-03-15',
+        'currency' => 'ZAR',
+        'exchange_rate' => 1.0,
+        'source' => 'manual',
+    ]);
+    $income = Account::factory()->create(['allow_direct_posting' => true]);
+    $invoice->lines()->createMany([
+        ['line_number' => 1, 'type' => 'service', 'description' => 'Design', 'account_id' => $income->id, 'quantity' => 1, 'unit_price' => 700.00, 'tax_rate' => null],
+        ['line_number' => 2, 'type' => 'service', 'description' => 'Build', 'account_id' => $income->id, 'quantity' => 1, 'unit_price' => 300.00, 'tax_rate' => null],
+    ]);
+    $invoice->recalculateTotals();
+    $user = User::factory()->create();
+    app(DocumentService::class)->markAsSent($invoice->fresh(), $user);
+
+    $creditNote = app(DocumentService::class)->createCreditNoteFromInvoice($invoice->fresh(), $user);
+
+    expect($creditNote->status)->toBe('draft')
+        ->and($creditNote->party_id)->toBe($client->id)
+        ->and((float) $creditNote->total)->toBe(1000.0)
+        ->and($creditNote->lines)->toHaveCount(2);
+
+    // The invoice itself is untouched — the draft can be trimmed for a
+    // partial credit without ever mutating the original.
+    expect((float) $invoice->fresh()->total)->toBe(1000.0);
+
+    $creditNote->lines()->where('line_number', 2)->delete();
+    $creditNote->recalculateTotals();
+    expect((float) $creditNote->fresh()->total)->toBe(700.0);
+});
+
+it('rejects a credit note dated before the invoice it credits', function (): void {
+    $client = quoteClient();
+    $invoice = makeSentInvoice($client);
+    $invoice->update(['issue_date' => '2026-03-15']);
+    $user = User::factory()->create();
+
+    $creditNote = makeDraftCreditNote($client, 200.00);
+    $creditNote->update(['issue_date' => '2026-02-01', 'status' => 'issued']);
+
+    expect(fn () => app(DocumentService::class)->applyCreditNote($creditNote->fresh(), $invoice->fresh(), $user))
+        ->toThrow(InvalidArgumentException::class);
+});
+
+it('keeps March revenue in March when the invoice is credited in July', function (): void {
+    $client = quoteClient();
+    $income = Account::factory()->create(['allow_direct_posting' => true]);
+    $ar = Account::factory()->create(['allow_direct_posting' => true]);
+    $user = User::factory()->create();
+
+    $invoice = Document::create([
+        'document_type' => 'sales_invoice',
+        'direction' => 'outbound',
+        'status' => 'draft',
+        'party_id' => $client->id,
+        'issue_date' => '2026-03-15',
+        'currency' => 'ZAR',
+        'exchange_rate' => 1.0,
+        'source' => 'manual',
+        'receivable_account_id' => $ar->id,
+    ]);
+    $invoice->lines()->create([
+        'line_number' => 1, 'type' => 'service', 'description' => 'Consulting',
+        'account_id' => $income->id, 'quantity' => 1, 'unit_price' => 1000.00, 'tax_rate' => null,
+    ]);
+    $invoice->recalculateTotals();
+    app(DocumentService::class)->markAsSent($invoice->fresh(), $user);
+
+    $creditNote = app(DocumentService::class)->createCreditNoteFromInvoice($invoice->fresh(), $user);
+    $creditNote->update(['issue_date' => '2026-07-10']);
+    app(DocumentService::class)->issueCreditNote($creditNote->fresh(), $user);
+    app(DocumentService::class)->applyCreditNote($creditNote->fresh(), $invoice->fresh(), $user);
+
+    $this->actingAs($user);
+
+    // March: the invoice's revenue is there, exactly as filed.
+    $march = Livewire::test('pages.reports.trial-balance')
+        ->set('dateFrom', '2026-03-01')->set('dateTo', '2026-03-31');
+    $marchIncome = $march->viewData('rows')->flatten()->firstWhere('id', $income->id);
+    expect((float) $marchIncome->mov_credit)->toBe(1000.0);
+
+    // Cumulative balance as at end of March: revenue still stands.
+    $marchBalance = Livewire::test('pages.reports.trial-balance')->set('dateTo', '2026-03-31');
+    $marchBalanceRow = $marchBalance->viewData('rows')->flatten()->firstWhere('id', $income->id);
+    expect((float) $marchBalanceRow->bal_credit)->toBe(1000.0);
+
+    // July: the credit note's reversal shows up here, not in March.
+    $july = Livewire::test('pages.reports.trial-balance')
+        ->set('dateFrom', '2026-07-01')->set('dateTo', '2026-07-31');
+    $julyIncome = $july->viewData('rows')->flatten()->firstWhere('id', $income->id);
+    expect((float) $julyIncome->mov_debit)->toBe(1000.0);
+
+    // Cumulative balance as at end of July: fully reversed.
+    $julyBalance = Livewire::test('pages.reports.trial-balance')->set('dateTo', '2026-07-31');
+    $julyBalanceRow = $julyBalance->viewData('rows')->flatten()->firstWhere('id', $income->id);
+    expect((float) $julyBalanceRow->bal_credit)->toBe(0.0)
+        ->and((float) $julyBalanceRow->bal_debit)->toBe(0.0);
+
+    expect($invoice->fresh()->status)->toBe('paid')
+        ->and($invoice->fresh()->is_fully_credited)->toBeTrue();
 });

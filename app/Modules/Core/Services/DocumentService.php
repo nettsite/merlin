@@ -4,7 +4,6 @@ namespace App\Modules\Core\Services;
 
 use App\Exceptions\InvalidDocumentStateException;
 use App\Modules\Accounting\Models\Account;
-use App\Modules\Accounting\Models\JournalEntry;
 use App\Modules\Accounting\Services\JournalService;
 use App\Modules\Billing\Settings\BillingSettings;
 use App\Modules\Core\Models\Document;
@@ -92,18 +91,49 @@ class DocumentService
         $this->recordActivity($doc, $by, 'resent', 'Invoice resent to client.');
     }
 
-    public function voidDocument(Document $doc, User $by): void
+    /**
+     * An issued sales invoice can never be voided — the correct reversal is
+     * a credit note, dated in the period the mistake is discovered rather
+     * than retroactively erasing the period the invoice was issued in. This
+     * creates a draft credit note pre-filled from the invoice (party,
+     * currency, and a like-for-like copy of every line) so the operator can
+     * issue it as-is for a full credit, or trim/edit lines first for a
+     * partial one. Applying it to the invoice is a separate, existing step
+     * (applyCreditNote()) — this only prepares the draft.
+     */
+    public function createCreditNoteFromInvoice(Document $invoice, User $by): Document
     {
-        DB::transaction(function () use ($doc, $by) {
-            $this->transition($doc, 'voided', $by, 'Invoice voided.');
+        return DB::transaction(function () use ($invoice, $by): Document {
+            $creditNote = Document::create([
+                'document_type' => 'credit_note',
+                'direction' => 'outbound',
+                'status' => 'draft',
+                'party_id' => $invoice->party_id,
+                'issue_date' => now()->toDateString(),
+                'reference' => "Credit for {$invoice->document_number}",
+                'currency' => $invoice->currency,
+                'exchange_rate' => $invoice->exchange_rate,
+                'source' => 'manual',
+            ]);
 
-            $entry = JournalEntry::where('document_id', $doc->id)
-                ->where('source', 'sales_invoice_issued')
-                ->first();
-
-            if ($entry !== null && ! $entry->isReversed()) {
-                $this->journal->reverse($entry, 'Invoice voided.');
+            foreach ($invoice->lines as $line) {
+                $creditNote->lines()->create([
+                    'line_number' => $line->line_number,
+                    'type' => $line->type,
+                    'description' => $line->description,
+                    'account_id' => $line->account_id,
+                    'quantity' => $line->quantity,
+                    'unit_price' => $line->unit_price,
+                    'discount_percent' => $line->discount_percent,
+                    'discount_amount' => $line->discount_amount,
+                    'tax_rate' => $line->tax_rate,
+                ]);
             }
+
+            $creditNote->recalculateTotals();
+            $this->recordActivity($creditNote, $by, 'created', "Drafted from invoice {$invoice->document_number}.");
+
+            return $creditNote;
         });
     }
 
@@ -168,6 +198,16 @@ class DocumentService
 
     public function applyCreditNote(Document $creditNote, Document $invoice, ?User $by): void
     {
+        // Dated reversal is the entire point of crediting rather than voiding
+        // — a credit note that predates the invoice it credits would put the
+        // reversal in the wrong period, exactly the defect this replaces.
+        if ($creditNote->issue_date !== null && $invoice->issue_date !== null
+            && $creditNote->issue_date->lt($invoice->issue_date)) {
+            throw new \InvalidArgumentException(
+                "Credit note {$creditNote->document_number} is dated before invoice {$invoice->document_number}; it cannot be applied."
+            );
+        }
+
         DB::transaction(function () use ($creditNote, $invoice, $by) {
             // credits_applied accumulates the raw credit note total, uncapped
             // — recalculateBalance()'s max(0, ...) floors the displayed
@@ -223,7 +263,7 @@ class DocumentService
 
         $this->journal->post(
             source: 'credit_note_applied',
-            date: now(),
+            date: $creditNote->issue_date ?? now(),
             description: "Credit note {$creditNote->document_number} applied to invoice {$invoice->document_number}",
             lines: $journalLines,
             document: $creditNote,
@@ -819,11 +859,10 @@ class DocumentService
                 'rejected' => [],
             ],
             'sales_invoice' => [
-                'draft' => ['sent', 'voided'],
-                'sent' => ['partially_paid', 'paid', 'voided'],
-                'partially_paid' => ['paid', 'voided'],
+                'draft' => ['sent'],
+                'sent' => ['partially_paid', 'paid'],
+                'partially_paid' => ['paid'],
                 'paid' => [],
-                'voided' => [],
             ],
             'quote' => [
                 'draft' => ['sent', 'declined', 'expired'],
@@ -834,10 +873,9 @@ class DocumentService
                 'expired' => [],
             ],
             'credit_note' => [
-                'draft' => ['issued', 'voided'],
-                'issued' => ['applied', 'voided'],
+                'draft' => ['issued'],
+                'issued' => ['applied'],
                 'applied' => [],
-                'voided' => [],
             ],
             'bank_statement' => [
                 'queued' => ['received'],

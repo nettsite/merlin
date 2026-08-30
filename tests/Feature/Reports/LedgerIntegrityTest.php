@@ -86,10 +86,12 @@ it('keeps the trial balance balanced across a mixed set of postings', function (
         'contra_account_id' => $this->bank->id,
     ], $user);
 
-    // Sales invoice, sent then voided — must not appear in the ledger at all.
-    $voidedInvoice = ledgerSalesInvoice($this->ar, $this->income, 7777.77);
-    $svc->markAsSent($voidedInvoice->fresh(), $user);
-    $svc->voidDocument($voidedInvoice->fresh(), $user);
+    // Sales invoice, sent then fully credited — nets to zero, not voided.
+    $fullyCreditedInvoice = ledgerSalesInvoice($this->ar, $this->income, 7777.77);
+    $svc->markAsSent($fullyCreditedInvoice->fresh(), $user);
+    $fullCreditNote = $svc->createCreditNoteFromInvoice($fullyCreditedInvoice->fresh(), $user);
+    $svc->issueCreditNote($fullCreditNote->fresh(), $user);
+    $svc->applyCreditNote($fullCreditNote->fresh(), $fullyCreditedInvoice->fresh(), $user);
 
     // Sales invoice, sent then partially credited.
     $creditedInvoice = ledgerSalesInvoice($this->ar, $this->income, 500.00);
@@ -133,16 +135,19 @@ it('keeps the trial balance balanced across a mixed set of postings', function (
         ->and($totalDebit)->toBeGreaterThan(0.0);
 });
 
-it('excludes a voided invoice from the ledger entirely', function (): void {
+it('nets a fully credited invoice to zero in the ledger', function (): void {
     $svc = app(DocumentService::class);
     $user = User::factory()->create();
 
     $invoice = ledgerSalesInvoice($this->ar, $this->income, 7777.77);
     $svc->markAsSent($invoice->fresh(), $user);
-    $svc->voidDocument($invoice->fresh(), $user);
+    $creditNote = $svc->createCreditNoteFromInvoice($invoice->fresh(), $user);
+    $svc->issueCreditNote($creditNote->fresh(), $user);
+    $svc->applyCreditNote($creditNote->fresh(), $invoice->fresh(), $user);
 
-    // The reversal cancels out net movement to zero, but both the original
-    // and the reversing entry exist in the append-only journal.
+    // The credit note's reversal cancels out net movement to zero, but both
+    // the original posting and the reversing entry exist in the append-only
+    // journal — an invoice is never voided, only credited.
     $net = (float) JournalLine::where('account_id', $this->income->id)->sum('credit')
         - (float) JournalLine::where('account_id', $this->income->id)->sum('debit');
 

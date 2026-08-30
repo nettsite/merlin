@@ -43,10 +43,12 @@ class Document extends Model implements HasMedia
      * Statuses that mean "not recognised as revenue" for sales invoices.
      * Counterpart to POSTED_STATUSES. Any report filtering sales invoices
      * must use this rather than re-typing the list — a stale literal here is
-     * what let voided invoices count as revenue on the income statement while
-     * the trial balance correctly excluded them.
+     * what once let voided invoices count as revenue on the income statement
+     * while the trial balance correctly excluded them. An issued sales
+     * invoice can no longer be voided at all — see credit notes — so the
+     * only unrecognised status left is one that was never sent.
      */
-    public const UNRECOGNISED_SALES_STATUSES = ['draft', 'voided'];
+    public const UNRECOGNISED_SALES_STATUSES = ['draft'];
 
     protected $fillable = [
         'document_type',
@@ -252,11 +254,11 @@ class Document extends Model implements HasMedia
     {
         // Overdue = past due with money still owing. Posted purchase
         // invoices are awaiting payment, so they count; settled, rejected,
-        // voided, and unsent drafts do not.
+        // and unsent drafts do not.
         return $query->whereNotNull('due_date')
             ->whereDate('due_date', '<', now()->toDateString())
             ->where('balance_due', '>', 0)
-            ->whereNotIn('status', ['draft', 'rejected', 'voided']);
+            ->whereNotIn('status', ['draft', 'rejected']);
     }
 
     public function scopeUnpaid(Builder $query): Builder
@@ -278,7 +280,7 @@ class Document extends Model implements HasMedia
             get: fn (): bool => $this->due_date !== null
                 && $this->due_date->isPast()
                 && (float) $this->balance_due > 0
-                && ! in_array($this->status, ['draft', 'rejected', 'voided']),
+                && ! in_array($this->status, ['draft', 'rejected']),
         );
     }
 
@@ -286,6 +288,22 @@ class Document extends Model implements HasMedia
     {
         return Attribute::make(
             get: fn (): bool => (float) $this->balance_due <= 0,
+        );
+    }
+
+    /**
+     * True once a sales invoice's balance was zeroed entirely by credit
+     * notes rather than cash — status alone reads "paid" either way, so the
+     * UI needs this to show "Credited" instead of implying money changed
+     * hands. Presentation only; the status column and every report keep
+     * reading 'paid'.
+     */
+    protected function isFullyCredited(): Attribute
+    {
+        return Attribute::make(
+            get: fn (): bool => $this->status === 'paid'
+                && (float) $this->credits_applied > 0
+                && (float) $this->credits_applied >= (float) $this->total,
         );
     }
 
@@ -297,7 +315,7 @@ class Document extends Model implements HasMedia
                     return 0;
                 }
 
-                if ((float) $this->balance_due <= 0 || in_array($this->status, ['draft', 'rejected', 'voided'])) {
+                if ((float) $this->balance_due <= 0 || in_array($this->status, ['draft', 'rejected'])) {
                     return 0;
                 }
 

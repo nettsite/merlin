@@ -176,9 +176,16 @@ it('throws when recording payment against a draft invoice', function () {
     ], null))->toThrow(RuntimeException::class);
 });
 
-it('throws when recording payment against a voided invoice', function () {
+it('throws when recording payment against a fully credited invoice', function () {
     $invoice = sipSentInvoice();
-    app(DocumentService::class)->voidDocument($invoice, User::factory()->create());
+    $actor = User::factory()->create();
+    $svc = app(DocumentService::class);
+
+    $creditNote = $svc->createCreditNoteFromInvoice($invoice, $actor);
+    $svc->issueCreditNote($creditNote->fresh(), $actor);
+    $svc->applyCreditNote($creditNote->fresh(), $invoice->fresh(), $actor);
+
+    expect($invoice->fresh()->status)->toBe('paid');
 
     expect(fn () => app(BillingService::class)->recordPayment($invoice->fresh(), [
         'amount' => 100.00,

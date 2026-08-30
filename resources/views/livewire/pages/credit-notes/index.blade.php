@@ -1,5 +1,6 @@
 <?php
 
+use App\Exceptions\InvalidDocumentStateException;
 use App\Modules\Core\Models\Party;
 use App\Modules\Core\Settings\CurrencySettings;
 use App\Modules\Core\Models\Document;
@@ -8,6 +9,7 @@ use App\Modules\Core\Services\DocumentService;
 use App\Modules\Purchasing\Services\ExchangeRateService;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -54,10 +56,23 @@ new #[Layout('components.layout.app')] class extends Component
 
     public string $applyToInvoiceId = '';
 
+    #[Url(as: 'open')]
+    public ?string $openId = null;
+
     public function mount(): void
     {
         $this->authorize('viewAny', Document::class);
         $this->createForm['issue_date'] = now()->toDateString();
+
+        // Landed here from "Issue credit note" on a sales invoice —
+        // createCreditNoteFromInvoice() already made the draft.
+        if ($this->openId !== null) {
+            $doc = Document::find($this->openId);
+
+            if ($doc !== null && Auth::user()->can('view', $doc)) {
+                $this->openDetail($doc->id);
+            }
+        }
     }
 
     public function updatedSearch(): void
@@ -331,13 +346,6 @@ new #[Layout('components.layout.app')] class extends Component
         $this->openDetail($creditNote->id);
     }
 
-    public function void(): void
-    {
-        $doc = Document::findOrFail($this->detailId);
-        $this->authorize('update', $doc);
-        app(DocumentService::class)->voidDocument($doc, Auth::user());
-    }
-
     // -------------------------------------------------------------------------
     // Delete
     // -------------------------------------------------------------------------
@@ -352,6 +360,14 @@ new #[Layout('components.layout.app')] class extends Component
     {
         $doc = Document::findOrFail($this->detailId);
         $this->authorize('delete', $doc);
+
+        // An issued credit note is never deleted — it's the reversal
+        // instrument itself; deleting one after applying it would silently
+        // un-reverse the invoice it credited. Only a draft can go.
+        if ($doc->status !== 'draft') {
+            throw new InvalidDocumentStateException("Credit note {$doc->document_number} has been issued and cannot be deleted.");
+        }
+
         $doc->lines()->delete();
         $doc->delete();
         $this->showDeleteConfirm = false;
@@ -439,7 +455,7 @@ new #[Layout('components.layout.app')] class extends Component
 {{-- Status tabs --}}
 <div class="flex items-center gap-1 px-6 pt-4 border-b border-line overflow-x-auto">
     @php
-        $tabs = ['' => 'All', 'draft' => 'Draft', 'issued' => 'Issued', 'applied' => 'Applied', 'voided' => 'Voided'];
+        $tabs = ['' => 'All', 'draft' => 'Draft', 'issued' => 'Issued', 'applied' => 'Applied'];
     @endphp
     @foreach($tabs as $status => $label)
         <button
@@ -495,7 +511,6 @@ new #[Layout('components.layout.app')] class extends Component
                                 'draft' => 'bg-surface-alt text-ink-muted',
                                 'issued' => 'bg-blue-50 text-blue-700',
                                 'applied' => 'bg-green-50 text-green-700',
-                                'voided' => 'bg-red-50 text-danger',
                                 default => 'bg-surface-alt text-ink-muted',
                             };
                         @endphp
@@ -581,7 +596,6 @@ new #[Layout('components.layout.app')] class extends Component
                                 'draft' => 'bg-surface-alt text-ink-muted',
                                 'issued' => 'bg-blue-50 text-blue-700',
                                 'applied' => 'bg-green-50 text-green-700',
-                                'voided' => 'bg-red-50 text-danger',
                                 default => 'bg-surface-alt text-ink-muted',
                             };
                         @endphp
@@ -618,11 +632,6 @@ new #[Layout('components.layout.app')] class extends Component
                         @endcan
                     @endif
 
-                    @if(in_array($detail->status, ['draft', 'issued']))
-                        @can('update', $detail)
-                            <flux:button wire:click="void" size="xs" variant="ghost" class="text-danger">Void</flux:button>
-                        @endcan
-                    @endif
 
                     @if($detail->status === 'draft')
                         @can('delete', $detail)

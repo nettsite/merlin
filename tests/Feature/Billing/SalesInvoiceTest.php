@@ -203,42 +203,74 @@ it('send transitions invoice to sent', function (): void {
     expect($doc->fresh()->status)->toBe('sent');
 });
 
-it('voids a draft invoice', function (): void {
-    $doc = siDraft();
-    $this->actingAs(siUserWith(['documents-view-any', 'documents-view', 'can-void-sales-invoices']));
-
-    Livewire::test('pages.sales-invoices.index')
-        ->call('openDetail', $doc->id)
-        ->call('void');
-
-    expect($doc->fresh()->status)->toBe('voided');
-});
-
-it('voids a sent invoice', function (): void {
-    $doc = siDraft();
-    $actor = User::factory()->create();
-    app(DocumentService::class)->markAsSent($doc, $actor);
-
-    $this->actingAs(siUserWith(['documents-view-any', 'documents-view', 'can-void-sales-invoices']));
-
-    Livewire::test('pages.sales-invoices.index')
-        ->call('openDetail', $doc->id)
-        ->call('void');
-
-    expect($doc->fresh()->status)->toBe('voided');
-});
-
 it('fresh user lacks can-send-sales-invoices', function (): void {
     expect(User::factory()->create()->can('can-send-sales-invoices'))->toBeFalse();
 });
 
-it('cannot send a voided invoice', function (): void {
+it('cannot void a sent invoice — a credit note is the only reversal', function (): void {
     $doc = siDraft();
     $actor = User::factory()->create();
-    app(DocumentService::class)->voidDocument($doc, $actor);
+    app(DocumentService::class)->markAsSent($doc, $actor);
 
-    expect(fn () => app(DocumentService::class)->markAsSent($doc->fresh(), $actor))
+    expect(method_exists(DocumentService::class, 'voidDocument'))->toBeFalse();
+
+    // The transition map has no 'voided' entry for any status any more —
+    // reach it via reflection since transition() is protected, guarding
+    // against the map quietly growing a 'voided' entry back in.
+    $svc = app(DocumentService::class);
+    $transition = new ReflectionMethod($svc, 'transition');
+    $transition->setAccessible(true);
+
+    expect(fn () => $transition->invoke($svc, $doc->fresh(), 'voided', $actor, 'attempted void'))
         ->toThrow(InvalidDocumentStateException::class);
+});
+
+it('cannot delete a sent invoice — only a never-issued draft can be deleted', function (): void {
+    $doc = siDraft();
+    $actor = User::factory()->create();
+    app(DocumentService::class)->markAsSent($doc, $actor);
+
+    $this->actingAs(siUserWith(['documents-view-any', 'documents-view', 'documents-delete']));
+
+    $component = Livewire::test('pages.sales-invoices.index')->call('openDetail', $doc->id);
+
+    expect(fn () => $component->call('confirmDelete'))
+        ->toThrow(InvalidDocumentStateException::class);
+
+    expect($doc->fresh())->not->toBeNull();
+});
+
+it('issues a credit note from a sent invoice, copying its lines', function (): void {
+    $client = siClient();
+    $doc = siDraft($client);
+    $doc->lines()->create([
+        'line_number' => 1,
+        'type' => 'service',
+        'description' => 'Consulting',
+        'quantity' => 2,
+        'unit_price' => 500.00,
+        'discount_percent' => 0,
+        'discount_amount' => 0,
+        'tax_rate' => 0,
+    ]);
+    $doc->recalculateTotals();
+
+    $actor = User::factory()->create();
+    app(DocumentService::class)->markAsSent($doc->fresh(), $actor);
+
+    $this->actingAs(siUserWith(['documents-view-any', 'documents-view', 'documents-create']));
+
+    Livewire::test('pages.sales-invoices.index')
+        ->call('openDetail', $doc->id)
+        ->call('createCreditNoteForInvoice')
+        ->assertRedirect();
+
+    $creditNote = Document::where('document_type', 'credit_note')->where('party_id', $client->id)->sole();
+
+    expect($creditNote->status)->toBe('draft')
+        ->and((float) $creditNote->total)->toBe(1000.0)
+        ->and($creditNote->lines)->toHaveCount(1)
+        ->and((float) $doc->fresh()->total)->toBe(1000.0); // the invoice itself is untouched
 });
 
 // --- Create via Volt UI ---

@@ -105,7 +105,30 @@ two aggregates into one or materialise `postings` into a table written by one se
 
 Existing matching behaviour is kept; Phase 3 reduces to flooring the settings threshold. See Phase 3.
 
-## Phase 1 — Remove void; credit notes as the sole reversal (1.5 days)
+## Phase 1 — Remove void; credit notes as the sole reversal (1.5 days) — **DONE 2026-08-30**
+
+All six sub-steps landed on `main`: transition maps closed, `voidDocument()` deleted, the UI
+replaced with **Issue Credit Note** (`createCreditNoteFromInvoice()` on `DocumentService`, a
+draft pre-filled with the invoice's party/currency/lines that the operator can trim before
+issuing), status vocabulary shrunk, the backdating guard added, the "Credited" label wired into
+all three status-badge locations, and `confirmDelete()` on both sales invoices and credit notes
+now refuses anything past `draft` — closing the hole where deleting an issued document would
+have achieved the same period-erasure void existed to prevent. 664/664 tests green (was 661),
+`vendor/bin/pint --dirty` clean, `npm run build` run for the new badge colour.
+
+**Bug found and fixed while writing the period-integrity test (1.6):** `postCreditNoteJournal()`
+posted every credit note's journal entry with `date: now()`, ignoring the credit note's own
+`issue_date` entirely. A March invoice credited in July would have posted its reversal dated
+*today* instead of July — silently defeating the one property this whole phase exists to
+provide. Only surfaced because the new test asserted on a specific month's movement rather than
+just a net-zero balance. Fixed to `$creditNote->issue_date ?? now()`, matching the three sibling
+`journal->post()` calls elsewhere in the file, all of which already used the document's own date.
+
+**Known gap surfaced, left out of scope on purpose:** `income-by-account` and `income-by-client`
+read `documents` directly and have never netted credit notes against the invoices they reverse —
+true before this phase and unchanged by it. Two new tests
+(`ReportStatusFilteringTest`) assert this explicitly so it's a documented fact rather than a
+silent surprise. Worth a line item whenever those two reports are next touched.
 
 ### 1.1 Close the transition maps
 `app/Modules/Core/Services/DocumentService.php:822–840`:

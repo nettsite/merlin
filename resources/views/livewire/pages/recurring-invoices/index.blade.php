@@ -623,9 +623,9 @@ new #[Layout('components.layout.app')] class extends Component
                                         'inline-flex items-center px-2 py-0.5 rounded text-xs font-medium',
                                         'bg-surface-alt text-ink-muted' => $invoice->status === 'draft',
                                         'bg-blue-50 text-blue-700' => $invoice->status === 'sent',
-                                        'bg-red-50 text-danger' => $invoice->status === 'voided',
+                                        'bg-purple-50 text-purple-700' => $invoice->is_fully_credited,
                                     ])>
-                                        {{ ucfirst($invoice->status) }}
+                                        {{ $invoice->is_fully_credited ? 'Credited' : ucfirst($invoice->status) }}
                                     </span>
                                 </td>
                             </tr>

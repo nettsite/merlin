@@ -1,5 +1,6 @@
 <?php
 
+use App\Exceptions\InvalidDocumentStateException;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Core\Models\PaymentTerm;
 use App\Modules\Billing\Services\BillingService;
@@ -69,8 +70,6 @@ new #[Layout('components.layout.app')] class extends Component
     public array $sendRecipients = [];
 
     public string $sendError = '';
-
-    public bool $showVoidConfirm = false;
 
     public bool $showDeleteConfirm = false;
 
@@ -416,12 +415,15 @@ new #[Layout('components.layout.app')] class extends Component
         return response()->download($media->getPath(), 'invoice-'.$doc->document_number.'.pdf');
     }
 
-    public function void(): void
+    public function createCreditNoteForInvoice(): void
     {
-        $this->authorize('can-void-sales-invoices');
         $doc = Document::findOrFail($this->detailId);
-        app(DocumentService::class)->voidDocument($doc, Auth::user());
-        $this->showVoidConfirm = false;
+        $this->authorize('view', $doc);
+        $this->authorize('create', Document::class);
+
+        $creditNote = app(DocumentService::class)->createCreditNoteFromInvoice($doc, Auth::user());
+
+        $this->redirect(route('credit-notes.index', ['open' => $creditNote->id]));
     }
 
     // -------------------------------------------------------------------------
@@ -487,6 +489,14 @@ new #[Layout('components.layout.app')] class extends Component
     {
         $doc = Document::findOrFail($this->detailId);
         $this->authorize('delete', $doc);
+
+        // A sent invoice is never deleted, only credited — deleting it would
+        // erase the period it was issued in, exactly what credit notes exist
+        // to avoid. Only a never-issued draft can go.
+        if ($doc->status !== 'draft') {
+            throw new InvalidDocumentStateException("Invoice {$doc->document_number} has been sent and can only be reversed with a credit note.");
+        }
+
         $doc->lines()->delete();
         $doc->delete();
         $this->showDeleteConfirm = false;
@@ -583,7 +593,7 @@ new #[Layout('components.layout.app')] class extends Component
             $tabCounts = $statusCounts->toArray();
             $tabCounts['unpaid'] = ($statusCounts['sent'] ?? 0) + ($statusCounts['partially_paid'] ?? 0);
         @endphp
-        @foreach(['' => 'All', 'unpaid' => 'Unpaid', 'draft' => 'Draft', 'sent' => 'Sent', 'partially_paid' => 'Partially Paid', 'paid' => 'Paid', 'voided' => 'Voided'] as $status => $label)
+        @foreach(['' => 'All', 'unpaid' => 'Unpaid', 'draft' => 'Draft', 'sent' => 'Sent', 'partially_paid' => 'Partially Paid', 'paid' => 'Paid'] as $status => $label)
             <button
                 wire:click="$set('statusFilter', '{{ $status }}')"
                 @class([
@@ -656,17 +666,16 @@ new #[Layout('components.layout.app')] class extends Component
                     </td>
                     <td class="px-4 py-3">
                         @php
-                            $badgeClass = match($invoice->status) {
+                            $badgeClass = $invoice->is_fully_credited ? 'bg-purple-50 text-purple-700' : match($invoice->status) {
                                 'draft' => 'bg-surface-alt text-ink-muted',
                                 'sent' => 'bg-blue-50 text-blue-700',
                                 'partially_paid' => 'bg-amber-50 text-warning',
                                 'paid' => 'bg-green-50 text-success',
-                                'voided' => 'bg-red-50 text-danger',
                                 default => 'bg-surface-alt text-ink-muted',
                             };
                         @endphp
                         <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium {{ $badgeClass }}">
-                            {{ ucwords(str_replace('_', ' ', $invoice->status)) }}
+                            {{ $invoice->is_fully_credited ? 'Credited' : ucwords(str_replace('_', ' ', $invoice->status)) }}
                         </span>
                     </td>
                 </tr>
@@ -757,17 +766,16 @@ new #[Layout('components.layout.app')] class extends Component
                             {{ $detail->document_number ?? 'Draft Invoice' }}
                         </flux:heading>
                         @php
-                            $badgeClass = match($detail->status) {
+                            $badgeClass = $detail->is_fully_credited ? 'bg-purple-50 text-purple-700' : match($detail->status) {
                                 'draft' => 'bg-surface-alt text-ink-muted',
                                 'sent' => 'bg-blue-50 text-blue-700',
                                 'partially_paid' => 'bg-amber-50 text-amber-700',
                                 'paid' => 'bg-green-50 text-green-700',
-                                'voided' => 'bg-red-50 text-danger',
                                 default => 'bg-surface-alt text-ink-muted',
                             };
                         @endphp
                         <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium {{ $badgeClass }}">
-                            {{ ucfirst($detail->status) }}
+                            {{ $detail->is_fully_credited ? 'Credited' : ucfirst($detail->status) }}
                         </span>
                     </div>
                     <p class="text-sm text-ink-soft mt-1">
@@ -812,10 +820,10 @@ new #[Layout('components.layout.app')] class extends Component
                         @endcan
                     @endif
 
-                    {{-- Void --}}
-                    @if(in_array($detail->status, ['draft', 'sent', 'partially_paid']))
-                        @can('can-void-sales-invoices')
-                            <flux:button wire:click="$set('showVoidConfirm', true)" size="xs" variant="ghost" class="text-danger">Void</flux:button>
+                    {{-- Issue Credit Note --}}
+                    @if(in_array($detail->status, ['sent', 'partially_paid', 'paid']))
+                        @can('create', \App\Modules\Core\Models\Document::class)
+                            <flux:button wire:click="createCreditNoteForInvoice" size="xs" variant="ghost">Issue Credit Note</flux:button>
                         @endcan
                     @endif
 
@@ -1157,18 +1165,6 @@ new #[Layout('components.layout.app')] class extends Component
             >
                 {{ $detail?->status === 'draft' ? 'Send Invoice' : 'Resend Invoice' }}
             </flux:button>
-        </div>
-    </div>
-</flux:modal>
-
-{{-- ===== Void Confirm ===== --}}
-<flux:modal name="void-confirm" wire:model.self="showVoidConfirm" class="w-[400px]">
-    <div class="p-6">
-        <flux:heading size="lg" class="font-semibold mb-2">Void Invoice?</flux:heading>
-        <p class="text-sm text-ink-soft mb-6">This will permanently void the invoice. This cannot be undone.</p>
-        <div class="flex gap-3 justify-end">
-            <flux:button variant="ghost" wire:click="$set('showVoidConfirm', false)">Cancel</flux:button>
-            <flux:button variant="danger" wire:click="void">Void Invoice</flux:button>
         </div>
     </div>
 </flux:modal>
