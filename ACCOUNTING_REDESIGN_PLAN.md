@@ -101,10 +101,9 @@ Two side findings, both worth acting on:
 Fallback trigger: revisit if document volume passes ~50 000, at which point either collapse the
 two aggregates into one or materialise `postings` into a table written by one service.
 
-### 0.2 Confirm scope on payment notifications — **open, needs a decision**
-Phase 3 applies principle 1 to `PaymentEvidenceRecorder`, which currently creates GL payments
-unattended from fuzzy-matched receipts. Confirm this is wanted — it is the same pattern being
-removed from bank statements, but it is extra work and removes a labour saving.
+### 0.2 Scope on payment notifications — **DECIDED 2026-08-30**
+
+Existing matching behaviour is kept; Phase 3 reduces to flooring the settings threshold. See Phase 3.
 
 ## Phase 1 — Remove void; credit notes as the sole reversal (1.5 days)
 
@@ -200,17 +199,32 @@ produces a dated document; reconciliation arithmetic balances.
 
 ---
 
-## Phase 3 — Payment notifications become evidence (1 day)
+## Phase 3 — Floor the payment-match threshold (0.25 day)
 
-Conditional on decision 0.3.
+**Decided 2026-08-30: the existing matching behaviour stays.** The dual-invoice pattern is
+already handled — a supplier sends an unpaid invoice and a matching paid copy, often under a
+different invoice number; `DuplicateInvoiceMerger` folds the paid copy into the original as
+evidence and `PaymentEvidenceRecorder` raises the payment from it. A paid-only arrival is covered
+by the extraction's `already_paid` signal. None of that changes.
 
-`PaymentEvidenceRecorder:75` calls `recordPurchasePayment()` unattended, fed by
-`PaymentNotificationMatcher`'s 50%-name-similarity match (review finding **F7**). Same pattern
-as F5, one layer over. Change it to raise a suggestion into the Phase 2 confirm queue instead
-of posting. F7 dies with it; the `applyCorrectedAmount()` rescaling risk it fed goes behind the
-same human confirmation.
+This differs from the bank-statement case on purpose. `PaymentNotificationMatcher::score()`
+already tiers its evidence, and the top two tiers are *definitive* — the payment's own reference
+text contains the invoice's `document_number` (0.95) or the supplier's invoice number (0.90).
+That is a real identifier appearing in the payment record, not a date-proximity guess.
 
----
+The hole is the settings UI. `PurchasingSettings::payment_match_auto_confidence` defaults to
+0.80, which correctly excludes the weak tiers — name resemblance at 0.60 (`similar_text` >= 50%)
+and same-day-only at 0.40 — but the field accepts any value >= 0. Set it to 0.6 and a loose
+string match starts auto-applying, including `applyCorrectedAmount()`'s rescaling of every line
+on the invoice.
+
+- Floor the settings input at **0.90**, the lowest confidence a definitive (reference-match) tier
+  can produce, so the weak tiers can never be configured into auto-applying. Closes review
+  finding **F7**.
+- Gate `applyCorrectedAmount()` on the definitive threshold independently of the merge threshold
+  — rescaling an invoice's line amounts deserves its own gate.
+- Verify: a test asserting the settings page rejects a threshold below 0.90, and that a 0.60
+  name-only match never posts.
 
 ## Phase 4 — The `postings` view; delete the journal tables (2.5 days)
 
@@ -313,11 +327,11 @@ otherwise.
 | 0 · Decide before building | 0.25 |
 | 1 · Remove void | 1.5 |
 | 2 · Bank statements → reconciliation | 3.0 |
-| 3 · Payment notifications → evidence | 1.0 |
+| 3 · Floor the payment-match threshold | 0.25 |
 | 4 · `postings` view, delete journal | 2.5 |
 | 5 · Split mutable columns | 2.0 |
 | 6 · App-level immutability + audit | 1.5 |
-| **Total** | **11.75** |
+| **Total** | **11.0** |
 
 No data-migration contingency — the database is empty. Phases 1–3 are independently shippable
 and deliver the correctness wins; 4–6 are the structural payoff.
@@ -331,7 +345,7 @@ and deliver the correctness wins; 4–6 are the structural payoff.
 | # | Finding | How |
 |---|---|---|
 | F5 | Bank settlement guesses which invoice got paid | feature deleted (2.1) |
-| F7 | Payment notifications merge on 50% name match | becomes a suggestion (Phase 3) |
+| F7 | Payment notifications merge on 50% name match | settings floored at the definitive tier (Phase 3) |
 | F3 | No ledger / reports re-invent double entry | `postings` view (Phase 4) |
 | F19 (half) | `BankStatementProcessingService` untested | covered in 2.6 |
 
