@@ -2,6 +2,7 @@
 
 namespace App\Modules\Core\Models;
 
+use App\Exceptions\PostedDocumentImmutableException;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Core\Settings\CurrencySettings;
 use App\Traits\HasDocumentNumber;
@@ -122,6 +123,50 @@ class Document extends Model implements HasMedia
      * @var array<string, mixed>
      */
     private array $pendingBalance = [];
+
+    /**
+     * Commercial columns frozen once a document is issued (see isIssued())
+     * — everything a credit note exists to reverse instead of an edit.
+     * Deliberately narrower than "every column": the account-id columns
+     * and currency/exchange-rate fields are stamped once by design but
+     * aren't guarded here, matching the plan this phase came from.
+     *
+     * @var array<int, string>
+     */
+    private const IMMUTABLE_ONCE_ISSUED = ['total', 'subtotal', 'tax_total', 'issue_date', 'party_id', 'document_number'];
+
+    protected static function booted(): void
+    {
+        static::saving(function (Document $document): void {
+            $document->guardAgainstIssuedMutation();
+        });
+    }
+
+    /**
+     * Checked against the status as persisted before this save (read from
+     * the balance relation directly, bypassing pendingBalance) rather than
+     * $this->is_issued — a save that both sets status to an issued value
+     * and fills in these columns for the first time (e.g. issuing a draft
+     * credit note and confirming its issue_date in the same call) must not
+     * trip the guard; only a save touching them on a document that was
+     * *already* issued before this save started should. Bypassed by
+     * saveQuietly() (this is an event hook, not part of the save()
+     * override below), same as DocumentLine's — the trusted system paths
+     * that legitimately rewrite these columns after issuance (FX-rate
+     * finalisation in recordPayment()) already use it.
+     */
+    private function guardAgainstIssuedMutation(): void
+    {
+        if (! $this->exists || ! self::statusCountsAsIssued($this->document_type, $this->balance?->status)) {
+            return;
+        }
+
+        $dirtyGuarded = array_intersect(self::IMMUTABLE_ONCE_ISSUED, array_keys($this->getDirty()));
+
+        if ($dirtyGuarded !== []) {
+            throw PostedDocumentImmutableException::forDocument($this->id, implode(', ', $dirtyGuarded));
+        }
+    }
 
     /**
      * Flushes pendingBalance into document_balances after every save —
@@ -468,13 +513,18 @@ class Document extends Model implements HasMedia
     protected function isIssued(): Attribute
     {
         return Attribute::make(
-            get: fn (): bool => match ($this->document_type) {
-                'sales_invoice' => ! in_array($this->status, self::UNRECOGNISED_SALES_STATUSES, true),
-                'purchase_invoice' => in_array($this->status, self::POSTED_STATUSES, true),
-                'credit_note' => in_array($this->status, ['issued', 'applied'], true),
-                default => false,
-            },
+            get: fn (): bool => self::statusCountsAsIssued($this->document_type, $this->status),
         );
+    }
+
+    private static function statusCountsAsIssued(string $documentType, ?string $status): bool
+    {
+        return match ($documentType) {
+            'sales_invoice' => ! in_array($status, self::UNRECOGNISED_SALES_STATUSES, true),
+            'purchase_invoice' => in_array($status, self::POSTED_STATUSES, true),
+            'credit_note' => in_array($status, ['issued', 'applied'], true),
+            default => false,
+        };
     }
 
     protected function daysOverdue(): Attribute

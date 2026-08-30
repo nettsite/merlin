@@ -74,7 +74,7 @@ function makeQuoteWithLines(?Party $client = null): Document
     return $quote->fresh();
 }
 
-function makeSentInvoice(?Party $client = null): Document
+function makeSentInvoice(?Party $client = null, ?string $issueDate = null): Document
 {
     $client ??= quoteClient();
 
@@ -83,7 +83,7 @@ function makeSentInvoice(?Party $client = null): Document
         'direction' => 'outbound',
         'status' => 'sent',
         'party_id' => $client->id,
-        'issue_date' => now()->toDateString(),
+        'issue_date' => $issueDate ?? now()->toDateString(),
         'currency' => 'ZAR',
         'exchange_rate' => 1.0,
         'subtotal' => 1000.00,
@@ -398,8 +398,7 @@ it('creates a draft credit note pre-filled from the invoice, full or partial', f
 
 it('rejects a credit note dated before the invoice it credits', function (): void {
     $client = quoteClient();
-    $invoice = makeSentInvoice($client);
-    $invoice->update(['issue_date' => '2026-03-15']);
+    $invoice = makeSentInvoice($client, '2026-03-15');
     $user = User::factory()->create();
 
     $creditNote = makeDraftCreditNote($client, 200.00);
