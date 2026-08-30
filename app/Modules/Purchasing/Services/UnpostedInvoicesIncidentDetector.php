@@ -23,9 +23,10 @@ class UnpostedInvoicesIncidentDetector implements IncidentDetector
     public function check(): ?array
     {
         $byStatus = Document::purchaseInvoices()
-            ->whereIn('status', self::UNPOSTED_STATUSES)
-            ->selectRaw('status, COUNT(*) as count')
-            ->groupBy('status')
+            ->join('document_balances', 'document_balances.document_id', '=', 'documents.id')
+            ->whereIn('document_balances.status', self::UNPOSTED_STATUSES)
+            ->selectRaw('document_balances.status, COUNT(*) as count')
+            ->groupBy('document_balances.status')
             ->pluck('count', 'status');
 
         $total = (int) $byStatus->sum();

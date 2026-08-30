@@ -377,9 +377,9 @@ new #[Layout('components.layout.app')] class extends Component
                         ->orWhere('legal_name', 'like', "%{$this->search}%")
                     );
             }))
-            ->when($this->statusFilter, fn ($q) => $q->where('status', $this->statusFilter))
-            ->latest('issue_date')
-            ->latest('created_at')
+            ->when($this->statusFilter, fn ($q) => $q->joinBalance()->where('document_balances.status', $this->statusFilter))
+            ->latest('documents.issue_date')
+            ->latest('documents.created_at')
             ->paginate(25);
 
         $detail = null;
@@ -399,8 +399,9 @@ new #[Layout('components.layout.app')] class extends Component
         return [
             'rows' => $rows,
             'statusCounts' => Document::quotes()
-                ->selectRaw('status, COUNT(*) as count')
-                ->groupBy('status')
+                ->join('document_balances', 'document_balances.document_id', '=', 'documents.id')
+                ->selectRaw('document_balances.status, COUNT(*) as count')
+                ->groupBy('document_balances.status')
                 ->pluck('count', 'status'),
             'clients' => ($this->showCreateModal || ($this->showDetail && $this->editingHeader))
                 ? Party::clients()->with('business')->get()

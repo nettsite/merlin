@@ -26,6 +26,7 @@ new #[Layout('components.layout.app')] class extends Component
         $rows = Document::query()
             ->join('parties', 'parties.id', '=', 'documents.party_id')
             ->join('businesses', 'businesses.id', '=', 'parties.id')
+            ->join('document_balances', 'document_balances.document_id', '=', 'documents.id')
             ->selectRaw('
                 documents.party_id,
                 businesses.trading_name,
@@ -34,10 +35,10 @@ new #[Layout('components.layout.app')] class extends Component
                 SUM(documents.subtotal) as total_excl,
                 SUM(documents.tax_total) as total_vat,
                 SUM(documents.total) as total_incl,
-                SUM(documents.balance_due) as outstanding
+                SUM(document_balances.balance_due) as outstanding
             ')
             ->where('documents.document_type', 'purchase_invoice')
-            ->whereIn('documents.status', Document::POSTED_STATUSES)
+            ->whereIn('document_balances.status', Document::POSTED_STATUSES)
             ->when($this->dateFrom, fn ($q) => $q->whereDate('documents.issue_date', '>=', $this->dateFrom))
             ->when($this->dateTo, fn ($q) => $q->whereDate('documents.issue_date', '<=', $this->dateTo))
             ->groupBy('documents.party_id', 'businesses.trading_name', 'businesses.legal_name')

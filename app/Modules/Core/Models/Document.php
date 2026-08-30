@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Spatie\Activitylog\Models\Concerns\LogsActivity;
 use Spatie\MediaLibrary\HasMedia;
@@ -102,18 +103,111 @@ class Document extends Model implements HasMedia
             'subtotal' => 'decimal:2',
             'tax_total' => 'decimal:2',
             'total' => 'decimal:2',
-            'amount_paid' => 'decimal:2',
-            'balance_due' => 'decimal:2',
-            'credits_applied' => 'decimal:2',
             'foreign_subtotal' => 'decimal:2',
             'foreign_tax_total' => 'decimal:2',
             'foreign_total' => 'decimal:2',
-            'foreign_amount_paid' => 'decimal:2',
-            'foreign_balance_due' => 'decimal:2',
             'llm_confidence' => 'decimal:4',
             'metadata' => 'array',
             'requires_review' => 'boolean',
         ];
+    }
+
+    /**
+     * status/amount_paid/balance_due/foreign_amount_paid/foreign_balance_due/
+     * credits_applied aren't real columns on `documents` any more — see
+     * DocumentBalance. A plain array here (not the `attributes` bag) so
+     * they never reach the INSERT/UPDATE this model itself builds; save()
+     * below flushes them into document_balances instead.
+     *
+     * @var array<string, mixed>
+     */
+    private array $pendingBalance = [];
+
+    /**
+     * Flushes pendingBalance into document_balances after every save —
+     * overridden here rather than hooked on the `saved` event because
+     * saveQuietly() (used throughout DocumentService for every status
+     * transition) suppresses model events entirely but still calls this
+     * method, so an event-based hook would silently never fire for the
+     * single most common way this app changes a document's status.
+     */
+    public function save(array $options = [])
+    {
+        $result = parent::save($options);
+
+        if ($this->pendingBalance !== []) {
+            $balance = DocumentBalance::updateOrCreate(
+                ['document_id' => $this->id],
+                $this->pendingBalance,
+            );
+            $this->pendingBalance = [];
+            $this->setRelation('balance', $balance);
+        }
+
+        return $result;
+    }
+
+    private function balanceValue(string $key): mixed
+    {
+        return array_key_exists($key, $this->pendingBalance)
+            ? $this->pendingBalance[$key]
+            : $this->balance?->{$key};
+    }
+
+    /** @return array<string, mixed> */
+    private function setBalanceValue(string $key, mixed $value): array
+    {
+        $this->pendingBalance[$key] = $value;
+
+        return [];
+    }
+
+    protected function status(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => $this->balanceValue('status'),
+            set: fn ($value) => $this->setBalanceValue('status', $value),
+        );
+    }
+
+    protected function amountPaid(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => $this->balanceValue('amount_paid'),
+            set: fn ($value) => $this->setBalanceValue('amount_paid', $value),
+        );
+    }
+
+    protected function balanceDue(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => $this->balanceValue('balance_due'),
+            set: fn ($value) => $this->setBalanceValue('balance_due', $value),
+        );
+    }
+
+    protected function foreignAmountPaid(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => $this->balanceValue('foreign_amount_paid'),
+            set: fn ($value) => $this->setBalanceValue('foreign_amount_paid', $value),
+        );
+    }
+
+    protected function foreignBalanceDue(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => $this->balanceValue('foreign_balance_due'),
+            set: fn ($value) => $this->setBalanceValue('foreign_balance_due', $value),
+        );
+    }
+
+    protected function creditsApplied(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => $this->balanceValue('credits_applied'),
+            set: fn ($value) => $this->setBalanceValue('credits_applied', $value),
+        );
     }
 
     public function registerMediaCollections(): void
@@ -178,6 +272,12 @@ class Document extends Model implements HasMedia
     public function paymentTerm(): BelongsTo
     {
         return $this->belongsTo(PaymentTerm::class);
+    }
+
+    /** @return HasOne<DocumentBalance, $this> */
+    public function balance(): HasOne
+    {
+        return $this->hasOne(DocumentBalance::class);
     }
 
     /** @return HasMany<DocumentLine, $this> */
@@ -251,17 +351,47 @@ class Document extends Model implements HasMedia
         return $query->where('direction', 'inbound');
     }
 
+    /**
+     * status/balance_due live on document_balances now — every scope that
+     * filters on either needs this joined first. Idempotent: safe to call
+     * from scopes that might be chained together in the same query.
+     */
+    public function scopeJoinBalance(Builder $query): Builder
+    {
+        $alreadyJoined = collect($query->getQuery()->joins)
+            ->contains(fn ($join) => $join->table === 'document_balances');
+
+        if ($alreadyJoined) {
+            return $query;
+        }
+
+        $query->join('document_balances', 'document_balances.document_id', '=', 'documents.id');
+
+        // Both tables have created_at/updated_at — an unqualified select *
+        // would let document_balances' columns silently clobber documents'
+        // own timestamps when hydrating the model. Only when nothing more
+        // specific has been selected yet, so a report building its own
+        // selectRaw() isn't overridden.
+        if ($query->getQuery()->columns === null) {
+            $query->select('documents.*');
+        }
+
+        return $query;
+    }
+
     /** @param string|array<int, string> $status */
     public function scopeWithStatus(Builder $query, string|array $status): Builder
     {
+        $query->joinBalance();
+
         return is_array($status)
-            ? $query->whereIn('status', $status)
-            : $query->where('status', $status);
+            ? $query->whereIn('document_balances.status', $status)
+            : $query->where('document_balances.status', $status);
     }
 
     public function scopePostedOnwards(Builder $query): Builder
     {
-        return $query->whereIn('status', self::POSTED_STATUSES);
+        return $query->joinBalance()->whereIn('document_balances.status', self::POSTED_STATUSES);
     }
 
     public function scopeOverdue(Builder $query): Builder
@@ -269,16 +399,18 @@ class Document extends Model implements HasMedia
         // Overdue = past due with money still owing. Posted purchase
         // invoices are awaiting payment, so they count; settled, rejected,
         // and unsent drafts do not.
-        return $query->whereNotNull('due_date')
+        return $query->joinBalance()
+            ->whereNotNull('due_date')
             ->whereDate('due_date', '<', now()->toDateString())
-            ->where('balance_due', '>', 0)
-            ->whereNotIn('status', ['draft', 'rejected']);
+            ->where('document_balances.balance_due', '>', 0)
+            ->whereNotIn('document_balances.status', ['draft', 'rejected']);
     }
 
     public function scopeUnpaid(Builder $query): Builder
     {
-        return $query->where('balance_due', '>', 0)
-            ->whereNotIn('status', ['rejected']);
+        return $query->joinBalance()
+            ->where('document_balances.balance_due', '>', 0)
+            ->whereNotIn('document_balances.status', ['rejected']);
     }
 
     public function scopeForParty(Builder $query, Party $party): Builder

@@ -73,14 +73,15 @@ new #[Layout('components.layout.app')] class extends Component
     public function with(): array
     {
         $notifications = Document::where('document_type', 'payment_notification')
-            ->where('status', 'received')
+            ->joinBalance()
+            ->where('document_balances.status', 'received')
             ->when($this->search, fn ($q) => $q->where(function ($q): void {
                 $q->where('reference', 'like', "%{$this->search}%")
                     ->orWhere('metadata->payee_name', 'like', "%{$this->search}%")
                     ->orWhere('metadata->method', 'like', "%{$this->search}%");
             }))
             ->with('media')
-            ->latest('issue_date')
+            ->latest('documents.issue_date')
             ->paginate(25);
 
         // Only computed while the link modal is open — searched/scoped rather

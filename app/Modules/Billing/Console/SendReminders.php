@@ -38,8 +38,9 @@ class SendReminders extends Command
         }
 
         $candidates = Document::salesInvoices()
-            ->whereIn('status', ['sent', 'partially_paid'])
-            ->where('balance_due', '>', 0)
+            ->joinBalance()
+            ->whereIn('document_balances.status', ['sent', 'partially_paid'])
+            ->where('document_balances.balance_due', '>', 0)
             ->whereNotNull('due_date')
             ->with('party.business')
             ->get();

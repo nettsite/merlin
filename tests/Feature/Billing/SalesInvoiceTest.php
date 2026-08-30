@@ -291,6 +291,8 @@ it('creates an invoice through the Volt UI', function (): void {
     $this->assertDatabaseHas('documents', [
         'document_type' => 'sales_invoice',
         'party_id' => $client->id,
-        'status' => 'draft',
     ]);
+
+    $doc = Document::where('document_type', 'sales_invoice')->where('party_id', $client->id)->sole();
+    expect($doc->status)->toBe('draft');
 });

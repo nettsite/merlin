@@ -632,6 +632,7 @@ new #[Layout('components.layout.app')] class extends Component
     public function with(): array
     {
         $rows = Document::purchaseInvoices()
+            ->joinBalance()
             ->with(['party.business', 'lines.account', 'media'])
             ->when($this->search, fn ($q) => $q->where(function ($q): void {
                 $q->where('document_number', 'like', "%{$this->search}%")
@@ -640,16 +641,16 @@ new #[Layout('components.layout.app')] class extends Component
                         ->orWhere('legal_name', 'like', "%{$this->search}%")
                     );
             }))
-            ->when($this->statusFilter, fn ($q) => $q->where('status', $this->statusFilter))
+            ->when($this->statusFilter, fn ($q) => $q->where('document_balances.status', $this->statusFilter))
             ->when($this->supplierFilter, fn ($q) => $q->where('party_id', $this->supplierFilter))
             ->when($this->paymentFilter, fn ($q) => match ($this->paymentFilter) {
-                'unpaid' => $q->where('status', 'posted')->where('balance_due', '>', 0),
-                'partially_paid' => $q->where('status', 'partially_paid'),
-                'paid' => $q->where('status', 'paid'),
+                'unpaid' => $q->where('document_balances.status', 'posted')->where('document_balances.balance_due', '>', 0),
+                'partially_paid' => $q->where('document_balances.status', 'partially_paid'),
+                'paid' => $q->where('document_balances.status', 'paid'),
                 default => $q,
             })
-            ->latest('issue_date')
-            ->latest('created_at')
+            ->latest('documents.issue_date')
+            ->latest('documents.created_at')
             ->paginate(25);
 
         // Only suppliers that actually have purchase invoices — never the full
@@ -674,7 +675,8 @@ new #[Layout('components.layout.app')] class extends Component
             $accounts = Account::postable()->active()->orderBy('code')->get(['id', 'code', 'name']);
 
             $suggestedPaymentNotification = Document::where('document_type', 'payment_notification')
-                ->where('status', 'received')
+                ->joinBalance()
+                ->where('document_balances.status', 'received')
                 ->where('metadata->suggested_invoice_id', $detail->id)
                 ->first();
         }
@@ -686,8 +688,9 @@ new #[Layout('components.layout.app')] class extends Component
         return [
             'rows' => $rows,
             'statusCounts' => Document::purchaseInvoices()
-                ->selectRaw('status, COUNT(*) as count')
-                ->groupBy('status')
+                ->join('document_balances', 'document_balances.document_id', '=', 'documents.id')
+                ->selectRaw('document_balances.status, COUNT(*) as count')
+                ->groupBy('document_balances.status')
                 ->pluck('count', 'status'),
             'suppliers' => $needsSuppliers ? Party::suppliers()->with('business')->get() : collect(),
             'supplierFilterOptions' => $supplierFilterOptions,

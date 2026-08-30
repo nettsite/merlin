@@ -447,10 +447,10 @@ new #[Layout('components.layout.app')] class extends Component
                         ->orWhereJsonContains('metadata->bank_name', $this->search);
                 });
             })
-            ->when($this->statusFilter, fn ($q) => $q->where('status', $this->statusFilter))
+            ->when($this->statusFilter, fn ($q) => $q->joinBalance()->where('document_balances.status', $this->statusFilter))
             ->with(['contraAccount', 'bankTemplate'])
             ->withCount('lines')
-            ->orderByDesc('created_at')
+            ->orderByDesc('documents.created_at')
             ->paginate(25);
 
         $detail = $this->detailId
@@ -459,15 +459,17 @@ new #[Layout('components.layout.app')] class extends Component
             : null;
 
         $outstandingInvoices = Document::salesInvoices()
-            ->whereIn('status', ['sent', 'partially_paid'])
+            ->joinBalance()
+            ->whereIn('document_balances.status', ['sent', 'partially_paid'])
             ->with('party')
-            ->orderBy('document_number')
+            ->orderBy('documents.document_number')
             ->get();
 
         $outstandingPurchaseInvoices = Document::purchaseInvoices()
-            ->whereIn('status', ['posted', 'partially_paid'])
+            ->joinBalance()
+            ->whereIn('document_balances.status', ['posted', 'partially_paid'])
             ->with('party')
-            ->orderBy('document_number')
+            ->orderBy('documents.document_number')
             ->get();
 
         $suggestions = collect();

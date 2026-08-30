@@ -86,6 +86,7 @@ new #[Layout('components.layout.app')] class extends Component
 
         return DB::table('postings')
             ->leftJoin('documents', 'documents.id', '=', 'postings.document_id')
+            ->leftJoin('document_balances', 'document_balances.document_id', '=', 'documents.id')
             ->leftJoin('businesses', 'businesses.id', '=', 'documents.party_id')
             ->leftJoin('persons', 'persons.id', '=', 'documents.party_id')
             ->leftJoin('accounts as contra_accounts', function ($join) use ($contraSubquery) {
@@ -101,7 +102,7 @@ new #[Layout('components.layout.app')] class extends Component
                 documents.id as document_id,
                 documents.document_number,
                 documents.document_type,
-                documents.status as document_status,
+                document_balances.status as document_status,
                 {$partyName} as party_name,
                 postings.description as description,
                 (case when postings.debit > 0 then postings.debit else postings.credit end) as amount,

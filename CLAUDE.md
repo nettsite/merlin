@@ -258,6 +258,40 @@ through `posted`/`partially_paid`/`paid`).
 
 **Eloquent `'date'`-cast columns store a full `Y-m-d H:i:s` value**, not a clean date (`fromDateTime()` uses the connection's datetime format regardless of cast type) — every date-column query in this app, including `postings.entry_date`, must use `whereDate()`, never a raw `where()` comparison, or the stored value's trailing time component silently fails the match.
 
+### `document_balances` — the only mutable part of a document
+
+`status`, `amount_paid`, `balance_due`, `foreign_amount_paid`, `foreign_balance_due`, and
+`credits_applied` are **not columns on `documents`** — they live on `document_balances`
+(`document_id` primary key, one row per document), so `documents`/`document_lines` are
+physically append-only: every other column on a document is set once, at creation, and never
+touched again.
+
+**Model-level reads and writes are unaffected — `$doc->status = 'sent'; $doc->save();` and
+`Document::create(['status' => 'draft', ...])` work exactly as before.** `Document` declares
+these six as custom `Attribute::make()` accessors backed by a `balance()` `hasOne` relation, not
+real columns; they stay in `$fillable` so mass assignment keeps working, and Document's own
+`save()` is overridden (not hooked on the `saved` **event**, because `saveQuietly()` — used
+throughout `DocumentService` for every status transition — suppresses events entirely but still
+calls `save()`) to flush any pending values into `document_balances` after every save, quiet or
+not.
+
+**Query-builder-level filtering is what actually changed.** `Document::where('status', ...)`,
+`whereIn('balance_due', ...)`, `orderBy('status', ...)` etc. all break — those columns are gone
+from `documents`. Every such query needs `document_balances` joined first and the column
+qualified: `Document::scopeJoinBalance()` does this (idempotent — safe if already joined; skips
+setting `select('documents.*')` if the caller already specified a custom select, so a report's
+own `selectRaw()` isn't overridden). The four built-in scopes that used to filter on these
+columns (`scopeWithStatus`, `scopePostedOnwards`, `scopeOverdue`, `scopeUnpaid`) call it
+internally. **Any new query filtering or sorting by status/balance_due must call
+`->joinBalance()` (or an explicit `->join('document_balances', ...)`) and qualify the column** —
+grep for `document_balances.status` / `document_balances.balance_due` across the report and list
+pages for the established pattern. Also qualify `created_at`/`updated_at` explicitly
+(`documents.created_at`) once the join is present — both tables have their own, and an
+unqualified `ORDER BY` after the join is ambiguous.
+
+The `postings` view joins `document_balances` for its own status filters — see the Journal
+section above.
+
 ### Configuration Files
 
 | File | Key env vars / settings |

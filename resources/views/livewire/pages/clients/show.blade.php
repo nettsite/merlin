@@ -164,8 +164,9 @@ new #[Layout('components.layout.app')] class extends Component
 
         $statusCounts = Document::salesInvoices()
             ->forParty($party)
-            ->selectRaw('status, COUNT(*) as count')
-            ->groupBy('status')
+            ->join('document_balances', 'document_balances.document_id', '=', 'documents.id')
+            ->selectRaw('document_balances.status, COUNT(*) as count')
+            ->groupBy('document_balances.status')
             ->pluck('count', 'status')
             ->all();
 

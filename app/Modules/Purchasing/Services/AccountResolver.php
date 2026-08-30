@@ -34,7 +34,8 @@ class AccountResolver
         if ($partyId !== null) {
             $accountId = DocumentLine::query()
                 ->whereHas('document', fn ($q) => $q->where('party_id', $partyId)
-                    ->whereIn('status', Document::POSTED_STATUSES))
+                    ->joinBalance()
+                    ->whereIn('document_balances.status', Document::POSTED_STATUSES))
                 ->whereHas('account', fn ($q) => $q->postable())
                 ->where('description', $description)
                 ->whereNotNull('account_id')

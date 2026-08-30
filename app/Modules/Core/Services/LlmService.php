@@ -301,8 +301,9 @@ class LlmService
     private function getOutstandingInvoicesForPrompt(): string
     {
         $invoices = Document::salesInvoices()
-            ->whereIn('status', ['sent', 'partially_paid'])
-            ->where('balance_due', '>', 0)
+            ->joinBalance()
+            ->whereIn('document_balances.status', ['sent', 'partially_paid'])
+            ->where('document_balances.balance_due', '>', 0)
             ->with('party.business', 'party.person')
             ->orderByDesc('issue_date')
             ->get();

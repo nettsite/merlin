@@ -399,16 +399,49 @@ Remove `JournalService`, `JournalEntry`, `JournalLine`, `UnbalancedJournalEntryE
 
 ---
 
-## Phase 5 — Split the mutable columns out of `documents` (2 days)
+## Phase 5 — Split the mutable columns out of `documents` (2 days) — **DONE 2026-08-30**
 
-While `balance_due`, `amount_paid`, `credits_applied`, `status` and `foreign_balance_due` live
-on `documents`, immutability can only ever be a convention — every payment UPDATEs the row.
+Landed on `main`, full scope (status included, not just the balance columns — see the scope
+decision below). 676/676 tests green (was 673), `vendor/bin/pint --dirty` clean, `npm run build`
+run. CLAUDE.md gets a new section describing the split and the query-level rule it creates.
 
-- Move them to `document_balances` (one row per document), or derive from `postings`.
-- `Document::recalculateBalance()` becomes the writer of that table, not of `documents`.
-- Watch the read cost: aged debtors, overdue scopes and every invoice list read these columns.
-  A table keeps them indexable; full derivation does not.
-- Then `documents` and `document_lines` are physically append-only.
+**Scope decision, recorded here because it changed the phase's real cost.** Before starting, the
+plan was flagged back to the user as bigger than 2 days: `status` is filtered/sorted at the query
+level throughout the app (scopes, every list page's tab filter, reports, `Document::isIssued()`
+— the exact mechanism Phase 4 just built), unlike `balance_due` et al. which are read far more
+than filtered. Offered a narrower cut (balances only, leave `status` on `documents`) as the
+recommended option. **The user chose the full scope anyway** — and correctly: `status` changes
+constantly (every transition), so leaving it on `documents` would have meant `documents` was
+never actually append-only, defeating Phase 6's premise before it starts. Proceeded on that basis.
+
+`document_balances` (`document_id` primary key, one row per document): `status`, `amount_paid`,
+`balance_due`, `foreign_amount_paid`, `foreign_balance_due`, `credits_applied`. Model-level reads
+and writes are unchanged everywhere — `Document::create(['status' => 'draft', ...])`,
+`$doc->status = 'sent'; $doc->save();` — via custom `Attribute::make()` accessors backed by a
+`balance()` relation; `save()` is overridden (not event-hooked, since `saveQuietly()` — used for
+every status transition in `DocumentService` — suppresses events but still calls `save()`) to
+flush pending values into `document_balances` after every save, quiet or not. This is what kept
+the blast radius survivable: every `Document::create()`/`->status = `/`->save()` call site in the
+app and its ~670 tests needed zero changes.
+
+**What did need changing, exhaustively:** every query-builder-level filter or sort on
+status/balance_due — `Document::scopeJoinBalance()` (idempotent, joins `document_balances`,
+qualifies the ambiguous `created_at`/`updated_at` collision) plus per-call-site column
+qualification across ~25 files: the four built-in scopes (`withStatus`, `postedOnwards`,
+`overdue`, `unpaid`), every list page's status-tab filter and status-count query (sales/purchase
+invoices, quotes, credit notes, bank statements, suppliers/clients detail pages), the four
+analytical reports, `SendReminders`, `LlmService::getOutstandingInvoicesForPrompt()`,
+`PaymentNotificationMatcher`, `BankStatementProcessingService`, `AccountResolver`'s history
+lookup, and `accounts/show`'s transaction register. **The `postings` view itself needed a second
+migration** — every branch's `d.status` filter became `db.status` behind a
+`document_balances` join, since the view is itself a query against the now-split columns.
+
+**Three of the ~25 fixes had zero test coverage and were found only by a targeted sweep after the
+suite was already green** — quotes, credit notes, and bank statements' status-tab filters. The
+full suite passing after the obvious fixes didn't mean the migration was complete; a `grep` for
+every remaining `where('status'` / `orderBy('balance_due'` etc. across the app, not just chasing
+test failures, is what actually found them. Added `DocumentListStatusFilterTest.php` to close the
+gap rather than leave it as an untested join.
 
 ---
 
@@ -463,7 +496,7 @@ otherwise.
 | 2 · Bank statements → reconciliation | 3.0 (done) |
 | 3 · Floor the payment-match threshold | 0.25 (done) |
 | 4 · `postings` view, delete journal | 2.5 (done) |
-| 5 · Split mutable columns | 2.0 |
+| 5 · Split mutable columns | 2.0 (done) |
 | 6 · App-level immutability + audit | 1.5 |
 | **Total** | **11.0** |
 

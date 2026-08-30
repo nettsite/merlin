@@ -69,7 +69,8 @@ class PaymentNotificationMatcher
         }
 
         $candidates = Document::where('document_type', 'payment_notification')
-            ->where('status', 'received')
+            ->joinBalance()
+            ->where('document_balances.status', 'received')
             ->whereNotNull('issue_date')
             ->whereDate('issue_date', '>=', $issueDate)
             ->whereDate('issue_date', '<=', $issueDate->copy()->addDays(self::MAX_DATE_WINDOW_DAYS))

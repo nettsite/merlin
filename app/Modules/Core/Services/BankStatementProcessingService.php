@@ -61,7 +61,8 @@ class BankStatementProcessingService
         // Pre-index outstanding invoices by document_number for fast lookup.
         /** @var Collection<string, Document> $invoiceIndex */
         $invoiceIndex = Document::salesInvoices()
-            ->whereIn('status', ['sent', 'partially_paid'])
+            ->joinBalance()
+            ->whereIn('document_balances.status', ['sent', 'partially_paid'])
             ->whereNotNull('document_number')
             ->pluck('id', 'document_number');
 

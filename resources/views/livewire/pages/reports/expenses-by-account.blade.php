@@ -27,6 +27,7 @@ new #[Layout('components.layout.app')] class extends Component
 
         $rows = DocumentLine::query()
             ->join('documents', 'document_lines.document_id', '=', 'documents.id')
+            ->join('document_balances', 'document_balances.document_id', '=', 'documents.id')
             ->join('accounts', 'accounts.id', '=', 'document_lines.account_id')
             ->selectRaw('
                 document_lines.account_id,
@@ -38,7 +39,7 @@ new #[Layout('components.layout.app')] class extends Component
                 SUM(document_lines.line_total + COALESCE(document_lines.tax_amount, 0)) as total_incl
             ')
             ->where('documents.document_type', 'purchase_invoice')
-            ->whereIn('documents.status', \App\Modules\Core\Models\Document::POSTED_STATUSES)
+            ->whereIn('document_balances.status', \App\Modules\Core\Models\Document::POSTED_STATUSES)
             // The manual join bypasses Document's SoftDeletes scope.
             ->whereNull('documents.deleted_at')
             ->whereNotNull('document_lines.account_id')

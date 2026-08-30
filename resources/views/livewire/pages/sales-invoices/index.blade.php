@@ -506,7 +506,15 @@ new #[Layout('components.layout.app')] class extends Component
 
     public function with(): array
     {
+        // status and balance_due are both sortable/filterable columns here,
+        // so document_balances is always joined rather than only when a
+        // filter happens to need it.
+        $sortColumn = in_array($this->sortBy, ['status', 'balance_due'], true)
+            ? "document_balances.{$this->sortBy}"
+            : "documents.{$this->sortBy}";
+
         $rows = Document::salesInvoices()
+            ->joinBalance()
             ->with('party.business')
             ->when($this->search, fn ($q) => $q->where(function ($q): void {
                 $q->where('document_number', 'like', "%{$this->search}%")
@@ -515,15 +523,15 @@ new #[Layout('components.layout.app')] class extends Component
                         ->orWhere('legal_name', 'like', "%{$this->search}%")
                     );
             }))
-            ->when($this->statusFilter === 'unpaid', fn ($q) => $q->whereIn('status', ['sent', 'partially_paid']))
-            ->when($this->statusFilter && $this->statusFilter !== 'unpaid', fn ($q) => $q->where('status', $this->statusFilter))
+            ->when($this->statusFilter === 'unpaid', fn ($q) => $q->whereIn('document_balances.status', ['sent', 'partially_paid']))
+            ->when($this->statusFilter && $this->statusFilter !== 'unpaid', fn ($q) => $q->where('document_balances.status', $this->statusFilter))
             ->when(
                 $this->sortBy === 'client',
                 fn ($q) => $q
                     ->join('businesses', 'businesses.id', '=', 'documents.party_id')
                     ->orderBy('businesses.trading_name', $this->sortDir)
                     ->select('documents.*'),
-                fn ($q) => $q->orderBy($this->sortBy, $this->sortDir)->orderBy('created_at', 'desc')
+                fn ($q) => $q->orderBy($sortColumn, $this->sortDir)->orderBy('documents.created_at', 'desc')
             )
             ->paginate(25);
 
@@ -546,8 +554,9 @@ new #[Layout('components.layout.app')] class extends Component
         return [
             'rows' => $rows,
             'statusCounts' => Document::salesInvoices()
-                ->selectRaw('status, COUNT(*) as count')
-                ->groupBy('status')
+                ->join('document_balances', 'document_balances.document_id', '=', 'documents.id')
+                ->selectRaw('document_balances.status, COUNT(*) as count')
+                ->groupBy('document_balances.status')
                 ->pluck('count', 'status'),
             // Client dropdown only renders inside the create modal and the
             // header edit form — skip the query on every other interaction.
