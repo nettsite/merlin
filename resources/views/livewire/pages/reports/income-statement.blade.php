@@ -1,8 +1,8 @@
 <?php
 
-use App\Modules\Accounting\Models\JournalLine;
 use App\Modules\Accounting\Services\FinancialYearService;
 use App\Modules\Core\Settings\CurrencySettings;
+use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 
@@ -18,18 +18,17 @@ new #[Layout('components.layout.app')] class extends Component
         $today = now();
 
         // Net movement per account type's normal side: income accounts are
-        // credited by revenue postings but debited by JournalService::reverse()
-        // when an invoice is voided (it swaps debit/credit rather than
-        // negating one side), so the net — not a one-sided SUM — is what
-        // actually nets a voided invoice's revenue back to zero here.
+        // credited by revenue postings but debited by the credit note that
+        // reverses one (a separate posting, not a swap of the original), so
+        // the net — not a one-sided SUM — is what nets a fully credited
+        // invoice's revenue back to zero here.
         $fetchLines = function (string $typeCode, $from, $to): \Illuminate\Support\Collection {
             $amountExpr = $typeCode === '4'
-                ? 'SUM(journal_lines.credit) - SUM(journal_lines.debit)'
-                : 'SUM(journal_lines.debit) - SUM(journal_lines.credit)';
+                ? 'SUM(postings.credit) - SUM(postings.debit)'
+                : 'SUM(postings.debit) - SUM(postings.credit)';
 
-            return JournalLine::query()
-                ->join('journal_entries', 'journal_entries.id', '=', 'journal_lines.journal_entry_id')
-                ->join('accounts', 'accounts.id', '=', 'journal_lines.account_id')
+            return DB::table('postings')
+                ->join('accounts', 'accounts.id', '=', 'postings.account_id')
                 ->join('account_groups', 'account_groups.id', '=', 'accounts.account_group_id')
                 ->join('account_types', 'account_types.id', '=', 'account_groups.account_type_id')
                 ->selectRaw("
@@ -42,8 +41,8 @@ new #[Layout('components.layout.app')] class extends Component
                     {$amountExpr} as amount
                 ")
                 ->where('account_types.code', $typeCode)
-                ->whereDate('journal_entries.entry_date', '>=', $from)
-                ->whereDate('journal_entries.entry_date', '<=', $to)
+                ->whereDate('postings.entry_date', '>=', $from)
+                ->whereDate('postings.entry_date', '<=', $to)
                 ->groupBy('account_groups.name', 'account_groups.sort_order', 'accounts.id', 'accounts.code', 'accounts.name', 'accounts.sort_order')
                 ->get()
                 ->keyBy('account_id');

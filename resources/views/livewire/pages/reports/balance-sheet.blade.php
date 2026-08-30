@@ -1,9 +1,9 @@
 <?php
 
 use App\Modules\Accounting\Models\Account;
-use App\Modules\Accounting\Models\JournalLine;
 use App\Modules\Accounting\Services\AccountBalanceRollup;
 use App\Modules\Core\Settings\CurrencySettings;
+use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 
@@ -21,15 +21,15 @@ new #[Layout('components.layout.app')] class extends Component
         $settings = app(CurrencySettings::class);
         $asAt = $this->asAt ?: null;
 
-        // Cumulative balance from the journal: one grouped query in place of
-        // the six document-header accumulator queries this used to run.
-        // Reversals (e.g. a voided invoice) are just further journal entries,
-        // so they net out automatically with no status filtering here.
-        $rows = JournalLine::query()
-            ->join('journal_entries', 'journal_entries.id', '=', 'journal_lines.journal_entry_id')
-            ->when($asAt, fn ($q) => $q->whereDate('journal_entries.entry_date', '<=', $asAt))
-            ->selectRaw('journal_lines.account_id, SUM(journal_lines.debit) as debit, SUM(journal_lines.credit) as credit')
-            ->groupBy('journal_lines.account_id')
+        // Cumulative balance from the postings view: one grouped query in
+        // place of the six document-header accumulator queries this used to
+        // run. Reversals (e.g. a fully credited invoice) are just further
+        // postings, so they net out automatically with no status filtering
+        // here.
+        $rows = DB::table('postings')
+            ->when($asAt, fn ($q) => $q->whereDate('entry_date', '<=', $asAt))
+            ->selectRaw('account_id, SUM(debit) as debit, SUM(credit) as credit')
+            ->groupBy('account_id')
             ->get();
 
         $acc = [];

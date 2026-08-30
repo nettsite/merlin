@@ -358,11 +358,15 @@ class ImportFromNinja extends Command
                     DocumentLine::$recalculatesDocumentTotals = false;
 
                     try {
+                        // Created as 'draft' and flipped to the real historical
+                        // status only after its lines exist — a line can no
+                        // longer be created on a document that's already
+                        // 'issued' (see Document::isIssued()).
                         $doc = Document::create([
                             'document_type' => 'sales_invoice',
                             'direction' => 'outbound',
                             'document_number' => $inv->number,
-                            'status' => $this->mapInvoiceStatus((int) $inv->status_id),
+                            'status' => 'draft',
                             'party_id' => $partyUuid,
                             'issue_date' => $inv->date ?: now()->toDateString(),
                             'due_date' => $inv->due_date ?: null,
@@ -388,6 +392,7 @@ class ImportFromNinja extends Command
                             (bool) ($inv->is_amount_discount ?? false),
                         );
                         $doc->recalculateTotals();
+                        $doc->update(['status' => $this->mapInvoiceStatus((int) $inv->status_id)]);
 
                         $this->invoiceMap[$inv->id] = $doc->id;
                     } finally {

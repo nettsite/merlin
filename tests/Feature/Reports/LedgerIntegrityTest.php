@@ -1,13 +1,13 @@
 <?php
 
+use App\Exceptions\InvalidDocumentStateException;
 use App\Modules\Accounting\Models\Account;
-use App\Modules\Accounting\Models\JournalEntry;
-use App\Modules\Accounting\Models\JournalLine;
 use App\Modules\Billing\Services\BillingService;
 use App\Modules\Core\Models\Document;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Services\DocumentService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 
 uses(RefreshDatabase::class);
 
@@ -128,8 +128,8 @@ it('keeps the trial balance balanced across a mixed set of postings', function (
         'contra_account_id' => $this->bank->id,
     ], $user);
 
-    $totalDebit = (float) JournalLine::sum('debit');
-    $totalCredit = (float) JournalLine::sum('credit');
+    $totalDebit = (float) DB::table('postings')->sum('debit');
+    $totalCredit = (float) DB::table('postings')->sum('credit');
 
     expect($totalDebit)->toBe($totalCredit)
         ->and($totalDebit)->toBeGreaterThan(0.0);
@@ -146,15 +146,15 @@ it('nets a fully credited invoice to zero in the ledger', function (): void {
     $svc->applyCreditNote($creditNote->fresh(), $invoice->fresh(), $user);
 
     // The credit note's reversal cancels out net movement to zero, but both
-    // the original posting and the reversing entry exist in the append-only
-    // journal — an invoice is never voided, only credited.
-    $net = (float) JournalLine::where('account_id', $this->income->id)->sum('credit')
-        - (float) JournalLine::where('account_id', $this->income->id)->sum('debit');
+    // the original posting and the reversing entry are separate rows in the
+    // postings view — an invoice is never voided, only credited.
+    $net = (float) DB::table('postings')->where('account_id', $this->income->id)->sum('credit')
+        - (float) DB::table('postings')->where('account_id', $this->income->id)->sum('debit');
 
     expect($net)->toBe(0.0);
 });
 
-it('does not double-post a credit note applied twice by accident', function (): void {
+it('cannot apply a credit note a second time', function (): void {
     $svc = app(DocumentService::class);
     $user = User::factory()->create();
 
@@ -183,5 +183,9 @@ it('does not double-post a credit note applied twice by accident', function (): 
     $svc->issueCreditNote($creditNote->fresh(), $user);
     $svc->applyCreditNote($creditNote->fresh(), $invoice->fresh(), $user);
 
-    expect(JournalEntry::where('document_id', $creditNote->id)->count())->toBe(1);
+    expect(fn () => $svc->applyCreditNote($creditNote->fresh(), $invoice->fresh(), $user))
+        ->toThrow(InvalidDocumentStateException::class);
+
+    // Only ever one AR-clearing row for this credit note, not two.
+    expect(DB::table('postings')->where('document_id', $creditNote->id)->where('source', 'credit_note_ar')->count())->toBe(1);
 });

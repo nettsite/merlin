@@ -1,10 +1,10 @@
 <?php
 
 use App\Modules\Accounting\Models\Account;
-use App\Modules\Accounting\Models\JournalLine;
 use App\Modules\Accounting\Services\AccountBalanceRollup;
 use App\Modules\Accounting\Services\FinancialYearService;
 use App\Modules\Core\Settings\CurrencySettings;
+use Illuminate\Support\Facades\DB;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 
@@ -27,19 +27,18 @@ new #[Layout('components.layout.app')] class extends Component
         $settings = app(CurrencySettings::class);
 
         // Build movement accumulator for a given date window from the
-        // journal — a single grouped query in place of the six
+        // postings view — a single grouped query in place of the six
         // document-header accumulator queries this used to run, one per
-        // document type/direction. A voided invoice's reversal is just
-        // another journal entry, so it nets out automatically with no
-        // status filtering needed here.
+        // document type/direction. A fully credited invoice's reversal is
+        // just another posting (from the credit note), so it nets out
+        // automatically with no status filtering needed here.
         // $from = null means no lower bound (cumulative balance mode).
         $buildAcc = function (?string $from, ?string $to): array {
-            $rows = JournalLine::query()
-                ->join('journal_entries', 'journal_entries.id', '=', 'journal_lines.journal_entry_id')
-                ->when($from, fn ($q) => $q->whereDate('journal_entries.entry_date', '>=', $from))
-                ->when($to, fn ($q) => $q->whereDate('journal_entries.entry_date', '<=', $to))
-                ->selectRaw('journal_lines.account_id, SUM(journal_lines.debit) as debit, SUM(journal_lines.credit) as credit')
-                ->groupBy('journal_lines.account_id')
+            $rows = DB::table('postings')
+                ->when($from, fn ($q) => $q->whereDate('entry_date', '>=', $from))
+                ->when($to, fn ($q) => $q->whereDate('entry_date', '<=', $to))
+                ->selectRaw('account_id, SUM(debit) as debit, SUM(credit) as credit')
+                ->groupBy('account_id')
                 ->get();
 
             $acc = [];

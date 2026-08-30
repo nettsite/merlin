@@ -239,7 +239,7 @@ function postedInvoice(mixed $supplier, mixed $account, array $overrides = []): 
 
     $doc = Document::factory()->purchaseInvoice()->create(array_merge([
         'party_id' => $supplier->id,
-        'status' => 'posted',
+        'status' => 'received',
         'llm_confidence' => 0.95,
         'currency' => 'ZAR',
         'payable_account_id' => $payableId,
@@ -252,6 +252,8 @@ function postedInvoice(mixed $supplier, mixed $account, array $overrides = []): 
         'unit_price' => 100.00,
         'tax_rate' => null,
     ]);
+
+    $doc->update(['status' => 'posted']);
 
     return $doc;
 }

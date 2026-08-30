@@ -2,7 +2,6 @@
 
 use App\Exceptions\InvalidDocumentStateException;
 use App\Exceptions\InvalidFileTypeException;
-use App\Modules\Accounting\Services\JournalService;
 use App\Modules\Billing\Settings\BillingSettings;
 use App\Modules\Core\Models\Document;
 use App\Modules\Core\Models\DocumentActivity;
@@ -282,7 +281,6 @@ it('rejects an unsupported file in createFromFile before touching the database',
 
     $service = new DocumentService(
         app(CurrencySettings::class),
-        app(JournalService::class),
         app(BillingSettings::class),
         app(PurchasingSettings::class),
         new MagikaService('__nonexistent__'),

@@ -4,7 +4,6 @@ namespace App\Modules\Core\Models;
 
 use App\Exceptions\PostedDocumentImmutableException;
 use App\Modules\Accounting\Models\Account;
-use App\Modules\Accounting\Models\JournalEntry;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -98,15 +97,15 @@ class DocumentLine extends Model
     }
 
     /**
-     * Refuses to save/delete a line once its document has a non-reversed
-     * journal entry — this is what makes the journal actually append-only:
-     * without it, editing a posted invoice's line silently leaves the
-     * already-posted ledger entry wrong with nothing to catch it. Bypassed
-     * by saveQuietly() (used by the FX-rate-finalisation and VAT-correction
-     * paths, both of which only ever touch lines on invoices confirmed not
-     * yet posted) and by the bulk relation delete()s used when reprocessing
-     * — both restricted to non-posted documents already, at the service
-     * layer that calls them.
+     * Refuses to save/delete a line once its document is issued (see
+     * Document::isIssued()) — this is what makes a document's postings
+     * actually append-only: without it, editing an issued invoice's line
+     * would silently leave every report reading the postings view wrong,
+     * with nothing to catch it. Bypassed by saveQuietly() (used by the
+     * FX-rate-finalisation and VAT-correction paths, both of which only
+     * ever touch lines on invoices confirmed not yet issued) and by the
+     * bulk relation delete()s used when reprocessing — both restricted to
+     * non-issued documents already, at the service layer that calls them.
      */
     private function guardAgainstPostedMutation(): void
     {
@@ -114,11 +113,12 @@ class DocumentLine extends Model
             return;
         }
 
-        $isPosted = JournalEntry::where('document_id', $this->document_id)
-            ->whereNull('reversed_by_id')
-            ->exists();
-
-        if ($isPosted) {
+        // Always a fresh query, never the cached document() relation — a
+        // line saved once while its document was still a draft caches that
+        // status on the instance, and a later save after the document is
+        // issued would otherwise read the stale cached copy instead of the
+        // status that's actually true at this moment.
+        if (Document::find($this->document_id)?->is_issued) {
             throw PostedDocumentImmutableException::forLine($this->document_id);
         }
     }

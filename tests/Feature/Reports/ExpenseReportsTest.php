@@ -21,8 +21,10 @@ beforeEach(function (): void {
 
 function expenseInvoice(Account $account, float $unitPrice, string $status = 'posted'): Document
 {
+    // A line can no longer be created once the document is posted — build
+    // at 'received' and flip to the requested status afterward.
     $doc = Document::factory()->purchaseInvoice()->create([
-        'status' => $status,
+        'status' => $status === 'posted' ? 'received' : $status,
         'issue_date' => now()->toDateString(),
     ]);
 
@@ -35,6 +37,10 @@ function expenseInvoice(Account $account, float $unitPrice, string $status = 'po
         'unit_price' => $unitPrice,
         'tax_rate' => 15,
     ]);
+
+    if ($status === 'posted') {
+        $doc->update(['status' => 'posted']);
+    }
 
     return $doc;
 }

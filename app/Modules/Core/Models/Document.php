@@ -82,6 +82,7 @@ class Document extends Model implements HasMedia
         'payable_account_id',
         'receivable_account_id',
         'contra_account_id',
+        'tax_account_id',
         'payment_term_id',
         'source',
         'llm_confidence',
@@ -158,6 +159,19 @@ class Document extends Model implements HasMedia
     public function receivableAccount(): BelongsTo
     {
         return $this->belongsTo(Account::class, 'receivable_account_id');
+    }
+
+    /**
+     * The VAT liability account in force when this document was issued —
+     * stamped at that moment from BillingSettings::tax_liability_account_id
+     * rather than read live, so changing the setting later can't
+     * retroactively re-post a historical invoice's VAT leg.
+     *
+     * @return BelongsTo<Account, $this>
+     */
+    public function taxAccount(): BelongsTo
+    {
+        return $this->belongsTo(Account::class, 'tax_account_id');
     }
 
     /** @return BelongsTo<PaymentTerm, $this> */
@@ -304,6 +318,30 @@ class Document extends Model implements HasMedia
             get: fn (): bool => $this->status === 'paid'
                 && (float) $this->credits_applied > 0
                 && (float) $this->credits_applied >= (float) $this->total,
+        );
+    }
+
+    /**
+     * True once a document carries real accounting weight — its lines are
+     * what the postings view reads, so they can no longer change without
+     * silently rewriting a report that already showed them. Per document
+     * type because "issued" means something different for each: a sales
+     * invoice the moment it's sent, a purchase invoice once posted (draft
+     * through disputed are all still pre-posting review states), a credit
+     * note the moment it's issued — not only once applied, matching "a
+     * document is immutable once issued" rather than waiting for its GL
+     * effect. Quotes, POs, and statements never carry accounting weight, so
+     * they're never locked here.
+     */
+    protected function isIssued(): Attribute
+    {
+        return Attribute::make(
+            get: fn (): bool => match ($this->document_type) {
+                'sales_invoice' => ! in_array($this->status, self::UNRECOGNISED_SALES_STATUSES, true),
+                'purchase_invoice' => in_array($this->status, self::POSTED_STATUSES, true),
+                'credit_note' => in_array($this->status, ['issued', 'applied'], true),
+                default => false,
+            },
         );
     }
 

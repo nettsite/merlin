@@ -3,7 +3,6 @@
 namespace App\Modules\Core\Services;
 
 use App\Exceptions\InvalidDocumentStateException;
-use App\Modules\Accounting\Services\JournalService;
 use App\Modules\Billing\Settings\BillingSettings;
 use App\Modules\Core\Models\BankReconciliationMatch;
 use App\Modules\Core\Models\Document;
@@ -15,14 +14,12 @@ use App\Modules\Core\Settings\CurrencySettings;
 use App\Modules\Purchasing\Services\PaymentEvidenceRecorder;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class DocumentService
 {
     public function __construct(
         private readonly CurrencySettings $currencySettings,
-        private readonly JournalService $journal,
         private readonly BillingSettings $billingSettings,
     ) {}
 
@@ -34,56 +31,43 @@ class DocumentService
     {
         DB::transaction(function () use ($doc, $by) {
             $this->transition($doc, 'sent', $by, 'Invoice sent to client.');
-            $this->postSalesInvoiceJournal($doc);
+            $this->stampTaxAccount($doc);
         });
     }
 
     /**
-     * Post the revenue-recognition entry for a sent sales invoice: debit AR
-     * for the full total, credit each line's income account, and credit the
-     * VAT liability account for any tax. Silently skipped (not an error) when
-     * the invoice's receivable account or any line's income account isn't
-     * configured yet — the same gap the old report queries already guarded
-     * against with whereNotNull(), just moved to write time.
+     * Stamp the VAT liability account onto an invoice at the moment it's
+     * issued, rather than have the postings view read
+     * BillingSettings::tax_liability_account_id live — a view can't reach a
+     * settings-table JSON payload portably, and reading it live would let a
+     * later change to the setting retroactively re-post a historical
+     * invoice's VAT leg. Once stamped, the postings view picks it straight
+     * off the row; nothing else needs to happen at write time — an invoice
+     * with an uncoded line or no receivable account simply doesn't appear
+     * in the view yet, the same silent omission the old per-report
+     * whereNotNull() guards always had, just moved from report-query time
+     * to (nowhere — it's structural now).
      */
-    private function postSalesInvoiceJournal(Document $doc): void
+    private function stampTaxAccount(Document $doc): void
     {
-        if ($doc->receivable_account_id === null) {
+        // Mirrors postSalesInvoiceJournal()'s old guard order: the VAT
+        // account is only a hard requirement once the invoice is otherwise
+        // postable at all. Without receivable_account_id it won't appear in
+        // the postings view regardless (see the create_postings_view
+        // migration), so it's still an in-progress document, not the
+        // "configured VAT but no VAT account" Settings gap this throws for.
+        if ((float) $doc->tax_total <= 0 || $doc->receivable_account_id === null) {
             return;
         }
 
-        /** @var Collection<int, DocumentLine> $lines */
-        $lines = $doc->lines;
+        $taxAccountId = $this->billingSettings->tax_liability_account_id;
 
-        if ($lines->isEmpty() || $lines->contains(fn (DocumentLine $l) => $l->account_id === null)) {
-            return;
+        if ($taxAccountId === null) {
+            throw new \RuntimeException("Cannot send invoice {$doc->document_number}: it carries VAT but Settings > Billing has no VAT liability account configured.");
         }
 
-        $journalLines = [
-            ['account_id' => $doc->receivable_account_id, 'debit' => (float) $doc->total, 'party_id' => $doc->party_id, 'description' => 'Invoice total'],
-        ];
-
-        foreach ($lines->groupBy('account_id') as $accountId => $group) {
-            $journalLines[] = ['account_id' => $accountId, 'credit' => (float) $group->sum('line_total'), 'description' => $group->first()->description];
-        }
-
-        if ((float) $doc->tax_total > 0) {
-            $taxAccountId = $this->billingSettings->tax_liability_account_id;
-
-            if ($taxAccountId === null) {
-                throw new \RuntimeException("Cannot post invoice {$doc->document_number}: it carries VAT but Settings > Billing has no VAT liability account configured.");
-            }
-
-            $journalLines[] = ['account_id' => $taxAccountId, 'credit' => (float) $doc->tax_total, 'description' => 'VAT'];
-        }
-
-        $this->journal->post(
-            source: 'sales_invoice_issued',
-            date: $doc->issue_date ?? now(),
-            description: "Sales invoice {$doc->document_number} issued",
-            lines: $journalLines,
-            document: $doc,
-        );
+        $doc->tax_account_id = $taxAccountId;
+        $doc->saveQuietly();
     }
 
     public function recordResend(Document $doc, ?User $by): void
@@ -229,45 +213,15 @@ class DocumentService
             $this->transition($creditNote, 'applied', $by, "Applied to invoice {$invoice->document_number}.");
             $this->recordActivity($invoice, $by, 'credit_applied', "Credit note {$creditNote->document_number} applied; balance reduced by {$creditNote->currency} {$amount}.");
 
-            $this->postCreditNoteJournal($creditNote, $invoice, $amount);
+            // The postings view's credit-note branch reads receivable_account_id
+            // straight off the credit note row (same as every other document
+            // type) — a credit note has no AR account of its own at creation, so
+            // stamp the invoice's onto it here, at the one moment that
+            // relationship becomes fixed. Matches what postCreditNoteJournal()
+            // used to read from $invoice transiently, just persisted instead.
+            $creditNote->receivable_account_id ??= $invoice->receivable_account_id;
+            $creditNote->saveQuietly();
         });
-    }
-
-    /**
-     * Post the credit note's own income-account lines as debits (reversing
-     * the revenue) against a credit to the target invoice's AR account.
-     * Silently skipped when the invoice has no receivable account configured
-     * or any credit note line lacks an income account — same guard as
-     * postSalesInvoiceJournal().
-     */
-    private function postCreditNoteJournal(Document $creditNote, Document $invoice, float $amount): void
-    {
-        if ($invoice->receivable_account_id === null || $amount <= 0) {
-            return;
-        }
-
-        /** @var Collection<int, DocumentLine> $lines */
-        $lines = $creditNote->lines;
-
-        if ($lines->isEmpty() || $lines->contains(fn (DocumentLine $l) => $l->account_id === null)) {
-            return;
-        }
-
-        $journalLines = [
-            ['account_id' => $invoice->receivable_account_id, 'credit' => $amount, 'party_id' => $invoice->party_id, 'description' => "Credit note {$creditNote->document_number}"],
-        ];
-
-        foreach ($lines->groupBy('account_id') as $accountId => $group) {
-            $journalLines[] = ['account_id' => $accountId, 'debit' => (float) $group->sum('line_total'), 'description' => $group->first()->description];
-        }
-
-        $this->journal->post(
-            source: 'credit_note_applied',
-            date: $creditNote->issue_date ?? now(),
-            description: "Credit note {$creditNote->document_number} applied to invoice {$invoice->document_number}",
-            lines: $journalLines,
-            document: $creditNote,
-        );
     }
 
     public function markAsReviewed(Document $doc, User $by): void
@@ -289,51 +243,17 @@ class DocumentService
         $this->transition($doc, 'approved', $by, 'Approved for payment.');
     }
 
+    /**
+     * A posted purchase invoice needs no stamping beyond the status change —
+     * its payable account and each line's expense account are already their
+     * own columns, which is all the postings view reads. An invoice with an
+     * uncoded line or no payable account simply doesn't appear in the view
+     * yet, same as the sales side.
+     */
     public function post(Document $doc, User $by): void
     {
-        DB::transaction(function () use ($doc, $by) {
-            $this->transition($doc, 'posted', $by, 'Posted to the general ledger.');
-            $this->postPurchaseInvoiceJournal($doc);
-        });
-
+        $this->transition($doc, 'posted', $by, 'Posted to the general ledger.');
         $this->recordPendingPurchasePayment($doc);
-    }
-
-    /**
-     * Post the expense-recognition entry for a posted purchase invoice: debit
-     * each line's expense account, credit AP for the full total. Silently
-     * skipped when the invoice's payable account or any line's expense
-     * account isn't configured yet — mirrors postSalesInvoiceJournal()'s
-     * guard on the sales side.
-     */
-    private function postPurchaseInvoiceJournal(Document $doc): void
-    {
-        if ($doc->payable_account_id === null) {
-            return;
-        }
-
-        /** @var Collection<int, DocumentLine> $lines */
-        $lines = $doc->lines;
-
-        if ($lines->isEmpty() || $lines->contains(fn (DocumentLine $l) => $l->account_id === null)) {
-            return;
-        }
-
-        $journalLines = [
-            ['account_id' => $doc->payable_account_id, 'credit' => (float) $doc->total, 'party_id' => $doc->party_id, 'description' => 'Invoice total'],
-        ];
-
-        foreach ($lines->groupBy('account_id') as $accountId => $group) {
-            $journalLines[] = ['account_id' => $accountId, 'debit' => (float) $group->sum('line_total'), 'description' => $group->first()->description];
-        }
-
-        $this->journal->post(
-            source: 'purchase_invoice_posted',
-            date: $doc->issue_date ?? now(),
-            description: "Purchase invoice {$doc->document_number} posted",
-            lines: $journalLines,
-            document: $doc,
-        );
     }
 
     /**
@@ -381,6 +301,11 @@ class DocumentService
             : ($statement->issue_date ?? now());
 
         return DB::transaction(function () use ($statementLine, $statement, $glAccountId, $amount, $direction, $date, $by): Document {
+            // The postings view's payment branch already reads
+            // receivable_account_id (inbound) / payable_account_id (outbound)
+            // against contra_account_id — a bank charge's expense account
+            // fills the exact same slot an AR/AP account would on an
+            // ordinary payment, so this needs no branch of its own.
             $entry = Document::create([
                 'document_type' => 'payment',
                 'direction' => $direction,
@@ -391,84 +316,17 @@ class DocumentService
                 'subtotal' => $amount,
                 'tax_total' => 0,
                 'total' => $amount,
+                'receivable_account_id' => $direction === 'inbound' ? $glAccountId : null,
+                'payable_account_id' => $direction === 'outbound' ? $glAccountId : null,
                 'contra_account_id' => $statement->contra_account_id,
                 'reference' => $statementLine->description,
                 'source' => 'reconciliation',
             ]);
 
-            $lines = $direction === 'inbound'
-                ? [
-                    ['account_id' => $statement->contra_account_id, 'debit' => $amount, 'description' => $statementLine->description],
-                    ['account_id' => $glAccountId, 'credit' => $amount, 'description' => $statementLine->description],
-                ]
-                : [
-                    ['account_id' => $glAccountId, 'debit' => $amount, 'description' => $statementLine->description],
-                    ['account_id' => $statement->contra_account_id, 'credit' => $amount, 'description' => $statementLine->description],
-                ];
-
-            $this->journal->post(
-                source: 'reconciliation_gl_entry',
-                date: $date,
-                description: "Reconciled: {$statementLine->description}",
-                lines: $lines,
-                document: $entry,
-            );
-
             $this->matchReconciliation($statementLine, $entry, $by);
 
             return $entry;
         });
-    }
-
-    /**
-     * Post the cash-movement entry for an inbound or outbound payment
-     * Document: debit/credit the contra (bank) account against the
-     * receivable or payable account on the payment's own header — payments
-     * never carry lines, so there's nothing to group by account. Public so
-     * BillingService::recordPayment() (the manual sales-payment path) can
-     * call it too; it creates its own payment Document independently of
-     * recordPurchasePayment() below. Silently skipped when the contra
-     * account isn't configured, same guard pattern as the invoice postings.
-     */
-    public function postPaymentJournal(Document $payment): void
-    {
-        if ($payment->contra_account_id === null) {
-            return;
-        }
-
-        $amount = (float) $payment->total;
-
-        if ($amount <= 0) {
-            return;
-        }
-
-        if ($payment->direction === 'inbound') {
-            if ($payment->receivable_account_id === null) {
-                return;
-            }
-
-            $lines = [
-                ['account_id' => $payment->contra_account_id, 'debit' => $amount, 'description' => 'Payment received'],
-                ['account_id' => $payment->receivable_account_id, 'credit' => $amount, 'party_id' => $payment->party_id, 'description' => 'Payment received'],
-            ];
-        } else {
-            if ($payment->payable_account_id === null) {
-                return;
-            }
-
-            $lines = [
-                ['account_id' => $payment->payable_account_id, 'debit' => $amount, 'party_id' => $payment->party_id, 'description' => 'Payment made'],
-                ['account_id' => $payment->contra_account_id, 'credit' => $amount, 'description' => 'Payment made'],
-            ];
-        }
-
-        $this->journal->post(
-            source: 'payment',
-            date: $payment->issue_date ?? now(),
-            description: "Payment {$payment->document_number}",
-            lines: $lines,
-            document: $payment,
-        );
     }
 
     public function dispute(Document $doc, User $by, string $reason): void
@@ -626,7 +484,6 @@ class DocumentService
             ]);
 
             $this->recordPayment($invoice, $amount, $date, $reference, (bool) ($data['finalise_rate'] ?? false));
-            $this->postPaymentJournal($payment);
 
             return $payment;
         });
@@ -696,11 +553,7 @@ class DocumentService
 
     public function postAutonomously(Document $doc, string $reason): void
     {
-        DB::transaction(function () use ($doc, $reason) {
-            $this->transition($doc, 'posted', null, "Auto-posted: {$reason}");
-            $this->postPurchaseInvoiceJournal($doc);
-        });
-
+        $this->transition($doc, 'posted', null, "Auto-posted: {$reason}");
         $this->recordPendingPurchasePayment($doc);
     }
 

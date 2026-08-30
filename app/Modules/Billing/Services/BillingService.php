@@ -162,7 +162,6 @@ class BillingService
             ]);
 
             app(DocumentService::class)->recordPayment($invoice, $amount, $date, $reference);
-            app(DocumentService::class)->postPaymentJournal($payment);
 
             return $payment;
         });

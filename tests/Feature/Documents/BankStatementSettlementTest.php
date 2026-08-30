@@ -1,7 +1,6 @@
 <?php
 
 use App\Modules\Accounting\Models\Account;
-use App\Modules\Accounting\Models\JournalLine;
 use App\Modules\Billing\Services\BillingService;
 use App\Modules\Core\Models\BankReconciliationMatch;
 use App\Modules\Core\Models\Document;
@@ -9,6 +8,7 @@ use App\Modules\Core\Models\Party;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Services\DocumentService;
 use App\Modules\Core\Services\PartyService;
+use Illuminate\Support\Facades\DB;
 use Livewire\Livewire;
 
 function bssSentInvoice(): Document
@@ -57,7 +57,7 @@ function bssStatement(?Account $bankAccount = null): Document
 
 it('does not touch the ledger when a statement is imported', function (): void {
     bssSentInvoice(); // pre-existing invoice, so the journal isn't empty
-    $before = (int) JournalLine::count();
+    $before = (int) DB::table('postings')->count();
 
     $statement = bssStatement();
     $statement->lines()->create([
@@ -69,7 +69,7 @@ it('does not touch the ledger when a statement is imported', function (): void {
         'tax_rate' => null,
     ]);
 
-    expect(JournalLine::count())->toBe($before);
+    expect(DB::table('postings')->count())->toBe($before);
 });
 
 it('creates a payment and matches it when the operator confirms against an invoice', function (): void {
@@ -180,8 +180,8 @@ it('posts a two-line GL entry for an unmatched line with no invoice behind it', 
         ->and($entry->direction)->toBe('outbound')
         ->and((float) $entry->total)->toBe(150.00);
 
-    expect((float) JournalLine::where('account_id', $bankCharges->id)->sum('debit'))->toBe(150.0)
-        ->and((float) JournalLine::where('account_id', $bankAccount->id)->sum('credit'))->toBe(150.0);
+    expect((float) DB::table('postings')->where('account_id', $bankCharges->id)->sum('debit'))->toBe(150.0)
+        ->and((float) DB::table('postings')->where('account_id', $bankAccount->id)->sum('credit'))->toBe(150.0);
 });
 
 it('unmatches a line, freeing it to be matched again', function (): void {
@@ -217,7 +217,7 @@ it('unmatches a line, freeing it to be matched again', function (): void {
 
 it('closes a statement out as reconciled without posting anything', function (): void {
     $statement = bssStatement();
-    $before = (int) JournalLine::count();
+    $before = (int) DB::table('postings')->count();
 
     $user = User::factory()->create();
     $user->givePermissionTo(['documents-view-any', 'documents-view', 'documents-update']);
@@ -228,5 +228,5 @@ it('closes a statement out as reconciled without posting anything', function ():
         ->call('reconcileStatement', $statement->id);
 
     expect($statement->fresh()->status)->toBe('reconciled')
-        ->and(JournalLine::count())->toBe($before);
+        ->and(DB::table('postings')->count())->toBe($before);
 });

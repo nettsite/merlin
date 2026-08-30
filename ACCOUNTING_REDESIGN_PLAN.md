@@ -318,7 +318,49 @@ on the invoice.
 - Verify: a test asserting the settings page rejects a threshold below 0.90, and that a 0.60
   name-only match never posts.
 
-## Phase 4 — The `postings` view; delete the journal tables (2.5 days)
+## Phase 4 — The `postings` view; delete the journal tables (2.5 days) — **DONE 2026-08-30**
+
+Landed on `main`. `journal_entries`/`journal_lines` dropped, `JournalService`/`JournalEntry`/
+`JournalLine`/`UnbalancedJournalEntryException` deleted outright, replaced by a 12-branch
+`postings` view. 673/673 tests green, `vendor/bin/pint --dirty` clean, `npm run build` run.
+CLAUDE.md's Journal section rewritten for the new model.
+
+**Two things the plan didn't anticipate, both real correctness gaps closed while building this:**
+
+- **The view needed a `description` column and an "all lines coded" `NOT EXISTS` guard** neither
+  of which the plan's SQL sketch mentioned. Without the guard, an invoice with one uncoded line
+  would show its AR debit (doesn't depend on line coding) while its income leg silently didn't —
+  an apparently real but actually unbalanced row set. The guard reproduces the deleted
+  `post*Journal()` methods' all-or-nothing rule exactly.
+- **`accounts/show`'s "contra account" derivation had to change grouping key**, not just table
+  name. The old query correlated on `journal_entries.id` (a real per-entry row); the view has no
+  row-level identity, only `document_id`, which is the correct equivalent (every document got
+  exactly one posting event under the old model too) — but the "is this a clean 2-account entry"
+  test had to move from counting sibling rows to counting `COUNT(DISTINCT account_id)` per
+  `document_id`. Same answer, different mechanism, entirely rewritten rather than a table-name swap.
+
+**A guard-caching bug, caught by tests, not reasoning:** the immutability guard's rewrite from "query
+`JournalEntry` fresh every time" to `$this->document->is_issued` introduced real staleness — a
+line saved once while its document was still draft caches that relation, and a later save after
+the document is issued read the stale cached copy instead of re-querying. Fixed by always calling
+`Document::find($this->document_id)` fresh, never the cached relation. Two of my own new tests
+caught this immediately; it would have silently defeated the whole guard in production.
+
+**The widest-reaching fix wasn't in the redesign at all — it was a pre-existing test-fixture
+pattern.** ~20 tests across 10 files created a purchase invoice directly at `status: 'posted'`
+(bypassing `DocumentService::post()`) and then attached lines to it afterward — legal under the
+old journal-entry-existence guard (nothing had posted a journal entry, so nothing fired) but
+correctly refused by the new status-based guard, since the document genuinely is issued the
+moment its status says so, regardless of how it got there. Every fixture reordered: create at a
+pre-issue status, add lines, flip to the final status afterward. Two further fixes came out of
+the same sweep: `ImportFromNinja.php` had the identical pattern in *production* code (historical
+invoices imported directly at their final status, lines attached after) — same reorder, and
+worth noting as a live bug this phase fixed rather than a test-only concern; and
+`stampTaxAccount()` needed the old `receivable_account_id === null` early-return restored (dropped
+in the first pass), which `RecurringInvoiceTest` caught — recurring-generated invoices don't stamp
+a receivable account, and without that guard a VAT invoice with no receivable account would hard-
+throw on send instead of staying silently un-postable, the same "in-progress document" distinction
+CLAUDE.md already documented for the old code.
 
 Gated on benchmark 0.2.
 
@@ -420,7 +462,7 @@ otherwise.
 | 1 · Remove void | 1.5 |
 | 2 · Bank statements → reconciliation | 3.0 (done) |
 | 3 · Floor the payment-match threshold | 0.25 (done) |
-| 4 · `postings` view, delete journal | 2.5 |
+| 4 · `postings` view, delete journal | 2.5 (done) |
 | 5 · Split mutable columns | 2.0 |
 | 6 · App-level immutability + audit | 1.5 |
 | **Total** | **11.0** |
@@ -438,7 +480,7 @@ and deliver the correctness wins; 4–6 are the structural payoff.
 |---|---|---|
 | F5 | Bank settlement guesses which invoice got paid | feature deleted (Phase 2) |
 | F7 | Payment notifications merge on 50% name match | fully closed — floored at 0.90 in both settings and `merge()` itself (Phase 3) |
-| F3 | No ledger / reports re-invent double entry | `postings` view (Phase 4) |
+| F3 | No ledger / reports re-invent double entry | fully closed — `postings` view (Phase 4) |
 | F19 | `BankStatementProcessingService` untested | fully closed — Phase 2.6 |
 
 **Already fixed on PR #2:** F1, F2, F4, F12, F17, F19 (`FinancialYearService` half).

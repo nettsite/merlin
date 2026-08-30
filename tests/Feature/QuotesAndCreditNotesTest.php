@@ -1,9 +1,9 @@
 <?php
 
 use App\Exceptions\InvalidDocumentStateException;
+use App\Exceptions\PostedDocumentImmutableException;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Core\Models\Document;
-use App\Modules\Core\Models\DocumentLine;
 use App\Modules\Core\Models\DocumentRelationship;
 use App\Modules\Core\Models\Party;
 use App\Modules\Core\Models\User;
@@ -299,15 +299,22 @@ it('does not reverse an applied credit when a payment is recorded', function ():
         ->and((float) $after->credits_applied)->toBe(400.00);
 });
 
-it('does not reverse an applied credit when a line is edited', function (): void {
+it('cannot edit a line after the invoice is sent, so an applied credit can never be silently reversed', function (): void {
     $client = quoteClient();
-    $invoice = makeSentInvoice($client); // total 1150
     $user = User::factory()->create();
 
-    // Give the invoice a real line matching its stated total, so a normal
-    // line save's recalculateTotals() doesn't change total for unrelated
-    // reasons — this test is about credits_applied surviving that call.
-    DocumentLine::$recalculatesDocumentTotals = false;
+    // Built and lined while still draft — a line can no longer be created
+    // or edited on a sent invoice at all, so this has to happen first.
+    $invoice = Document::create([
+        'document_type' => 'sales_invoice',
+        'direction' => 'outbound',
+        'status' => 'draft',
+        'party_id' => $client->id,
+        'issue_date' => now()->toDateString(),
+        'currency' => 'ZAR',
+        'exchange_rate' => 1.0,
+        'source' => 'manual',
+    ]);
     $line = $invoice->lines()->create([
         'line_number' => 1,
         'type' => 'service',
@@ -316,20 +323,21 @@ it('does not reverse an applied credit when a line is edited', function (): void
         'unit_price' => 1150.00,
         'tax_rate' => null,
     ]);
-    DocumentLine::$recalculatesDocumentTotals = true;
+    app(DocumentService::class)->markAsSent($invoice->fresh(), $user);
 
     $cn = makeDraftCreditNote($client, 400.00);
     $cn->update(['status' => 'issued']);
 
-    app(DocumentService::class)->applyCreditNote($cn->fresh(), $invoice, $user);
+    app(DocumentService::class)->applyCreditNote($cn->fresh(), $invoice->fresh(), $user);
 
     expect((float) $invoice->fresh()->balance_due)->toBe(750.00);
 
-    // A normal line save fires Document::recalculateTotals() via
-    // DocumentLine::booted()'s saved hook — this is the path that used to
-    // silently wipe out the applied credit.
+    // The bug this test used to guard against — a normal line save's
+    // recalculateTotals() silently wiping out the applied credit — can no
+    // longer happen at all: the line is immutable the moment the invoice
+    // is issued, so the edit itself is refused before it can touch totals.
     $line->description = 'Annual retainer (updated)';
-    $line->save();
+    expect(fn () => $line->save())->toThrow(PostedDocumentImmutableException::class);
 
     expect((float) $invoice->fresh()->balance_due)->toBe(750.00)
         ->and((float) $invoice->fresh()->credits_applied)->toBe(400.00);

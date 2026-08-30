@@ -17,7 +17,7 @@ beforeEach(function (): void {
 function postedPurchaseInvoice(float $unitPrice = 1000.00): Document
 {
     $doc = Document::factory()->purchaseInvoice()->create([
-        'status' => 'posted',
+        'status' => 'received',
         'issue_date' => now()->toDateString(),
     ]);
 
@@ -29,6 +29,8 @@ function postedPurchaseInvoice(float $unitPrice = 1000.00): Document
         'unit_price' => $unitPrice,
         'tax_rate' => 0,
     ]);
+
+    $doc->update(['status' => 'posted']);
 
     return $doc->fresh();
 }
@@ -106,7 +108,7 @@ it('rejects overpayment of a purchase invoice', function (): void {
 
 it('finalises the exchange rate from the actual amount paid', function (): void {
     $invoice = Document::factory()->purchaseInvoice()->create([
-        'status' => 'posted',
+        'status' => 'received',
         'currency' => 'USD',
         'exchange_rate' => 18.0,
         'exchange_rate_provisional' => true,
@@ -124,6 +126,7 @@ it('finalises the exchange rate from the actual amount paid', function (): void 
         'foreign_tax_amount' => 0,
         'tax_rate' => 0,
     ]);
+    $invoice->update(['status' => 'posted']);
 
     $invoice = $invoice->fresh(); // foreign_total 100, total 1800 provisional
 

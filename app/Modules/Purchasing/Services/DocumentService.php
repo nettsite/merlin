@@ -3,7 +3,6 @@
 namespace App\Modules\Purchasing\Services;
 
 use App\Modules\Accounting\Models\Account;
-use App\Modules\Accounting\Services\JournalService;
 use App\Modules\Billing\Settings\BillingSettings;
 use App\Modules\Core\Models\Document;
 use App\Modules\Core\Models\Party;
@@ -20,12 +19,11 @@ class DocumentService extends BaseDocumentService
 {
     public function __construct(
         CurrencySettings $currencySettings,
-        JournalService $journal,
         BillingSettings $billingSettings,
         private readonly PurchasingSettings $purchasingSettings,
         private readonly MagikaService $magika,
     ) {
-        parent::__construct($currencySettings, $journal, $billingSettings);
+        parent::__construct($currencySettings, $billingSettings);
     }
 
     /**

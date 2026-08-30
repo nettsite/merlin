@@ -173,10 +173,11 @@ it('does not change totals when the invoice is already posted', function (): voi
     $invoice = Document::factory()->purchaseInvoice()->create([
         'currency' => 'USD',
         'exchange_rate' => 18.0,
-        'status' => 'posted',
+        'status' => 'received',
     ]);
 
     DocumentLine::factory()->for($invoice)->create(['unit_price' => 1000, 'tax_rate' => 15]);
+    $invoice->update(['status' => 'posted']);
     $invoice->refresh();
     $originalTotal = (float) $invoice->total;
 
@@ -243,8 +244,9 @@ it('does not change totals when the payment notification is only a pending/reser
 // --- GL payment recording ---
 
 it('creates a real GL payment when a confirmed base-currency notification matches a posted invoice', function (): void {
-    $invoice = Document::factory()->purchaseInvoice()->create(['status' => 'posted']);
+    $invoice = Document::factory()->purchaseInvoice()->create(['status' => 'received']);
     DocumentLine::factory()->for($invoice)->create(['unit_price' => 1000, 'tax_rate' => 15]);
+    $invoice->update(['status' => 'posted']);
     $invoice->refresh();
     expect((float) $invoice->balance_due)->toBe(1150.0);
 
@@ -269,8 +271,9 @@ it('creates a real GL payment when a confirmed base-currency notification matche
 it('does not create a second GL payment when a second confirmation arrives for an already-settled invoice', function (): void {
     // Same payment confirmed twice — a bank advice, then a payment-gateway
     // email for the same EFT — must not double up the GL entry.
-    $invoice = Document::factory()->purchaseInvoice()->create(['status' => 'posted']);
+    $invoice = Document::factory()->purchaseInvoice()->create(['status' => 'received']);
     DocumentLine::factory()->for($invoice)->create(['unit_price' => 1000, 'tax_rate' => 15]);
+    $invoice->update(['status' => 'posted']);
     $invoice->refresh();
 
     $bankAdvice = paymentNotification(['total' => 1150.0, 'metadata' => ['confirmed' => true]]);

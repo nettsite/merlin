@@ -53,55 +53,58 @@ new #[Layout('components.layout.app')] class extends Component
 
     /**
      * Builds the transaction register for the current account directly from
-     * the journal — one query in place of the old 6-way UNION across raw
-     * document headers/lines. Pass $filterByContra = false to compute the
-     * set of contra accounts actually present in the (date-filtered)
+     * the postings view — one query in place of the old 6-way UNION across
+     * raw document headers/lines. Pass $filterByContra = false to compute
+     * the set of contra accounts actually present in the (date-filtered)
      * dataset, so the filter dropdown never offers an option that would
      * return zero rows.
      *
-     * "Contra account" only has a single answer when a journal entry has
-     * exactly one other line (a 2-line entry — the common case: a payment,
-     * or a purchase invoice line against its AP total). An entry with more
-     * lines (e.g. a sales invoice spanning several income accounts) has no
+     * "Contra account" only has a single answer when a document's postings
+     * touch exactly one other account (the common case: a payment, or a
+     * purchase invoice with one expense account against its AP total). A
+     * document touching more accounts (e.g. a sales invoice spanning
+     * several income accounts, or one that also has a VAT leg) has no
      * single contra, shown as "Various" — same as the old header rows.
+     * Grouped by document_id, not a per-row id (the view has none) — every
+     * document_id is one accounting event, the same grouping the deleted
+     * journal_entries row for that document used to represent.
      */
     private function buildTransactionQuery(bool $filterByContra): \Illuminate\Database\Query\Builder
     {
         $partyName = 'COALESCE(businesses.legal_name, CONCAT(persons.first_name, \' \', persons.last_name))';
 
-        // Correlated subquery: the account_id of the entry's one other line,
-        // or NULL when there isn't exactly one.
-        $contraSubquery = 'select ol.account_id from journal_lines ol
-            where ol.journal_entry_id = journal_lines.journal_entry_id
-                and ol.id != journal_lines.id
+        // Correlated subquery: the one other account touched by this
+        // document's postings, or NULL when there isn't exactly one.
+        $contraSubquery = 'select p3.account_id from postings p3
+            where p3.document_id = postings.document_id
+                and p3.account_id != postings.account_id
                 and (
-                    select count(*) from journal_lines ol2
-                    where ol2.journal_entry_id = journal_lines.journal_entry_id
-                        and ol2.id != journal_lines.id
-                ) = 1';
+                    select count(distinct p2.account_id) from postings p2
+                    where p2.document_id = postings.document_id
+                ) = 2
+            limit 1';
 
-        return DB::table('journal_lines')
-            ->join('journal_entries', 'journal_entries.id', '=', 'journal_lines.journal_entry_id')
-            ->leftJoin('documents', 'documents.id', '=', 'journal_entries.document_id')
+        return DB::table('postings')
+            ->leftJoin('documents', 'documents.id', '=', 'postings.document_id')
             ->leftJoin('businesses', 'businesses.id', '=', 'documents.party_id')
             ->leftJoin('persons', 'persons.id', '=', 'documents.party_id')
             ->leftJoin('accounts as contra_accounts', function ($join) use ($contraSubquery) {
                 $join->on('contra_accounts.id', '=', DB::raw("({$contraSubquery})"));
             })
-            ->where('journal_lines.account_id', $this->accountId)
-            ->when($this->dateFrom, fn ($q) => $q->whereDate('journal_entries.entry_date', '>=', $this->dateFrom))
-            ->when($this->dateTo, fn ($q) => $q->whereDate('journal_entries.entry_date', '<=', $this->dateTo))
+            ->where('postings.account_id', $this->accountId)
+            ->when($this->dateFrom, fn ($q) => $q->whereDate('postings.entry_date', '>=', $this->dateFrom))
+            ->when($this->dateTo, fn ($q) => $q->whereDate('postings.entry_date', '<=', $this->dateTo))
             ->when($filterByContra && $this->contraAccountId, fn ($q) => $q->whereRaw("({$contraSubquery}) = ?", [$this->contraAccountId]))
             ->selectRaw("
-                journal_entries.source,
-                journal_entries.entry_date as issue_date,
+                postings.source,
+                postings.entry_date as issue_date,
                 documents.id as document_id,
                 documents.document_number,
                 documents.document_type,
                 documents.status as document_status,
                 {$partyName} as party_name,
-                journal_lines.description as description,
-                (case when journal_lines.debit > 0 then journal_lines.debit else journal_lines.credit end) as amount,
+                postings.description as description,
+                (case when postings.debit > 0 then postings.debit else postings.credit end) as amount,
                 contra_accounts.id as contra_account_id,
                 contra_accounts.name as contra_account_name
             ");

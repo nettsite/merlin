@@ -57,9 +57,10 @@ app/Modules/
 │   ├── Settings/   — CurrencySettings (base_currency, locale), CompanySettings
 │   └── Policies/   — AllModulesPolicy (base; all domain policies extend this)
 ├── Accounting/
-│   ├── Models/     — Account, AccountGroup, AccountType, JournalEntry, JournalLine
+│   ├── Models/     — Account, AccountGroup, AccountType
 │   ├── Services/   — FinancialYearService (fiscal year bounds, month labels),
-│   │               — JournalService (the general ledger — see Journal section below), AccountBalanceRollup (sub-account rollup)
+│   │               — AccountBalanceRollup (sub-account rollup); the ledger itself is the
+│   │               — `postings` SQL view, not a service — see Journal section below
 │   └── Settings/   — AccountingSettings (financial_year_start_month)
 ├── Purchasing/
 │   ├── Models/     — PostingRule
@@ -81,7 +82,7 @@ app/Modules/
 app/Policies/       — 19 domain policies, all extend AllModulesPolicy
 app/Traits/         — HasDocumentNumber (auto-generates PREFIX-YEAR-NNNNN on create)
 app/Exceptions/     — InvalidDocumentStateException, InvalidFileTypeException, LlmApiException, LlmUnusableOutputException, PdfExtractionException,
-                    — UnbalancedJournalEntryException, PostedDocumentImmutableException
+                    — PostedDocumentImmutableException
 ```
 
 **Note:** `Purchasing\Services\DocumentService` (purchase-invoice status transitions) and `Core\Services\DocumentService` (shared document plumbing) are two distinct classes — check the namespace, not just the class name.
@@ -104,7 +105,7 @@ Routes use `Route::livewire()` unless marked *view*. Any test that renders a vie
 | `/suppliers/{id}` | `suppliers/show.blade.php` | Read-only detail |
 | `/purchase-invoices` | `purchase-invoices/index.blade.php` | **Fully custom** — file upload, LLM pipeline, inline line editing, status machine |
 | `/payment-notifications` | `payment-notifications/index.blade.php` | **Fully custom** — unmatched supplier payment notifications, link-to-invoice workflow |
-| `/bank-statements` | `bank-statements/index.blade.php` | **Fully custom** — upload PDF statements, LLM extraction, inline account assignment, reprocess with hint |
+| `/bank-statements` | `bank-statements/index.blade.php` | **Fully custom** — upload PDF statements, LLM extraction, reconciliation (match against an existing document, or create one on the spot), reprocess with hint. Statements never post — see Journal section |
 | `/bank-templates` | `bank-templates/index.blade.php` | CRUD |
 | `/posting-rules` | `posting-rules/index.blade.php` | CRUD |
 | `/settings/purchasing` | `settings/purchasing.blade.php` | Standalone page (not a Settings tab) — lives under the "Expenses" nav group, not `/settings` |
@@ -117,7 +118,7 @@ Routes use `Route::livewire()` unless marked *view*. Any test that renders a vie
 | `/recurring-invoices` | `recurring-invoices/index.blade.php` | CRUD |
 | `/payment-terms` | `payment-terms/index.blade.php` | CRUD |
 | `/accounts` | `accounts/index.blade.php` | CRUD |
-| `/accounts/{id}` | `accounts/show.blade.php` | Read-only transaction register for one account, sourced from `journal_lines` (see Journal section) |
+| `/accounts/{id}` | `accounts/show.blade.php` | Read-only transaction register for one account, sourced from the `postings` view (see Journal section) |
 | `/account-groups` | `account-groups/index.blade.php` | CRUD |
 | `/roles` | `roles/index.blade.php` | CRUD |
 | `/users` | `users/index.blade.php` | CRUD |
@@ -191,22 +192,71 @@ Full map (purchase invoices):
 
 Methods: `markAsReviewed()`, `approve()`, `post()`, `dispute()`, `reject()`, `reprocess()` (deletes lines, re-runs pipeline).
 
-### Journal (General Ledger)
+### The Ledger: `postings`, a derived view — not a written table
 
-`journal_entries` / `journal_lines` are the authoritative double-entry ledger. Before this existed, every report re-derived debits and credits from document headers/lines with its own copy-pasted status filters — that drift is what caused a real bug (voided sales invoices counting as revenue on the income statement). `JournalService` (`app/Modules/Accounting/Services/`) is the **only** writer:
+There is no journal table. `postings` (`create_postings_view` migration) is a SQL view, `UNION ALL`
+of one branch per posting source — sales invoice AR/income/VAT legs, purchase invoice
+expense/AP legs, credit note reversal legs, and payment in/out legs — read live from
+`documents`/`document_lines` with columns `document_id, entry_date, account_id, party_id, debit,
+credit, description, source`. Nothing writes to it; there's nothing to keep in sync. A document
+appears in it (or doesn't) purely by virtue of its own current status and account columns.
 
-- `post(source, date, description, lines, document?)` — rejects (`UnbalancedJournalEntryException`) unless `sum(debit) === sum(credit)`; idempotent per `(document_id, source)` — a second call for the same event is a no-op returning the existing entry, not a duplicate.
-- `reverse(entry, reason)` — writes a new entry with every line's debit/credit **swapped** (not negated) and stamps `reversed_by_id` on the original. The journal is append-only — nothing ever calls `update()`/`delete()` on a `JournalEntry`/`JournalLine`. **Because reverse() swaps rather than negates, any report computing a signed total must sum `credit − debit` (or `debit − credit`) — never one side alone, or a reversal has no visible effect.**
+**A document is "in the ledger" once its status is issued and its accounts are configured** — no
+write-time posting step exists. Each branch requires: the relevant account column set
+(`receivable_account_id`/`payable_account_id`/`contra_account_id`/`tax_account_id`, stamped onto
+the document at the moment it's decided — see below) and, for invoices/credit notes, **every
+line coded** (a `NOT EXISTS` guard in the view — one uncoded line hides the whole document, not
+just that line, reproducing the old all-or-nothing write-time skip). `Document::isIssued()`
+(`app/Modules/Core/Models/Document.php`) says which statuses count, per document type: a sales
+invoice from `sent` onward, a purchase invoice from `posted` onward, a credit note from `issued`
+onward (not only once applied — "immutable once issued" holds even before a credit note is ever
+used).
 
-`DocumentService` posts at every event that changes what's owed — `markAsSent()`/`voidDocument()` (sales revenue, reversed on void), `post()`/`postAutonomously()` (purchase expense), the three places a `payment` Document gets created (`createPaymentDocument()` for bank-statement settlement, `recordPurchasePayment()`, and `BillingService::recordPayment()` via the public `postPaymentJournal()`), and `applyCreditNote()`. Posting is **silently skipped** (not an error) when a document's receivable/payable account or a line's income/expense account isn't configured yet — this mirrors the `whereNotNull()` guards the old report queries already relied on, just moved to write time. A sales invoice with `tax_total > 0` but no `BillingSettings::tax_liability_account_id` configured **does** throw — that's a real Settings gap, not an in-progress document.
+**Balance by construction, not by assertion.** AR debit = `total`; income credit =
+`SUM(line_total)`; VAT credit = `tax_total`; and `total = subtotal + tax_total`,
+`subtotal = SUM(line_total)` are already enforced by `Document::recalculateTotals()`. There is no
+`UnbalancedJournalEntryException` equivalent because there is nothing left that could produce an
+imbalance — the arithmetic is tautological, not checked at write time.
 
-**Posted documents' lines are immutable.** `DocumentLine::saving()`/`deleting()` throw `PostedDocumentImmutableException` once the line's document has a non-reversed `JournalEntry` — this is what makes the ledger actually append-only. Bypassed only by `saveQuietly()`, used by the two trusted system paths that legitimately rewrite a posted invoice's line amounts (FX-rate finalisation in `DocumentService::recordPayment()`, and `PaymentNotificationMatcher::applyCorrectedAmount()`) — both already restricted to invoices confirmed not yet posted at the point they run.
+**Reversal is a credit note, not a swap.** A credit note posts its own legs (line debit reversing
+the income, AR credit) — a second, independent posting, not a mutation of the original. **Any
+report computing a signed total must sum `credit − debit` (or `debit − credit`) — never one side
+alone** — or a credit note has no visible effect. Sales invoices can no longer be voided at all;
+see the immutability paragraph below.
 
-**Not every report reads the journal.** `trial-balance`, `balance-sheet`, `income-statement`, and `accounts/{id}` are pure ledger views and read `journal_lines` directly (one grouped query each, in place of the old per-report accumulator queries). `income-by-account`, `income-by-client`, `expenses-by-account`, `expenses-by-supplier` deliberately still read `documents`/`document_lines` — each needs data the journal doesn't preserve at that granularity (invoice counts, `balance_due`, or per-line VAT split out from the invoice total), and neither has the reversal-drift risk the journal exists to fix (sales-side status filtering already excludes voided invoices directly; purchase invoices only ever move forward through `posted`/`partially_paid`/`paid`).
+**Account columns are stamped once, at the moment they're decided, never read live from Settings
+at query time** — a view has no portable way to join a settings-table JSON payload, and reading
+live would let a later Settings change retroactively re-post a historical document anyway.
+`DocumentService::stampTaxAccount()` copies `BillingSettings::tax_liability_account_id` onto a
+sales invoice's `tax_account_id` in `markAsSent()` (throws if VAT applies and none is configured
+— unless the invoice isn't otherwise postable yet, e.g. no `receivable_account_id`, in which case
+that's still an in-progress document, not a Settings gap). `applyCreditNote()` copies the
+invoice's `receivable_account_id` onto the credit note. `reconcileToGlAccount()` (bank
+reconciliation) stamps a GL account straight onto a payment's `receivable_account_id` /
+`payable_account_id` — the same slot an ordinary AR/AP payment uses, so it needs no branch of its
+own in the view.
+
+**Issued documents' lines are immutable.** `DocumentLine::saving()`/`deleting()` throw
+`PostedDocumentImmutableException` once `$this->document->is_issued` — always a fresh query
+(`Document::find()`), never the cached `document()` relation, since a line saved once while its
+document was still draft would otherwise cache that stale status past the point the document
+gets issued. Bypassed only by `saveQuietly()`, used by the two trusted system paths that
+legitimately rewrite an issued invoice's line amounts (FX-rate finalisation in
+`DocumentService::recordPayment()`, and `PaymentNotificationMatcher::applyCorrectedAmount()`) —
+both already restricted to invoices confirmed not yet posted at the point they run.
+
+**Not every report reads `postings`.** `trial-balance`, `balance-sheet`, `income-statement`, and
+`accounts/{id}` are pure ledger views and query the view directly (one grouped query each).
+`income-by-account`, `income-by-client`, `expenses-by-account`, `expenses-by-supplier`
+deliberately still read `documents`/`document_lines` — each needs data the view doesn't preserve
+at that granularity (invoice counts, `balance_due`, or per-line VAT split out from the invoice
+total), and neither has the reversal-drift risk the view exists to fix (sales-side status
+filtering already excludes unissued invoices directly; purchase invoices only ever move forward
+through `posted`/`partially_paid`/`paid`).
 
 **`credits_applied` on `Document`** stores a credit note's raw, uncapped amount; `Document::recalculateBalance()` is the single formula (`total − amount_paid − credits_applied`, floored at zero) every writer of `balance_due` must go through — `applyCreditNote()`, `recordPayment()`, and `Document::recalculateTotals()` all call it rather than assigning `balance_due` directly, which is what let a credit note get silently reversed by the invoice's next payment before this existed.
 
-**Eloquent `'date'`-cast columns store a full `Y-m-d H:i:s` value**, not a clean date (`fromDateTime()` uses the connection's datetime format regardless of cast type) — every date-column query in this app, including the journal's `entry_date`, must use `whereDate()`, never a raw `where()` comparison, or the stored value's trailing time component silently fails the match.
+**Eloquent `'date'`-cast columns store a full `Y-m-d H:i:s` value**, not a clean date (`fromDateTime()` uses the connection's datetime format regardless of cast type) — every date-column query in this app, including `postings.entry_date`, must use `whereDate()`, never a raw `where()` comparison, or the stored value's trailing time component silently fails the match.
 
 ### Configuration Files
 

@@ -56,15 +56,18 @@ it('resolves account from history before using llm suggestion', function (): voi
     ]);
 
     // A previously posted document for this supplier with the same description
+    // — lined while still received, since a line can no longer be created
+    // once the document is posted.
     $postedDoc = Document::factory()->purchaseInvoice()->create([
         'party_id' => $supplier->id,
-        'status' => 'posted',
+        'status' => 'received',
     ]);
     DocumentLine::factory()->create([
         'document_id' => $postedDoc->id,
         'description' => 'Monthly hosting fee',
         'account_id' => $historicalAccount->id,
     ]);
+    $postedDoc->update(['status' => 'posted']);
 
     $result = $this->resolver->resolve('Monthly hosting fee', $supplier->id, extractedLine('5210'));
 
@@ -134,13 +137,14 @@ it('ignores history posted to an account that has since gained sub-accounts', fu
 
     $postedDoc = Document::factory()->purchaseInvoice()->create([
         'party_id' => $supplier->id,
-        'status' => 'posted',
+        'status' => 'received',
     ]);
     DocumentLine::factory()->create([
         'document_id' => $postedDoc->id,
         'description' => 'Monthly hosting fee',
         'account_id' => $parentAccount->id,
     ]);
+    $postedDoc->update(['status' => 'posted']);
 
     // Account gains a child after the historical posting — no longer postable.
     Account::factory()->create(['parent_id' => $parentAccount->id]);

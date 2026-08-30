@@ -1,7 +1,6 @@
 <?php
 
 use App\Modules\Accounting\Models\Account;
-use App\Modules\Accounting\Models\JournalLine;
 use App\Modules\Core\DTO\ExtractedBankStatement;
 use App\Modules\Core\Models\Document;
 use App\Modules\Core\Models\User;
@@ -10,6 +9,7 @@ use App\Modules\Core\Services\DocumentService;
 use App\Modules\Core\Services\DocumentTextExtractor;
 use App\Modules\Core\Services\LlmService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
@@ -86,7 +86,7 @@ it('creates one document line per extracted transaction and does not post to the
         ['transaction_date' => '2026-03-10', 'description' => 'Bank fee', 'debit' => 50.00],
     ]));
 
-    $before = (int) JournalLine::count();
+    $before = (int) DB::table('postings')->count();
 
     $this->service->process($statement);
 
@@ -95,7 +95,7 @@ it('creates one document line per extracted transaction and does not post to the
         ->and((float) $statement->lines[0]->unit_price)->toBe(1500.0)
         ->and((float) $statement->lines[1]->unit_price)->toBe(-50.0)
         ->and((float) $statement->metadata['opening_balance'])->toBe(1000.0)
-        ->and(JournalLine::count())->toBe($before); // extraction never posts
+        ->and(DB::table('postings')->count())->toBe($before); // extraction never posts
 });
 
 it('links a credit line to the invoice number it mentions, without creating a payment', function (): void {

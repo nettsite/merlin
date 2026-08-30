@@ -17,8 +17,9 @@ beforeEach(function (): void {
 });
 
 it('caps the applied amount at the outstanding balance due', function (): void {
-    $invoice = Document::factory()->purchaseInvoice()->create(['status' => 'posted']);
+    $invoice = Document::factory()->purchaseInvoice()->create(['status' => 'received']);
     DocumentLine::factory()->for($invoice)->create(['unit_price' => 1000, 'tax_rate' => 15]);
+    $invoice->update(['status' => 'posted']);
     $invoice->refresh();
     expect((float) $invoice->balance_due)->toBe(1150.0);
 
@@ -37,8 +38,9 @@ it('records the configured contra account on the auto-created payment so the cre
     $settings->default_payment_contra_account_id = $contraAccount->id;
     $settings->save();
 
-    $invoice = Document::factory()->purchaseInvoice()->create(['status' => 'posted']);
+    $invoice = Document::factory()->purchaseInvoice()->create(['status' => 'received']);
     DocumentLine::factory()->for($invoice)->create(['unit_price' => 1000, 'tax_rate' => 15]);
+    $invoice->update(['status' => 'posted']);
     $invoice->refresh();
 
     $this->recorder->record($invoice, 1150.0, Carbon::now(), 'REF-1', 'test evidence');
@@ -51,8 +53,9 @@ it('records the configured contra account on the auto-created payment so the cre
 });
 
 it('ignores a zero or negative amount', function (): void {
-    $invoice = Document::factory()->purchaseInvoice()->create(['status' => 'posted']);
+    $invoice = Document::factory()->purchaseInvoice()->create(['status' => 'received']);
     DocumentLine::factory()->for($invoice)->create(['unit_price' => 1000, 'tax_rate' => 15]);
+    $invoice->update(['status' => 'posted']);
     $invoice->refresh();
     $originalBalance = (float) $invoice->balance_due;
 
