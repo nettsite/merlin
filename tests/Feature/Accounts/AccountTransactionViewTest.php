@@ -22,6 +22,7 @@ function atvUser(): User
 
 it('shows a sales invoice header posting for a client receivable account', function (): void {
     $receivableAccount = Account::factory()->create();
+    $incomeAccount = Account::factory()->create();
 
     $client = app(PartyService::class)->createBusiness([
         'business_type' => 'company',
@@ -37,6 +38,7 @@ it('shows a sales invoice header posting for a client receivable account', funct
         'line_number' => 1,
         'type' => 'service',
         'description' => 'Consulting',
+        'account_id' => $incomeAccount->id,
         'quantity' => 1,
         'unit_price' => 750.00,
         'discount_percent' => 0,
@@ -104,6 +106,8 @@ it('shows the contra account for a purchase invoice line and filters/sorts by it
 
     $invoice = Document::factory()->purchaseInvoice()->create([
         'payable_account_id' => $payableAccount->id,
+        'status' => 'received',
+        'llm_confidence' => 0.95,
         'issue_date' => now()->toDateString(),
     ]);
     $invoice->lines()->create([
@@ -118,6 +122,7 @@ it('shows the contra account for a purchase invoice line and filters/sorts by it
         'account_id' => $expenseAccount->id,
     ]);
     $invoice->recalculateTotals();
+    app(DocumentService::class)->post($invoice->fresh(), User::factory()->create());
 
     $this->actingAs(atvUser());
 
@@ -139,6 +144,8 @@ it('excludes transactions outside the selected date range', function (): void {
     $expenseAccount = Account::factory()->create();
 
     $oldInvoice = Document::factory()->purchaseInvoice()->create([
+        'status' => 'received',
+        'llm_confidence' => 0.95,
         'issue_date' => now()->subYears(3)->toDateString(),
     ]);
     $oldInvoice->lines()->create([
@@ -153,6 +160,7 @@ it('excludes transactions outside the selected date range', function (): void {
         'account_id' => $expenseAccount->id,
     ]);
     $oldInvoice->recalculateTotals();
+    app(DocumentService::class)->post($oldInvoice->fresh(), User::factory()->create());
 
     $this->actingAs(atvUser());
 

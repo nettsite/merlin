@@ -2,6 +2,7 @@
 
 use App\Exceptions\InvalidDocumentStateException;
 use App\Modules\Core\Models\Document;
+use App\Modules\Core\Models\DocumentLine;
 use App\Modules\Core\Models\DocumentRelationship;
 use App\Modules\Core\Models\Party;
 use App\Modules\Core\Models\User;
@@ -272,4 +273,76 @@ it('credit note balance_due floors at zero', function (): void {
 it('credit note numbering uses CRN prefix', function (): void {
     $cn = makeDraftCreditNote();
     expect($cn->document_number)->toStartWith('CRN-');
+});
+
+it('does not reverse an applied credit when a payment is recorded', function (): void {
+    $client = quoteClient();
+    $invoice = makeSentInvoice($client); // total 1150, balance_due 1150
+    $user = User::factory()->create();
+
+    $cn = makeDraftCreditNote($client, 400.00);
+    $cn->update(['status' => 'issued']);
+
+    $svc = app(DocumentService::class);
+    $svc->applyCreditNote($cn->fresh(), $invoice, $user);
+
+    expect((float) $invoice->fresh()->balance_due)->toBe(750.00);
+
+    $svc->recordPayment($invoice->fresh(), 750.00, now());
+
+    $after = $invoice->fresh();
+    expect((float) $after->balance_due)->toBe(0.0)
+        ->and($after->status)->toBe('paid')
+        ->and((float) $after->amount_paid)->toBe(750.00)
+        ->and((float) $after->credits_applied)->toBe(400.00);
+});
+
+it('does not reverse an applied credit when a line is edited', function (): void {
+    $client = quoteClient();
+    $invoice = makeSentInvoice($client); // total 1150
+    $user = User::factory()->create();
+
+    // Give the invoice a real line matching its stated total, so a normal
+    // line save's recalculateTotals() doesn't change total for unrelated
+    // reasons — this test is about credits_applied surviving that call.
+    DocumentLine::$recalculatesDocumentTotals = false;
+    $line = $invoice->lines()->create([
+        'line_number' => 1,
+        'type' => 'service',
+        'description' => 'Annual retainer',
+        'quantity' => 1,
+        'unit_price' => 1150.00,
+        'tax_rate' => null,
+    ]);
+    DocumentLine::$recalculatesDocumentTotals = true;
+
+    $cn = makeDraftCreditNote($client, 400.00);
+    $cn->update(['status' => 'issued']);
+
+    app(DocumentService::class)->applyCreditNote($cn->fresh(), $invoice, $user);
+
+    expect((float) $invoice->fresh()->balance_due)->toBe(750.00);
+
+    // A normal line save fires Document::recalculateTotals() via
+    // DocumentLine::booted()'s saved hook — this is the path that used to
+    // silently wipe out the applied credit.
+    $line->description = 'Annual retainer (updated)';
+    $line->save();
+
+    expect((float) $invoice->fresh()->balance_due)->toBe(750.00)
+        ->and((float) $invoice->fresh()->credits_applied)->toBe(400.00);
+});
+
+it('rejects a payment that exceeds the credited balance', function (): void {
+    $client = quoteClient();
+    $invoice = makeSentInvoice($client); // total 1150
+    $user = User::factory()->create();
+
+    $cn = makeDraftCreditNote($client, 400.00);
+    $cn->update(['status' => 'issued']);
+
+    app(DocumentService::class)->applyCreditNote($cn->fresh(), $invoice, $user);
+
+    expect(fn () => app(DocumentService::class)->recordPayment($invoice->fresh(), 800.00, now()))
+        ->toThrow(InvalidArgumentException::class);
 });

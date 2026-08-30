@@ -2,6 +2,7 @@
 
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Core\Settings\CurrencySettings;
+use App\Modules\Core\Models\Document;
 use App\Modules\Core\Models\DocumentLine;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
@@ -37,7 +38,7 @@ new #[Layout('components.layout.app')] class extends Component
                 SUM(document_lines.line_total + COALESCE(document_lines.tax_amount, 0)) as total_incl
             ')
             ->where('documents.document_type', 'sales_invoice')
-            ->whereNotIn('documents.status', ['draft', 'cancelled'])
+            ->whereNotIn('documents.status', Document::UNRECOGNISED_SALES_STATUSES)
             // The manual join bypasses Document's SoftDeletes scope.
             ->whereNull('documents.deleted_at')
             ->whereNotNull('document_lines.account_id')

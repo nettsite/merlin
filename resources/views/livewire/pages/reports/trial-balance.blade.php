@@ -1,11 +1,10 @@
 <?php
 
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Accounting\Models\JournalLine;
 use App\Modules\Accounting\Services\AccountBalanceRollup;
 use App\Modules\Accounting\Services\FinancialYearService;
 use App\Modules\Core\Settings\CurrencySettings;
-use App\Modules\Core\Models\Document;
-use App\Modules\Core\Models\DocumentLine;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 
@@ -27,103 +26,27 @@ new #[Layout('components.layout.app')] class extends Component
     {
         $settings = app(CurrencySettings::class);
 
-        // Build movement accumulator for a given date window.
+        // Build movement accumulator for a given date window from the
+        // journal — a single grouped query in place of the six
+        // document-header accumulator queries this used to run, one per
+        // document type/direction. A voided invoice's reversal is just
+        // another journal entry, so it nets out automatically with no
+        // status filtering needed here.
         // $from = null means no lower bound (cumulative balance mode).
         $buildAcc = function (?string $from, ?string $to): array {
+            $rows = JournalLine::query()
+                ->join('journal_entries', 'journal_entries.id', '=', 'journal_lines.journal_entry_id')
+                ->when($from, fn ($q) => $q->whereDate('journal_entries.entry_date', '>=', $from))
+                ->when($to, fn ($q) => $q->whereDate('journal_entries.entry_date', '<=', $to))
+                ->selectRaw('journal_lines.account_id, SUM(journal_lines.debit) as debit, SUM(journal_lines.credit) as credit')
+                ->groupBy('journal_lines.account_id')
+                ->get();
+
             $acc = [];
 
-            $add = function (string $id, float $debit, float $credit) use (&$acc): void {
-                if (! array_key_exists($id, $acc)) {
-                    $acc[$id] = ['debit' => 0.0, 'credit' => 0.0];
-                }
-                $acc[$id]['debit'] += $debit;
-                $acc[$id]['credit'] += $credit;
-            };
-
-            DocumentLine::query()
-                ->join('documents as d', 'd.id', '=', 'document_lines.document_id')
-                ->where('d.document_type', 'sales_invoice')
-                ->whereNotIn('d.status', ['draft', 'voided'])
-                ->whereNull('d.deleted_at')
-                ->whereNotNull('document_lines.account_id')
-                ->when($from, fn ($q) => $q->whereDate('d.issue_date', '>=', $from))
-                ->when($to, fn ($q) => $q->whereDate('d.issue_date', '<=', $to))
-                ->selectRaw('document_lines.account_id, SUM(document_lines.line_total) as total')
-                ->groupBy('document_lines.account_id')
-                ->get()
-                ->each(fn ($r) => $add($r->account_id, 0.0, (float) $r->total));
-
-            DocumentLine::query()
-                ->join('documents as d', 'd.id', '=', 'document_lines.document_id')
-                ->where('d.document_type', 'purchase_invoice')
-                ->whereIn('d.status', ['posted', 'partially_paid', 'paid'])
-                ->whereNull('d.deleted_at')
-                ->whereNotNull('document_lines.account_id')
-                ->when($from, fn ($q) => $q->whereDate('d.issue_date', '>=', $from))
-                ->when($to, fn ($q) => $q->whereDate('d.issue_date', '<=', $to))
-                ->selectRaw('document_lines.account_id, SUM(document_lines.line_total) as total')
-                ->groupBy('document_lines.account_id')
-                ->get()
-                ->each(fn ($r) => $add($r->account_id, (float) $r->total, 0.0));
-
-            Document::query()
-                ->where('document_type', 'sales_invoice')
-                ->whereNotIn('status', ['draft', 'voided'])
-                ->whereNull('deleted_at')
-                ->whereNotNull('receivable_account_id')
-                ->when($from, fn ($q) => $q->whereDate('issue_date', '>=', $from))
-                ->when($to, fn ($q) => $q->whereDate('issue_date', '<=', $to))
-                ->selectRaw('receivable_account_id, SUM(total) as total')
-                ->groupBy('receivable_account_id')
-                ->get()
-                ->each(fn ($r) => $add($r->receivable_account_id, (float) $r->total, 0.0));
-
-            // Purchase invoices → credit AP
-            Document::query()
-                ->where('document_type', 'purchase_invoice')
-                ->whereIn('status', ['posted', 'partially_paid', 'paid'])
-                ->whereNull('deleted_at')
-                ->whereNotNull('payable_account_id')
-                ->when($from, fn ($q) => $q->whereDate('issue_date', '>=', $from))
-                ->when($to, fn ($q) => $q->whereDate('issue_date', '<=', $to))
-                ->selectRaw('payable_account_id, SUM(total) as total')
-                ->groupBy('payable_account_id')
-                ->get()
-                ->each(fn ($r) => $add($r->payable_account_id, 0.0, (float) $r->total));
-
-            // Inbound payments (receivable settlements) → credit AR, debit bank
-            Document::query()
-                ->where('document_type', 'payment')
-                ->where('direction', 'inbound')
-                ->whereNull('deleted_at')
-                ->when($from, fn ($q) => $q->whereDate('issue_date', '>=', $from))
-                ->when($to, fn ($q) => $q->whereDate('issue_date', '<=', $to))
-                ->get()
-                ->each(function ($p) use ($add) {
-                    if ($p->receivable_account_id !== null) {
-                        $add($p->receivable_account_id, 0.0, (float) $p->total);
-                    }
-                    if ($p->contra_account_id !== null) {
-                        $add($p->contra_account_id, (float) $p->total, 0.0);
-                    }
-                });
-
-            // Outbound payments (payable settlements) → debit AP, credit bank
-            Document::query()
-                ->where('document_type', 'payment')
-                ->where('direction', 'outbound')
-                ->whereNull('deleted_at')
-                ->when($from, fn ($q) => $q->whereDate('issue_date', '>=', $from))
-                ->when($to, fn ($q) => $q->whereDate('issue_date', '<=', $to))
-                ->get()
-                ->each(function ($p) use ($add) {
-                    if ($p->payable_account_id !== null) {
-                        $add($p->payable_account_id, (float) $p->total, 0.0);
-                    }
-                    if ($p->contra_account_id !== null) {
-                        $add($p->contra_account_id, 0.0, (float) $p->total);
-                    }
-                });
+            foreach ($rows as $row) {
+                $acc[$row->account_id] = ['debit' => (float) $row->debit, 'credit' => (float) $row->credit];
+            }
 
             return AccountBalanceRollup::rollupToRoots($acc);
         };

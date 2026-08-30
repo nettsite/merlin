@@ -3,6 +3,7 @@
 use App\Ai\Agents\InvoiceExtractionAgent;
 use App\Ai\Agents\PdfVisionExtractionAgent;
 use App\Exceptions\LlmApiException;
+use App\Exceptions\LlmCreditExhaustedException;
 use App\Modules\Core\Models\Document;
 use App\Modules\Core\Models\LlmLog;
 use App\Modules\Core\Models\User;
@@ -11,6 +12,8 @@ use App\Modules\Purchasing\DTO\ExtractedInvoice;
 use App\Modules\Purchasing\DTO\ExtractedInvoiceLine;
 use App\Modules\Purchasing\Settings\PurchasingSettings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
+use Laravel\Ai\Exceptions\InsufficientCreditsException;
 use Laravel\Ai\Exceptions\ProviderConnectionException;
 use Laravel\Ai\Responses\Data\Meta;
 use Laravel\Ai\Responses\Data\Usage;
@@ -192,6 +195,32 @@ it('throws a RuntimeException when the llm returns invalid json', function (): v
 
     expect(fn () => $this->service->extractInvoice('text'))
         ->toThrow(RuntimeException::class, 'invalid JSON');
+});
+
+it('does not escalate to the strong model when credits are exhausted', function (): void {
+    InvoiceExtractionAgent::fake(
+        fn () => throw InsufficientCreditsException::forProvider('anthropic', 0, new RuntimeException('insufficient credits'))
+    );
+
+    expect(fn () => $this->service->extractInvoice('text'))
+        ->toThrow(LlmCreditExhaustedException::class);
+
+    InvoiceExtractionAgent::assertPromptedTimes(1);
+    expect(LlmLog::count())->toBe(1)
+        ->and(Cache::get('anthropic:credit_exhausted'))->not->toBeNull();
+});
+
+it('still escalates to the strong model on unusable output', function (): void {
+    InvoiceExtractionAgent::fake([
+        new TextResponse('not json', new Usage(500, 200), new Meta('anthropic', 'fake-model')),
+        fakeInvoiceResponse($this->fixture),
+    ]);
+
+    $result = $this->service->extractInvoice('text');
+
+    expect($result)->toBeInstanceOf(ExtractedInvoice::class);
+    InvoiceExtractionAgent::assertPromptedTimes(2);
+    expect(LlmLog::count())->toBe(2);
 });
 
 it('records the loggable model on llm_logs when provided', function (): void {

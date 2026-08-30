@@ -27,6 +27,17 @@ function bsrClient(string $name)
     return $party;
 }
 
+function bsrIncomeAccount(): Account
+{
+    $incomeType = AccountType::firstOrCreate(['code' => '4'], ['name' => 'Income', 'normal_balance' => 'credit']);
+    $incomeGroup = AccountGroup::firstOrCreate(['code' => '40'], ['name' => 'Revenue', 'account_type_id' => $incomeType->id]);
+
+    return Account::firstOrCreate(
+        ['code' => '4000'],
+        ['account_group_id' => $incomeGroup->id, 'name' => 'Consulting Revenue', 'allow_direct_posting' => true, 'is_active' => true],
+    );
+}
+
 function bsrSentInvoice($client, float $amount): Document
 {
     $invoice = app(BillingService::class)->createDraft($client, ['issue_date' => now()->toDateString()]);
@@ -35,6 +46,7 @@ function bsrSentInvoice($client, float $amount): Document
         'line_number' => 1,
         'type' => 'service',
         'description' => 'Consulting',
+        'account_id' => bsrIncomeAccount()->id,
         'quantity' => 1,
         'unit_price' => $amount,
         'discount_percent' => 0,

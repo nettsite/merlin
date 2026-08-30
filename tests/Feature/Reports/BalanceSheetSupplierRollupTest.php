@@ -5,10 +5,22 @@ use App\Modules\Accounting\Models\AccountGroup;
 use App\Modules\Accounting\Models\AccountType;
 use App\Modules\Core\Models\Document;
 use App\Modules\Core\Models\User;
+use App\Modules\Core\Services\DocumentService;
 use App\Modules\Core\Services\PartyService;
 use App\Modules\Purchasing\Services\SupplierPayableAccountService;
 use App\Modules\Purchasing\Settings\PurchasingSettings;
 use Livewire\Livewire;
+
+function bsrExpenseAccount(): Account
+{
+    $expenseType = AccountType::firstOrCreate(['code' => '5'], ['name' => 'Expense', 'normal_balance' => 'debit']);
+    $expenseGroup = AccountGroup::firstOrCreate(['code' => '50'], ['name' => 'Operating Expenses', 'account_type_id' => $expenseType->id]);
+
+    return Account::firstOrCreate(
+        ['code' => '5000'],
+        ['account_group_id' => $expenseGroup->id, 'name' => 'Office Supplies', 'allow_direct_posting' => true, 'is_active' => true],
+    );
+}
 
 function bsrSupplier(string $name)
 {
@@ -30,15 +42,24 @@ function bsrPostedPurchaseInvoice($party, Account $payableAccount, float $amount
     $invoice = Document::factory()->purchaseInvoice()->create([
         'party_id' => $party->id,
         'payable_account_id' => $payableAccount->id,
-        'status' => 'posted',
+        'status' => 'received',
         'issue_date' => now()->toDateString(),
-        'subtotal' => $amount,
-        'tax_total' => 0,
-        'total' => $amount,
-        'balance_due' => $amount,
+        'llm_confidence' => 0.95,
     ]);
 
-    return $invoice;
+    $invoice->lines()->create([
+        'line_number' => 1,
+        'type' => 'service',
+        'description' => 'Office supplies',
+        'account_id' => bsrExpenseAccount()->id,
+        'quantity' => 1,
+        'unit_price' => $amount,
+        'tax_rate' => null,
+    ]);
+
+    app(DocumentService::class)->post($invoice->fresh(), User::factory()->create());
+
+    return $invoice->fresh();
 }
 
 it('rolls up supplier payable sub-accounts into a single control-account line on the balance sheet', function (): void {

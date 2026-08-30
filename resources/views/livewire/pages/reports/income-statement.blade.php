@@ -1,8 +1,8 @@
 <?php
 
+use App\Modules\Accounting\Models\JournalLine;
 use App\Modules\Accounting\Services\FinancialYearService;
 use App\Modules\Core\Settings\CurrencySettings;
-use App\Modules\Core\Models\DocumentLine;
 use Livewire\Attributes\Layout;
 use Livewire\Component;
 
@@ -17,38 +17,42 @@ new #[Layout('components.layout.app')] class extends Component
         $monthStart = now()->startOfMonth();
         $today = now();
 
-        $fetchLines = function (string $docType, array $statuses, bool $useWhereIn, string $typeCode, $from, $to): \Illuminate\Support\Collection {
-            $q = DocumentLine::query()
-                ->join('documents', 'documents.id', '=', 'document_lines.document_id')
-                ->join('accounts', 'accounts.id', '=', 'document_lines.account_id')
+        // Net movement per account type's normal side: income accounts are
+        // credited by revenue postings but debited by JournalService::reverse()
+        // when an invoice is voided (it swaps debit/credit rather than
+        // negating one side), so the net — not a one-sided SUM — is what
+        // actually nets a voided invoice's revenue back to zero here.
+        $fetchLines = function (string $typeCode, $from, $to): \Illuminate\Support\Collection {
+            $amountExpr = $typeCode === '4'
+                ? 'SUM(journal_lines.credit) - SUM(journal_lines.debit)'
+                : 'SUM(journal_lines.debit) - SUM(journal_lines.credit)';
+
+            return JournalLine::query()
+                ->join('journal_entries', 'journal_entries.id', '=', 'journal_lines.journal_entry_id')
+                ->join('accounts', 'accounts.id', '=', 'journal_lines.account_id')
                 ->join('account_groups', 'account_groups.id', '=', 'accounts.account_group_id')
                 ->join('account_types', 'account_types.id', '=', 'account_groups.account_type_id')
-                ->selectRaw('
+                ->selectRaw("
                     account_groups.name as group_name,
                     account_groups.sort_order as group_sort,
                     accounts.id as account_id,
                     accounts.code,
                     accounts.name as account_name,
                     accounts.sort_order as account_sort,
-                    SUM(document_lines.line_total) as amount
-                ')
-                ->where('documents.document_type', $docType)
-                ->whereNull('documents.deleted_at')
-                ->whereNotNull('document_lines.account_id')
+                    {$amountExpr} as amount
+                ")
                 ->where('account_types.code', $typeCode)
-                ->whereDate('documents.issue_date', '>=', $from)
-                ->whereDate('documents.issue_date', '<=', $to)
-                ->groupBy('account_groups.name', 'account_groups.sort_order', 'accounts.id', 'accounts.code', 'accounts.name', 'accounts.sort_order');
-
-            return $useWhereIn
-                ? $q->whereIn('documents.status', $statuses)->get()->keyBy('account_id')
-                : $q->whereNotIn('documents.status', $statuses)->get()->keyBy('account_id');
+                ->whereDate('journal_entries.entry_date', '>=', $from)
+                ->whereDate('journal_entries.entry_date', '<=', $to)
+                ->groupBy('account_groups.name', 'account_groups.sort_order', 'accounts.id', 'accounts.code', 'accounts.name', 'accounts.sort_order')
+                ->get()
+                ->keyBy('account_id');
         };
 
-        $revenueYtd = $fetchLines('sales_invoice', ['draft', 'cancelled'], false, '4', $fyStart, $today);
-        $revenueMonth = $fetchLines('sales_invoice', ['draft', 'cancelled'], false, '4', $monthStart, $today);
-        $expensesYtd = $fetchLines('purchase_invoice', ['posted', 'partially_paid', 'paid'], true, '5', $fyStart, $today);
-        $expensesMonth = $fetchLines('purchase_invoice', ['posted', 'partially_paid', 'paid'], true, '5', $monthStart, $today);
+        $revenueYtd = $fetchLines('4', $fyStart, $today);
+        $revenueMonth = $fetchLines('4', $monthStart, $today);
+        $expensesYtd = $fetchLines('5', $fyStart, $today);
+        $expensesMonth = $fetchLines('5', $monthStart, $today);
 
         $mergeSection = function ($ytdMap, $monthMap): \Illuminate\Support\Collection {
             return $ytdMap->keys()->merge($monthMap->keys())->unique()
