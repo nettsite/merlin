@@ -33,6 +33,9 @@ php artisan accounts:backfill-client-receivables
 
 # Model retirement probe (also runs daily at 05:30 via schedule)
 php artisan models:health-check
+
+# Flags Document/DocumentLine rows changed with no matching audit trail entry (also runs daily at 05:35)
+php artisan documents:verify-audit-trail
 ```
 
 ## Architecture
@@ -236,14 +239,26 @@ reconciliation) stamps a GL account straight onto a payment's `receivable_accoun
 `payable_account_id` — the same slot an ordinary AR/AP payment uses, so it needs no branch of its
 own in the view.
 
-**Issued documents' lines are immutable.** `DocumentLine::saving()`/`deleting()` throw
-`PostedDocumentImmutableException` once `$this->document->is_issued` — always a fresh query
-(`Document::find()`), never the cached `document()` relation, since a line saved once while its
-document was still draft would otherwise cache that stale status past the point the document
-gets issued. Bypassed only by `saveQuietly()`, used by the two trusted system paths that
-legitimately rewrite an issued invoice's line amounts (FX-rate finalisation in
-`DocumentService::recordPayment()`, and `PaymentNotificationMatcher::applyCorrectedAmount()`) —
-both already restricted to invoices confirmed not yet posted at the point they run.
+**Issued documents' lines are immutable, and so is the document header.** `DocumentLine::saving()`/
+`deleting()` throw `PostedDocumentImmutableException` once `$this->document->is_issued` — always a
+fresh query (`Document::find()`), never the cached `document()` relation, since a line saved once
+while its document was still draft would otherwise cache that stale status past the point the
+document gets issued. `Document::saving()` mirrors this for the header's commercial columns
+(`total`, `subtotal`, `tax_total`, `issue_date`, `party_id`, `document_number`), checked against
+the persisted pre-save status (`$this->balance?->status`, bypassing `pendingBalance`) so that
+issuing a draft and confirming its `issue_date` in the same save is still allowed — only a save
+touching them on a document already issued before that save started throws. Bypassed only by
+`saveQuietly()`, used by the trusted system paths that legitimately rewrite an issued invoice's
+amounts after the fact — FX-rate finalisation in `DocumentService::recordPayment()`, and every
+`DocumentService::transition()`/`applyCreditNote()` status/balance write. (`applyCorrectedAmount()`
+in `PaymentNotificationMatcher` needs no bypass — it only runs against an invoice confirmed not yet
+posted, where the guard can't fire, so it uses a plain `save()`.) Because balance/status live on
+`document_balances`, not on `documents` itself, they never show up in `Document`'s own dirty
+attributes for `LogsActivity` to catch regardless of `save()` vs `saveQuietly()` — so every one of
+these bypasses is paired with a `DocumentActivity` row (`recordActivity()`) in the same
+transaction instead, and `php artisan documents:verify-audit-trail` (daily at 05:35) treats either
+a Spatie `Activity` row or a `DocumentActivity` row as evidence a row's change was legitimate,
+flagging only a change with neither as a likely out-of-band database edit.
 
 **Not every report reads `postings`.** `trial-balance`, `balance-sheet`, `income-statement`, and
 `accounts/{id}` are pure ledger views and query the view directly (one grouped query each).

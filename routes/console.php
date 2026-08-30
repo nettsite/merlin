@@ -1,6 +1,7 @@
 <?php
 
 use App\Console\Commands\CheckModelHealthCommand;
+use App\Console\Commands\VerifyAuditTrailCommand;
 use App\Modules\Billing\Console\GenerateRecurringInvoices;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -13,3 +14,5 @@ Artisan::command('inspire', function () {
 Schedule::command(GenerateRecurringInvoices::class)->dailyAt('06:00')->withoutOverlapping();
 
 Schedule::command(CheckModelHealthCommand::class)->dailyAt('05:30')->withoutOverlapping();
+
+Schedule::command(VerifyAuditTrailCommand::class)->dailyAt('05:35')->withoutOverlapping();

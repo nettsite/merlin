@@ -445,7 +445,7 @@ gap rather than leave it as an untested join.
 
 ---
 
-## Phase 6 — Immutability in the app; audit as the detection layer (1.5 days)
+## Phase 6 — Immutability in the app; audit as the detection layer (1.5 days) — **DONE 2026-08-30**
 
 **Enforcement is app-level. No SQL triggers, no restricted grants.** Whoever administers this
 database has full access to it, so a control implemented in the database is one its own operator
@@ -477,15 +477,38 @@ Add `php artisan documents:verify-audit-trail`:
 Detection, not prevention — the correct ambition for this threat model. The realistic failure is
 an 11pm hand-fix in a SQL client, and this surfaces it the next morning.
 
-### 6.4 Close the bypasses
-`saveQuietly()` skips model events, so it skips both the 6.1 guard and the 6.2 audit row. Audit
-the three callers — `applyCreditNote()`, `recordPayment()`, `applyCorrectedAmount()` — so only
-balance columns are reachable through them, and so 6.3 does not report them as false positives.
+### 6.4 Close the bypasses — **deviation from the plan text**
+Audited every `saveQuietly()` caller (`DocumentService::stampTaxAccount()`, `transition()`,
+`applyCreditNote()`, `recordPayment()` — both the header and the FX-finalisation line rewrite —
+`Document::recalculateTotals()`, `Purchasing\Services\DocumentService::reprocess()`) rather than
+just the three named in the plan text, since `transition()` — the method behind every status
+change in the app — turned out to use `saveQuietly()` too. `applyCorrectedAmount()` (payment
+notification matching) needed no changes: it already calls plain `save()`, since it only ever
+runs against a not-yet-posted invoice where the header/line guards can't fire anyway.
+
+Restricting each caller to "only balance columns" doesn't work as a fix on its own: after Phase 5,
+`status`/`balance_due`/etc. are accessor-backed, not real `documents` columns, so they never show
+up in `getDirty()` for `LogsActivity` to see regardless of `save()` vs `saveQuietly()` — a
+real-column Spatie activity row can only ever audit header fields, never balance ones. What
+actually already audits every one of these balance-mutating `saveQuietly()` calls is the
+pre-existing `DocumentActivity` row (`recordActivity()`) each one is paired with in the same
+transaction — `payment_recorded`, `credit_applied`, `status_changed`, `reprocess_queued`. So 6.3's
+detector (`VerifyAuditTrailCommand`) was built to accept *either* a Spatie `Activity` row *or* a
+`DocumentActivity` row (matched via the line's parent `document_id` for a `DocumentLine`) as
+evidence, rather than trying to eliminate the bypasses. `Document::recalculateTotals()`'s
+`saveQuietly()` (fired on every line save while a document is still a draft) was left as-is —
+structurally low-stakes, since the guard it would otherwise trip can only exist once a document is
+issued, and issued documents never legitimately trigger it (`DocumentLine`'s own guard blocks any
+line save on an issued document in the first place).
+
+- Verify: `VerifyAuditTrailCommandTest` — passes when a save is logged normally; flags a
+  `saveQuietly()` change made with `activity()->withoutLogging()` (i.e. genuinely no evidence of
+  any kind) as an orphan, for both `Document` and `DocumentLine`.
 
 **Optional hardening**, only if a third party will ever rely on these books: chain each activity
 row to its predecessor with a hash of (previous hash + current values), so editing or deleting a
 log row breaks the chain detectably. App-level, works under SQLite, ~0.5 day. Not recommended
-otherwise.
+otherwise — not implemented.
 
 ## Cost summary
 
@@ -497,8 +520,8 @@ otherwise.
 | 3 · Floor the payment-match threshold | 0.25 (done) |
 | 4 · `postings` view, delete journal | 2.5 (done) |
 | 5 · Split mutable columns | 2.0 (done) |
-| 6 · App-level immutability + audit | 1.5 |
-| **Total** | **11.0** |
+| 6 · App-level immutability + audit | 1.75 (done) |
+| **Total** | **11.25** |
 
 No data-migration contingency — the database is empty. Phases 1–3 are independently shippable
 and deliver the correctness wins; 4–6 are the structural payoff.
@@ -537,5 +560,5 @@ and once the reconciliation confirm queue exists it has an obvious home.
 | View too slow to be indexed | Benchmark gate at 0.2; fall back to a physical postings table written by one service |
 | SQLite/MariaDB dialect drift in the view | Portable `UNION ALL` only; full suite runs on SQLite, smoke-test on MariaDB before deploy |
 | Manual posting is more work than auto-allocation | Batch confirm in 2.4 keeps most of the saving, loses only the unattended part |
-| Audit reconciliation reports false positives | 6.4 restricts `saveQuietly()` to balance columns before 6.3 is scheduled |
+| Audit reconciliation reports false positives | 6.3's detector accepts a `DocumentActivity` row as evidence, not only a Spatie `Activity` row — see 6.4 |
 | Half-migrated state (journal tables and view coexisting) | Phase 4 is one commit: create view, swap reports, delete journal layer |
