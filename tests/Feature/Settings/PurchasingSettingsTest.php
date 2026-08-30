@@ -45,6 +45,32 @@ class PurchasingSettingsTest extends TestCase
         $this->assertEquals(70.0, $settings->description_similarity);
     }
 
+    public function test_payment_match_auto_confidence_cannot_be_saved_below_the_definitive_floor(): void
+    {
+        $this->actingAs($this->adminUser());
+
+        Livewire::test('pages.settings.purchasing')
+            ->set('paymentMatchAutoConfidence', 0.6)
+            ->call('save')
+            ->assertHasErrors('paymentMatchAutoConfidence');
+
+        $settings = app()->make(PurchasingSettings::class);
+        $this->assertNotEquals(0.6, $settings->payment_match_auto_confidence);
+    }
+
+    public function test_payment_match_auto_confidence_can_be_saved_at_the_definitive_floor(): void
+    {
+        $this->actingAs($this->adminUser());
+
+        Livewire::test('pages.settings.purchasing')
+            ->set('paymentMatchAutoConfidence', 0.90)
+            ->call('save')
+            ->assertHasNoErrors();
+
+        $settings = app()->make(PurchasingSettings::class);
+        $this->assertEquals(0.90, $settings->payment_match_auto_confidence);
+    }
+
     public function test_default_payment_contra_account_can_be_saved(): void
     {
         $this->actingAs($this->adminUser());

@@ -1,6 +1,7 @@
 <?php
 
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Purchasing\Services\PaymentNotificationMatcher;
 use App\Modules\Purchasing\Settings\PurchasingSettings;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Validate;
@@ -32,8 +33,13 @@ new #[Layout('components.layout.app')] class extends Component
     #[Validate('required|numeric|min:0|max:100')]
     public float|string $descriptionSimilarity = 60.0;
 
-    #[Validate('required|numeric|min:0|max:1')]
-    public float|string $paymentMatchAutoConfidence = 0.80;
+    // Floored at PaymentNotificationMatcher::DEFINITIVE_CONFIDENCE — the
+    // lowest confidence its reference-match tiers can produce. Below that,
+    // only the weak name-resemblance (0.60) and same-day-only (0.40) tiers
+    // are reachable, and neither should ever auto-merge a payment
+    // notification into an invoice.
+    #[Validate('required|numeric|min:' . PaymentNotificationMatcher::DEFINITIVE_CONFIDENCE . '|max:1')]
+    public float|string $paymentMatchAutoConfidence = PaymentNotificationMatcher::DEFINITIVE_CONFIDENCE;
 
     public bool $saved = false;
 
@@ -171,8 +177,8 @@ new #[Layout('components.layout.app')] class extends Component
 
                 <flux:field>
                     <flux:label>Min. Confidence for Payment Notification Auto-Match <span class="text-danger">*</span></flux:label>
-                    <flux:input wire:model="paymentMatchAutoConfidence" type="number" step="0.01" min="0" max="1" />
-                    <flux:description>0–1 scale. A payment notification (PayPal/FNB Connect receipt) matched to an invoice below this confidence is surfaced for manual confirmation instead of auto-merging.</flux:description>
+                    <flux:input wire:model="paymentMatchAutoConfidence" type="number" step="0.01" min="0.9" max="1" />
+                    <flux:description>0.90–1 scale. A payment notification (PayPal/FNB Connect receipt) matched to an invoice below this confidence is surfaced for manual confirmation instead of auto-merging. Floored at 0.90 — that's the lowest confidence an actual reference match (the invoice number appearing in the payment) can produce; anything looser is a name-resemblance guess and must never auto-apply.</flux:description>
                     <flux:error name="paymentMatchAutoConfidence" />
                 </flux:field>
             </div>

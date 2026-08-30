@@ -138,6 +138,37 @@ it('corrects a foreign-currency invoice to the confirmed local amount and soft-d
             ->exists())->toBeTrue();
 });
 
+it('does not rescale line amounts on a name-resemblance-only match, even when everything else about it would otherwise qualify', function (): void {
+    // Same setup as the test above — foreign currency, not posted, base
+    // currency payment, confirmed — proving the only thing standing between
+    // them is confidence. merge() must not trust the caller's own gate.
+    $invoice = Document::factory()->purchaseInvoice()->create([
+        'currency' => 'USD',
+        'exchange_rate' => 18.0,
+        'exchange_rate_provisional' => true,
+        'status' => 'received',
+    ]);
+
+    DocumentLine::factory()->for($invoice)->create(['unit_price' => 1000, 'tax_rate' => 15]);
+    $invoice->refresh();
+    $originalTotal = (float) $invoice->total;
+    $originalRate = (float) $invoice->exchange_rate;
+
+    $notification = paymentNotification([
+        'currency' => 'ZAR',
+        'total' => 2300.0,
+        'metadata' => ['payee_name' => 'Acme', 'method' => 'PayPal', 'confirmed' => true],
+    ]);
+
+    $this->matcher->merge($invoice, $notification, 0.6, 'name resemblance only');
+
+    $invoice->refresh();
+
+    expect((float) $invoice->total)->toBe($originalTotal)
+        ->and((float) $invoice->exchange_rate)->toBe($originalRate)
+        ->and($invoice->metadata['payment_notification']['amount_applied'])->toBeFalse();
+});
+
 it('does not change totals when the invoice is already posted', function (): void {
     $invoice = Document::factory()->purchaseInvoice()->create([
         'currency' => 'USD',

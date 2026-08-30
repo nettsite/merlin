@@ -13,6 +13,17 @@ class PaymentNotificationMatcher
 {
     private const MAX_DATE_WINDOW_DAYS = 30;
 
+    /**
+     * The lowest confidence score() can produce from an actual identifier
+     * appearing in the payment record (the 0.95 and 0.90 reference-match
+     * tiers) rather than a resemblance guess (0.60 name match, 0.40
+     * same-day-only). Settings > Purchasing floors
+     * payment_match_auto_confidence here so the weak tiers can never be
+     * configured into auto-merging; applyCorrectedAmount() re-checks it
+     * independently below rather than trusting the caller's gate alone.
+     */
+    public const DEFINITIVE_CONFIDENCE = 0.90;
+
     public function __construct(
         private readonly CurrencySettings $currencySettings,
         private readonly PaymentEvidenceRecorder $paymentEvidenceRecorder,
@@ -147,8 +158,11 @@ class PaymentNotificationMatcher
             // A merely pending/reserved notification (e.g. a card authorization
             // hold) could still be reversed or adjusted before it settles — only
             // a confirmed, completed payment is reliable enough to correct the
-            // invoice's amount against.
-            $amountApplied = $invoice->is_foreign_currency
+            // invoice's amount against. Confidence is re-checked here rather
+            // than trusted from the caller's own auto-merge gate — rescaling
+            // every line on an invoice deserves a gate of its own.
+            $amountApplied = $confidence >= self::DEFINITIVE_CONFIDENCE
+                && $invoice->is_foreign_currency
                 && ! in_array($invoice->status, Document::POSTED_STATUSES, true)
                 && $paidCurrency === $baseCurrency
                 && (float) $invoice->total > 0

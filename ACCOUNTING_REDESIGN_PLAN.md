@@ -275,7 +275,23 @@ produces a dated document; reconciliation arithmetic balances.
 
 ---
 
-## Phase 3 — Floor the payment-match threshold (0.25 day)
+## Phase 3 — Floor the payment-match threshold (0.25 day) — **DONE 2026-08-30**
+
+Landed on `main`. `PaymentNotificationMatcher::DEFINITIVE_CONFIDENCE` (0.90) is now the single
+source of truth, referenced by the settings form's validation floor and by `merge()`'s own
+independent gate on `applyCorrectedAmount()` — the latter checked directly, rather than trusting
+that the two call sites already gated on the settings value, so a test (or a future caller)
+invoking `merge()` directly at a weak confidence can't rescale an invoice's lines regardless.
+`PurchasingSettings::$payment_match_auto_confidence`'s PHP default moved to 0.90 too — but that
+class default was never what was in force. A `database/settings/` migration
+(`2026_07_06_160000_add_payment_match_auto_confidence_to_purchasing_settings.php`) had already
+seeded the real stored value at 0.80, independent of the class property, so a **second**
+migration (`raise_payment_match_auto_confidence_floor`) was needed to actually move the floor in
+the database — the class default alone would have changed nothing for the deployed value. 675/675
+tests green (was 672), `vendor/bin/pint --dirty` clean, `npm run build` run.
+
+Nothing else changed. F5/F7's dual-invoice handling and `already_paid` signal were confirmed
+correct back when this phase was scoped and needed no work.
 
 **Decided 2026-08-30: the existing matching behaviour stays.** The dual-invoice pattern is
 already handled — a supplier sends an unpaid invoice and a matching paid copy, often under a
@@ -403,7 +419,7 @@ otherwise.
 | 0 · Decide before building | 0.25 |
 | 1 · Remove void | 1.5 |
 | 2 · Bank statements → reconciliation | 3.0 (done) |
-| 3 · Floor the payment-match threshold | 0.25 |
+| 3 · Floor the payment-match threshold | 0.25 (done) |
 | 4 · `postings` view, delete journal | 2.5 |
 | 5 · Split mutable columns | 2.0 |
 | 6 · App-level immutability + audit | 1.5 |
@@ -421,7 +437,7 @@ and deliver the correctness wins; 4–6 are the structural payoff.
 | # | Finding | How |
 |---|---|---|
 | F5 | Bank settlement guesses which invoice got paid | feature deleted (Phase 2) |
-| F7 | Payment notifications merge on 50% name match | settings floored at the definitive tier (Phase 3) |
+| F7 | Payment notifications merge on 50% name match | fully closed — floored at 0.90 in both settings and `merge()` itself (Phase 3) |
 | F3 | No ledger / reports re-invent double entry | `postings` view (Phase 4) |
 | F19 | `BankStatementProcessingService` untested | fully closed — Phase 2.6 |
 
