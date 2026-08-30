@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Journals — Merlin User Guide</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/docs.css">
+</head>
+<body>
+    <div id="docs-shell">
+        <aside id="docs-sidebar"></aside>
+
+        <main id="docs-content">
+            <article>
+                <h1>Journals</h1>
+                <p>A journal is a manual entry directly into your general ledger, for things that don't come from an invoice, credit note, or payment — accruals, depreciation, write-offs, or a correction that doesn't belong anywhere else. It's the same double-entry idea as the rest of your books: every journal has to balance.</p>
+
+                <h2 id="creating-a-journal">Creating a journal</h2>
+                <ol>
+                    <li>Go to <strong>Accounting &rsaquo; Journals</strong> and click <strong>New Journal</strong>.</li>
+                    <li>Set the date and, optionally, a reference (e.g. "Accrual — March").</li>
+                    <li>Add lines: a description, an account, and either a <strong>Debit</strong> or a <strong>Credit</strong> amount for each line — never both on the same line.</li>
+                </ol>
+                <p>The journal starts as a <strong>Draft</strong>. While it's a draft you can add, edit, or remove lines freely, and the detail panel shows a running total for debits, credits, and the difference between them.</p>
+
+                <h2 id="balancing">Balancing</h2>
+                <p>A journal can't be posted until its debits and credits are exactly equal. The difference is shown at the top of the journal — once it reads zero, it's marked <strong>Balanced</strong> and the <strong>Post</strong> button becomes available.</p>
+
+                <h2 id="what-you-can-post-to">What you can post to</h2>
+                <p>Journal lines can only target ordinary general ledger accounts — expense, income, asset, liability, or equity accounts. They can't be used to adjust a specific client's or supplier's balance directly (your Accounts Receivable or Accounts Payable control accounts aren't offered in the account picker). If you need to adjust what a client or supplier owes, use an invoice, credit note, or payment instead — those keep each customer's own balance accurate.</p>
+
+                <h2 id="posting">Posting</h2>
+                <p>Click <strong>Post</strong> once the journal balances. This is a one-way step: a posted journal is permanent and appears immediately in your Trial Balance, Balance Sheet, and Income Statement, the same as any other posting. It can no longer be edited or deleted.</p>
+
+                <h2 id="fixing-a-mistake">Fixing a mistake</h2>
+                <p>If a posted journal turns out to be wrong, click <strong>Reverse</strong> on it. This creates a new draft journal with every line's debit and credit swapped, dated today rather than the original journal's date — so the correction shows up in the period you actually found the mistake in, not retroactively in the period the original was posted. Review the reversing draft (adjust the date if needed) and post it the same way as any other journal.</p>
+
+                <h2 id="permissions">Permissions</h2>
+                <ul>
+                    <li><code>documents-view-any</code> / <code>documents-view</code> / <code>documents-create</code> / <code>documents-update</code> / <code>documents-delete</code> — to view, create, edit, and delete draft journals</li>
+                    <li><code>can-post-journals</code> — to post a journal</li>
+                </ul>
+            </article>
+        </main>
+
+        <nav id="docs-toc"></nav>
+    </div>
+
+    <script src="assets/nav.js"></script>
+</body>
+</html>

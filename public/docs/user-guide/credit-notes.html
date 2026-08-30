@@ -18,11 +18,11 @@
                 <p>A credit note reduces what a client owes you — because you overcharged, goods were returned, or you're settling a dispute. It's the opposite of a sales invoice: instead of adding to the client's balance, it subtracts from it.</p>
 
                 <h2 id="creating-a-credit-note">Creating a credit note</h2>
-                <ol>
-                    <li>Go to <strong>Credit Notes</strong> and click <strong>New Credit Note</strong>.</li>
-                    <li>Choose the client and set the date.</li>
-                    <li>Add line items describing what is being credited, with amounts and VAT.</li>
-                </ol>
+                <p>There are two ways to start one:</p>
+                <ul>
+                    <li>From <strong>Credit Notes</strong>, click <strong>New Credit Note</strong>, choose the client, set the date, and add line items describing what's being credited, with amounts and VAT.</li>
+                    <li>From an already-sent sales invoice that needs correcting, click <strong>Issue Credit Note</strong> on the invoice itself. This pre-fills a draft credit note with the invoice's client, currency, and a copy of every line — trim it to a partial credit or leave it as-is for a full one.</li>
+                </ul>
                 <p>The credit note starts in <strong>Draft</strong> status with its own number (e.g. CRN-2026-00005). Edit the header and lines freely while it's a draft.</p>
 
                 <h2 id="credit-note-statuses">Credit note statuses</h2>
@@ -32,7 +32,6 @@
                         <tr><td>Draft</td><td>Being prepared. Amounts can still be changed.</td></tr>
                         <tr><td>Issued</td><td>Finalised and issued to the client. Ready to apply against an invoice.</td></tr>
                         <tr><td>Applied</td><td>Applied against a sales invoice, reducing what's owed. Final state.</td></tr>
-                        <tr><td>Voided</td><td>Cancelled. Final state.</td></tr>
                     </tbody>
                 </table>
 
@@ -42,16 +41,18 @@
                 <h2 id="applying-to-an-invoice">Applying to an invoice</h2>
                 <p>Click <strong>Apply</strong> on an issued credit note and choose the sales invoice it offsets. The credit reduces the outstanding balance of that invoice and the credit note moves to <strong>Applied</strong>.</p>
 
-                <h2 id="voiding">Voiding</h2>
-                <p>If a credit note was created in error, click <strong>Void</strong>. Voided credit notes stay in the list for your records but have no effect on any balance.</p>
+                <div class="callout">
+                    <span class="callout-title">Once issued, permanent</span>
+                    A credit note can't be edited, deleted, or voided once issued — it's itself the correction mechanism, so there's no way to "undo" one. Only a <strong>Draft</strong> credit note can still be deleted. If a credit note was created in error before it's issued, delete the draft instead.
+                </div>
 
                 <div class="callout">
                     <span class="callout-title">Don't edit — credit</span>
-                    Once a sales invoice has been sent or posted, don't try to change it. Issue a credit note instead. That keeps a clean, auditable trail of what was charged and what was corrected.
+                    Once a sales invoice has been sent, you can't change it. Issue a credit note instead. That keeps a clean, auditable trail of what was charged and what was corrected, without rewriting a period that's already closed.
                 </div>
 
                 <h2 id="filtering-and-searching">Filtering and searching</h2>
-                <p>Use the status tabs (All, Draft, Issued, Applied, Voided) to filter the list, and the search box to find credit notes by number or client.</p>
+                <p>Use the status tabs (All, Draft, Issued, Applied) to filter the list, and the search box to find credit notes by number or client.</p>
             </article>
         </main>
 

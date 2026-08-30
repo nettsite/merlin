@@ -65,7 +65,7 @@ const NAV = [
         pages: [
             { file: 'chart-of-accounts.html', title: 'Chart of Accounts' },
             { file: 'account-groups.html', title: 'Account Groups' },
-            { file: 'journal.html', title: 'Journal (General Ledger)' },
+            { file: 'journal.html', title: 'The Ledger & Manual Journals' },
         ],
     },
     {

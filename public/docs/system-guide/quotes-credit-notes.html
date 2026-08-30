@@ -15,7 +15,7 @@
         <main id="docs-content">
             <article>
                 <h1>Quotes &amp; Credit Notes</h1>
-                <p>Quotes and credit notes are the two remaining billing document types. Both reuse the shared <code>Document</code> / <code>DocumentLine</code> models — there are no separate tables — differing only in <code>document_type</code>, number prefix, and status machine. Neither type ever posts to the ledger directly.</p>
+                <p>Quotes and credit notes are the two remaining billing document types. Both reuse the shared <code>Document</code> / <code>DocumentLine</code> models — there are no separate tables — differing only in <code>document_type</code>, number prefix, and status machine. Quotes never post to the ledger. An issued credit note does — it's the <em>only</em> way to reverse a sent sales invoice, since invoices can no longer be voided.</p>
 
                 <h2 id="document-model">Document model reuse</h2>
                 <table>
@@ -36,12 +36,14 @@
                 </ul>
 
                 <h2 id="credit-note-lifecycle">Credit note lifecycle</h2>
-                <p>Statuses: <code>draft → issued → applied</code>, with <code>voided</code> as the cancellation terminal:</p>
+                <p>Statuses: <code>draft → issued → applied</code>. There is no <code>voided</code> status — a credit note is itself the reversal instrument, so it can't be reversed the same way an invoice used to be; once issued it's permanent (see <a href="journal.html">The Ledger &amp; Manual Journals</a> on document immutability).</p>
                 <ul>
-                    <li><code>issueCreditNote()</code> — finalises the draft; amounts are fixed from this point.</li>
-                    <li><code>applyCreditNote(Document $creditNote, Document $invoice, ...)</code> — applies the credit against a sales invoice, reducing its outstanding balance, and links the documents.</li>
-                    <li><code>voidDocument()</code> — cancels; the record remains for audit.</li>
+                    <li><code>issueCreditNote()</code> — finalises the draft; amounts are fixed from this point, and the credit note now posts to the ledger (it doesn't need to be applied to an invoice first).</li>
+                    <li><code>applyCreditNote(Document $creditNote, Document $invoice, ...)</code> — applies the credit against a sales invoice, reducing its outstanding balance, and links the documents. Rejects a credit note dated before the invoice it credits — the reversal must land in the period it's discovered, never backdated into the invoice's own period.</li>
                 </ul>
+
+                <h2 id="reversing-a-sales-invoice">Reversing a sales invoice</h2>
+                <p>A sent sales invoice can't be edited or voided. To correct one, use <strong>Issue Credit Note</strong> on the invoice — <code>DocumentService::createCreditNoteFromInvoice()</code> creates a draft credit note pre-filled from the invoice (party, currency, a like-for-like copy of every line), ready to issue as-is for a full credit or trimmed first for a partial one. The credit-notes page opens straight to this draft (<code>#[Url(as: 'open')]</code> handoff) so the operator finishes it in one flow.</p>
 
                 <div class="callout">
                     <span class="callout-title">Header edits only in draft</span>
@@ -49,7 +51,7 @@
                 </div>
 
                 <h2 id="relationship-to-reports">Relationship to accounts and reports</h2>
-                <p>Quotes never appear in financial reports. Credit notes affect reported income once applied, through the invoice balance they reduce. The GL entry story remains owned by the sales-invoice posting flow — see <a href="sales-invoices.html">Sales Invoices</a>.</p>
+                <p>Quotes never appear in financial reports or the ledger. An issued credit note posts its own reversing entry — debiting the income account(s) it credits, crediting accounts receivable — independently of the invoice it's applied to. Every report summing a signed total for an account must sum <code>credit − debit</code>, not one side alone, or the credit note's effect goes unseen. See <a href="journal.html">The Ledger &amp; Manual Journals</a>.</p>
             </article>
         </main>
 

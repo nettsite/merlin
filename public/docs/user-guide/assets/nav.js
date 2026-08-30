@@ -37,6 +37,7 @@ const NAV = [
         group: 'Accounting',
         pages: [
             { file: 'accounts.html', title: 'Accounts' },
+            { file: 'journals.html', title: 'Journals' },
         ],
     },
     {

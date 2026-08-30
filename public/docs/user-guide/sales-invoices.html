@@ -44,7 +44,6 @@
                         <tr><td>Sent</td><td>Emailed to the client.</td></tr>
                         <tr><td>Partially paid</td><td>Some payment received, balance outstanding.</td></tr>
                         <tr><td>Paid</td><td>Fully paid.</td></tr>
-                        <tr><td>Voided</td><td>Cancelled. Cannot be edited or sent.</td></tr>
                     </tbody>
                 </table>
 
@@ -52,8 +51,8 @@
                 <p>The invoice list has a <strong>Balance</strong> column showing what's still outstanding on each invoice, next to the invoice total. It's highlighted whenever there's a balance still owing.</p>
                 <p>Use the status tabs above the list to filter — including an <strong>Unpaid</strong> tab that shows every invoice not yet fully paid (both Sent and Partially Paid together), so you don't have to check two tabs separately to see everything still owing.</p>
 
-                <h2 id="voiding-an-invoice">Voiding an invoice</h2>
-                <p>If an invoice was created by mistake or needs to be cancelled, use <strong>Void</strong>. A voided invoice is kept on record but cannot be edited, sent, or paid against. This is a permanent action — use it only when the invoice should not exist. Voiding also reverses the invoice's revenue in your books, so a voided invoice never counts towards the Income Statement, Balance Sheet, or Trial Balance.</p>
+                <h2 id="correcting-an-invoice">Correcting a sent invoice</h2>
+                <p>Once an invoice has been sent, it can no longer be edited, and there's no "void" — a sent invoice stays on record exactly as it was issued, permanently. If it was created by mistake, overcharged, or needs to be cancelled, issue a <strong>credit note</strong> against it instead (see <a href="credit-notes.html">Credit Notes</a>): click <strong>Issue Credit Note</strong> on the invoice, which pre-fills a draft credit note ready to issue for a full or partial reversal. This keeps a clean, dated trail of what was originally charged and what was corrected, rather than rewriting history.</p>
 
                 <h2 id="pdf-invoices">PDF invoices</h2>
                 <p>Merlin generates a PDF version of the invoice automatically when you send it. The PDF includes your company name, address, tax number, and logo from your company settings, along with the client's billing address, all line items, VAT breakdown, and total. See <a href="settings.html">Settings</a> to set up your company details and logo.</p>

@@ -19,7 +19,7 @@
                 <p>Sales invoices are outbound invoices you issue to your clients. Merlin numbers them automatically in the format <code>SINV-YEAR-NNNNN</code> (for example, <code>SINV-2026-00001</code>). You can create them manually, or let recurring invoice schedules generate them for you. Once created, you can send them by email directly from the application.</p>
 
                 <h2 id="overview">Overview</h2>
-                <p>Go to <strong>Billing &rsaquo; Sales Invoices</strong> to see all sales invoices. The list shows the invoice number, client, issue date, due date, total, and status. Status reflects the invoice's progress: <code>draft</code> (not yet sent), <code>sent</code> (emailed to the client), <code>partially_paid</code>, <code>paid</code>, and <code>voided</code> (cancelled; terminal).</p>
+                <p>Go to <strong>Billing &rsaquo; Sales Invoices</strong> to see all sales invoices. The list shows the invoice number, client, issue date, due date, total, and status. Status reflects the invoice's progress: <code>draft</code> (not yet sent), <code>sent</code> (emailed to the client), <code>partially_paid</code>, <code>paid</code>.</p>
 
                 <h2 id="creating-a-sales-invoice">Creating a sales invoice</h2>
                 <ol>
@@ -57,8 +57,8 @@
                 <p>When a client pays, click <strong>Record Payment</strong> on the invoice. Enter the payment amount, date, an optional reference (such as a bank transaction ID), and the bank account the payment was received into. The invoice's <code>amount_paid</code> and <code>balance_due</code> are updated immediately. If <code>balance_due</code> reaches zero, the invoice status changes to <code>paid</code> automatically.</p>
                 <p>Recording payments requires the <code>can-record-payments</code> permission. NEEDS CONFIRMATION: distinction between <code>can-record-payments</code> and <code>can-process-invoice-payments</code>.</p>
 
-                <h2 id="voiding-an-invoice">Voiding an invoice</h2>
-                <p>Voiding cancels an invoice permanently. The invoice status is set to <code>voided</code>, which is a terminal state — a voided invoice cannot be re-activated or edited. Use void when an invoice was issued in error or needs to be replaced by a corrected invoice. Requires the <code>can-void-sales-invoices</code> permission.</p>
+                <h2 id="correcting-a-sent-invoice">Correcting a sent invoice</h2>
+                <p>Once sent, a sales invoice can never be edited, voided, or deleted — <code>DocumentLine::saving()</code>/<code>deleting()</code> and <code>Document::saving()</code> both throw <code>PostedDocumentImmutableException</code> on any attempt. This is deliberate: a closed accounting period must stay closed. To correct a sent invoice, issue a credit note against it (<strong>Issue Credit Note</strong> on the invoice, via <code>DocumentService::createCreditNoteFromInvoice()</code>) — see <a href="quotes-credit-notes.html">Quotes &amp; Credit Notes</a>. The credit note is dated when the mistake is discovered, not backdated to the invoice's own date, so the original period's reports are never rewritten.</p>
 
                 <h2 id="pdf-generation">PDF generation</h2>
                 <p>Merlin generates a PDF of each sales invoice using the <code>BillingService</code> and the <code>barryvdh/laravel-dompdf</code> package. The generated PDF can be downloaded from the invoice detail panel. The PDF uses the company details from Settings &rsaquo; General (name, address, tax number, and logo).</p>
@@ -69,7 +69,6 @@
                     <li><code>document-lines-create</code> / <code>document-lines-update</code> / <code>document-lines-delete</code> — to manage line items</li>
                     <li><code>can-send-sales-invoices</code> — to email an invoice to the client</li>
                     <li><code>can-record-payments</code> — to record a payment against an invoice</li>
-                    <li><code>can-void-sales-invoices</code> — to void an invoice</li>
                 </ul>
             </article>
         </main>

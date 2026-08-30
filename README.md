@@ -80,8 +80,8 @@ Business logic lives under `app/Modules/`, grouped by domain:
 app/Ai/Agents/   laravel/ai Agent classes — invoice/bank-statement/payment-notification extraction, PDF vision, bank template hints
 
 app/Modules/
-├── Core/        User, Party, Person, Business, Address, ContactAssignment, Document, DocumentLine, LlmLog
-├── Accounting/  Account, AccountGroup, AccountType, FinancialYearService, JournalEntry/JournalLine + JournalService (GL)
+├── Core/        User, Party, Person, Business, Address, ContactAssignment, Document, DocumentLine, DocumentBalance, LlmLog
+├── Accounting/  Account, AccountGroup, AccountType, FinancialYearService — the ledger itself is the `postings` SQL view, not a table
 ├── Purchasing/  PostingRule + invoice/payment-notification pipeline services
 └── Billing/     PaymentTerm, RecurringInvoice + BillingService, RecurringInvoiceService, DueDateCalculator, WorkingDayCalculator
 ```
@@ -113,7 +113,7 @@ Thresholds are configurable per business via `PurchasingSettings`.
 |---|---|
 | Expenses | Suppliers, Purchase Invoices, Payment Notifications, Posting Rules |
 | Billing | Clients, Sales Invoices, Quotes, Credit Notes, Recurring Invoices, Payment Terms |
-| Accounting | Bank Statements, Bank Templates, Accounts, Account Groups |
+| Accounting | Journals, Bank Statements, Bank Templates, Accounts, Account Groups |
 | Reports | Income Statement, Trial Balance, Balance Sheet, Income by Client/Account, Expenses by Account, Expenses by Supplier, LLM Performance |
 | Settings | General, Purchasing, Billing, Roles, Users, LLM Logs |
 | Emails | NettMail templates, contacts, lists, segments, campaigns |

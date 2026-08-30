@@ -191,9 +191,12 @@ authorization is always `$user->can('permission')`, never `hasRole()`.
   `access-panel`, `view-llm-summary`, `can-review-invoices`,
   `can-authorise-invoices`, `can-post-invoices`, `can-reprocess-invoices`,
   `can-process-invoice-payments`, `can-record-payments`,
-  `can-send-sales-invoices`, `can-void-sales-invoices`, plus the `accountant`
-  permission. Source: the dated `*permission*` migrations. NEEDS CONFIRMATION:
-  exact intent of `accountant` (looks like a grouping permission, not a role).
+  `can-send-sales-invoices`, `can-post-journals`, plus the `accountant`
+  permission. Source: the dated `*permission*` migrations. `can-void-sales-invoices`
+  still exists in the permissions table (never deleted) but is dead — voiding was
+  removed; a credit note is the only reversal now. Don't document it as active.
+  NEEDS CONFIRMATION: exact intent of `accountant` (looks like a grouping
+  permission, not a role).
 - **Managing roles in the UI** — `/roles` page (`roles/index.blade.php`):
   create roles, attach permissions. Requires appropriate permission.
 - **Assigning permissions to users** — Done via roles on `/users`
@@ -408,12 +411,14 @@ Source: `resources/views/livewire/pages/sales-invoices/index.blade.php`,
   `amount_paid`/`balance_due`). Gated by `can-record-payments` /
   `can-process-invoice-payments`. NEEDS CONFIRMATION: distinction between these
   two permissions.
-- **Voiding an invoice** — Gated by `can-void-sales-invoices`. NEEDS
-  CONFIRMATION: void semantics (status used).
+- **Reversing an invoice** — There is no void. To reverse a sent invoice,
+  issue a credit note against it (`DocumentService::createCreditNoteFromInvoice()`),
+  dated in the period the mistake is discovered, not backdated to the invoice's
+  own date. Cross-link *Quotes & Credit Notes*.
 - **PDF generation** — `BillingService` generates the invoice PDF. NEEDS
   CONFIRMATION: PDF engine used.
 - **Permissions** — `documents-*` + `can-send-sales-invoices`,
-  `can-void-sales-invoices`, `can-record-payments`, `can-process-invoice-payments`.
+  `can-record-payments`, `can-process-invoice-payments`.
 
 ### recurring-invoices.html — Recurring Invoices
 Source: `app/Modules/Billing/Models/RecurringInvoice.php`,
@@ -496,35 +501,44 @@ Source: `app/Modules/Accounting/Models/{AccountGroup,AccountType}.php`,
 - **Managing account groups** — CRUD on `/account-groups`.
 - **Permissions** — `account-groups-view-any|view|create|update|delete|restore|force-delete`.
 
-### journal.html — Journal (General Ledger)
-Source: `app/Modules/Accounting/{Models/JournalEntry.php,Models/JournalLine.php,Services/JournalService.php}`,
-`app/Modules/Core/Services/DocumentService.php`, `app/Modules/Core/Models/DocumentLine.php`.
+### journal.html — The Ledger & Manual Journals
+Source: `database/migrations/*_create_postings_view.php` and
+`*_update_postings_view_for_document_balances.php` and
+`*_add_journal_branch_to_postings_view.php`, `app/Modules/Core/Services/DocumentService.php`,
+`app/Modules/Core/Models/{Document.php,DocumentLine.php,DocumentBalance.php}`. CLAUDE.md's
+"The Ledger: `postings`, a derived view" and "Manual journals" sections are the authoritative
+source — mirror them, don't re-derive from the migration SQL directly.
 
-- **Why a journal** — `journal_entries`/`journal_lines` replaced per-report
-  re-derivation from `documents`/`document_lines` after that duplication let a
-  voided sales invoice's revenue leak through one report while correctly
-  disappearing from others.
-- **Shape of an entry** — `journal_entries` (document_id, entry_date, source,
-  description, reversed_by_id) / `journal_lines` (journal_entry_id, account_id,
-  party_id, debit, credit, description). `JournalService::post()` rejects an
-  unbalanced entry and is idempotent per (document_id, source).
-- **Append-only** — no `update()`/`delete()` on either table.
-  `JournalService::reverse()` swaps debit/credit on a new entry and stamps
-  `reversed_by_id` on the original.
-- **Posted documents are immutable** — `DocumentLine::saving()`/`deleting()`
-  throw `PostedDocumentImmutableException` once the document has a
-  non-reversed entry. Bypassed by `saveQuietly()` (FX finalisation, VAT
-  correction), both restricted to not-yet-posted invoices.
-- **What posts and when** — table of event → DocumentService method → entry
-  shape (sales invoice sent/voided, purchase invoice posted, payment,
-  credit note applied).
-- **Skip vs. fail** — missing account config skips posting silently (mirrors
-  the old report-time `whereNotNull` guards); a VAT-carrying sales invoice
-  with no configured VAT liability account throws instead.
-- **Which reports read the journal** — trial-balance/balance-sheet/
-  income-statement/account-transaction-view do; the four by-account/by-client/
-  by-supplier analytical reports deliberately don't (need invoice counts,
-  balance_due, or per-line VAT the journal doesn't preserve).
+- **Why a view, not a table** — a written ledger and its source documents can drift if a
+  write-time posting step is missed for one document type; a view recomputes from
+  `documents`/`document_lines` on every query, so there's no posting step to forget.
+- **How a document gets into the ledger** — issued status + configured account columns
+  (`receivable_account_id`/`payable_account_id`/`contra_account_id`/`tax_account_id`) + every
+  line coded (invoices/credit notes) is what makes a document appear; nothing is a write-time
+  toggle.
+- **Balance by construction** — invoice-type postings can't be unbalanced because the totals
+  arithmetic behind them already enforces it (`total = subtotal + tax_total` etc.).
+- **Reversal is a new document** — no void on sales invoices; a credit note (dated at
+  discovery, not backdated) is the only reversal. Same principle extends to manual journals
+  (reversing journal, not an edit).
+- **Posted documents are immutable** — header commercial columns (total, subtotal, tax_total,
+  issue_date, party_id, document_number) and every line are frozen once issued.
+  `PostedDocumentImmutableException`. Bypassed only by trusted `saveQuietly()` system paths,
+  each paired with a `DocumentActivity` audit row.
+- **Manual journals** — `document_type = 'journal'`, `/journals` in the Accounting nav group.
+  Signed line amount (positive = debit, negative = credit). Must balance to post; can never
+  target an AR/AP control account (GL-only — customer/supplier balances stay on
+  invoices/credit notes/payments). Draft → posted only, posted is terminal, corrected only by
+  a reversing journal. Postings-view branch is a straight 1:1 line-to-row map, unlike every
+  other document type's fixed two-leg shape.
+- **Bank statements never post** — reconciliation only; matched lines settle an existing
+  document, unmatched ones become a manual journal or GL posting on the spot.
+- **Which reports read the ledger** — trial-balance/balance-sheet/income-statement/
+  account-transaction-view query `postings` directly; the four by-account/by-client/
+  by-supplier analytical reports deliberately still read `documents`/`document_lines` (need
+  invoice counts, balance_due, or per-line VAT the view doesn't preserve).
+- **`document_balances`** — status/amount_paid/balance_due/credits_applied live on a separate
+  table, one row per document; the only mutable part of a document post-creation.
 
 ---
 
@@ -683,6 +697,6 @@ Source: cross-references to the above pages. Synthetic examples only.
 6. Recurring-invoice generation trigger (scheduler/command + cron).
 7. Permission gating for settings pages and reports.
 8. Distinction: `can-record-payments` vs `can-process-invoice-payments`.
-9. Sales-invoice void semantics + PDF engine.
+9. Sales-invoice PDF engine.
 10. Whether SaaS mode is in scope for public docs.
 11. Full `NETTMAIL_*` env key list and Emails route paths.

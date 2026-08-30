@@ -187,7 +187,7 @@ $pages = [
         [2, 'Tax and totals'],
         [2, 'Sending an invoice'],
         [2, 'Recording payments'],
-        [2, 'Voiding an invoice'],
+        [2, 'Correcting a sent invoice'],
         [2, 'PDF generation'],
         [2, 'Permissions'],
     ]],

@@ -15,7 +15,11 @@
         <main id="docs-content">
             <article>
                 <h1>Bank Statements</h1>
-                <p>Bank Statements lets you upload your bank or credit card statement PDFs and have Merlin read the transactions automatically. Each transaction is listed as a line, with a suggested account code and — where Merlin spots a match — a link to one of your outstanding sales invoices.</p>
+                <p>Bank Statements lets you upload your bank or credit card statement PDFs and have Merlin read the transactions automatically. Each transaction is listed as a line, with a suggested account code and — where Merlin spots one — a suggested matching invoice or payment.</p>
+                <div class="callout">
+                    <span class="callout-title">Statements are for reconciliation, not posting</span>
+                    Uploading a statement never changes your books by itself. It's a checklist: each transaction gets matched against something already recorded, or turned into a new entry on the spot. See <a href="#reconciling-transactions">Reconciling transactions</a>.
+                </div>
 
                 <h2 id="uploading-a-statement">Uploading a statement</h2>
                 <ol>
@@ -30,17 +34,25 @@
                 <h2 id="reviewing-transactions">Reviewing transactions</h2>
                 <p>Once processed, click any statement in the list to open the detail panel. You will see:</p>
                 <ul>
-                    <li>Statement header information — bank name, account, period, opening and closing balances, and whether the balance reconciles.</li>
+                    <li>Statement header information — bank name, account, period, opening and closing balances, and whether the extracted total reconciles against them.</li>
                     <li>A line per transaction — description, date, amount, and the account Merlin suggested.</li>
-                    <li>Any transactions Merlin matched to an outstanding sales invoice are highlighted with the invoice number.</li>
+                    <li>Any transaction Merlin matched to an outstanding invoice or existing payment is shown with that suggestion, ready to confirm.</li>
                 </ul>
-                <p>You can edit the account on any line directly in the panel if Merlin got it wrong. Click the account field on the line to change it.</p>
+
+                <h2 id="reconciling-transactions">Reconciling transactions</h2>
+                <p>Each line needs to be reconciled one of two ways before the statement can be closed out:</p>
+                <ul>
+                    <li><strong>Confirm a match</strong> — where Merlin suggested a matching invoice or payment, click to confirm it (or use <strong>Confirm All Suggested</strong> to accept every suggestion on the statement at once). You can also match a line manually if Merlin didn't suggest one, or unmatch a line you confirmed by mistake.</li>
+                    <li><strong>Post to an account</strong> — for a transaction with nothing behind it, like a bank charge or interest, choose the GL account it belongs to and post it directly. This creates the missing entry and reconciles the line in one step.</li>
+                </ul>
+                <p>If nothing already recorded matches a transaction — a payment you forgot to enter, say — create the missing document first (the same way you would anywhere else in Merlin), then come back and match the statement line against it.</p>
+                <p>Once every line is reconciled, mark the statement <strong>Reconciled</strong> to close it out.</p>
 
                 <h2 id="reprocessing">Reprocessing</h2>
-                <p>If the extraction wasn't right — for example, Merlin misclassified a category of transactions — you can reprocess the statement. Click <strong>Reprocess</strong> in the detail panel. A window appears where you can type an optional hint to guide Merlin (for example: <em>Monthly debit order rows are insurance premiums, not bank charges</em>). Merlin will re-read the statement and replace the existing transactions with a fresh extraction.</p>
+                <p>If the extraction wasn't right — for example, Merlin misclassified a category of transactions — you can reprocess the statement, as long as it isn't already marked Reconciled. Click <strong>Reprocess</strong> in the detail panel. A window appears where you can type an optional hint to guide Merlin (for example: <em>Monthly debit order rows are insurance premiums, not bank charges</em>). Merlin will re-read the statement and replace the existing transactions with a fresh extraction — any matches you'd already confirmed are cleared along with the old lines, so reprocess before you reconcile, not after.</p>
 
-                <h2 id="balance-reconciliation">Balance reconciliation</h2>
-                <p>Merlin checks whether the sum of extracted transactions matches the difference between the opening and closing balance shown on the statement. If they don't match, the statement is flagged as not reconciled — this usually means Merlin missed some transactions or misread an amount. Review the lines and reprocess with a hint if needed.</p>
+                <h2 id="balance-check">Balance check</h2>
+                <p>Merlin checks whether the sum of extracted transactions matches the difference between the opening and closing balance shown on the statement. If they don't match, the statement header flags it — this usually means Merlin missed some transactions or misread an amount. Review the lines and reprocess with a hint if needed.</p>
             </article>
         </main>
 

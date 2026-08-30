@@ -16,7 +16,11 @@
         <main id="docs-content">
             <article>
                 <h1>Bank Statements</h1>
-                <p>Bank Statements (<code>/bank-statements</code>) allows PDF bank and credit card statements to be uploaded and processed by the LLM. Each transaction in the statement becomes a <code>DocumentLine</code> with a suggested GL account code and, where possible, a link to an outstanding sales invoice. The page is fully custom (not <code>HasCrudForm</code>).</p>
+                <p>Bank Statements (<code>/bank-statements</code>) allows PDF bank and credit card statements to be uploaded and processed by the LLM. Each transaction in the statement becomes a <code>DocumentLine</code> with a suggested GL account code and, where possible, a suggested matching sales or purchase invoice. The page is fully custom (not <code>HasCrudForm</code>).</p>
+                <div class="callout warning">
+                    <span class="callout-title">A statement never posts to the ledger</span>
+                    A bank statement is reconciliation evidence, not a posting source — uploading or extracting one has no effect on <code>postings</code> or any report. Every line is either matched against an existing document (settling an invoice or payment already recorded) or turned into its own payment/GL posting on the spot. See <a href="#reconciliation">Reconciliation</a> below and <a href="journal.html">The Ledger &amp; Manual Journals</a>.
+                </div>
 
                 <h2 id="document-types">Document types</h2>
                 <p>Two document types are registered in <code>config/documents.php</code>:</p>
@@ -27,7 +31,7 @@
                         <tr><td><code>credit_card_statement</code></td><td>Credit Card Statement</td><td><code>CCSTMT</code></td><td>No — taken from the statement itself</td></tr>
                     </tbody>
                 </table>
-                <p>Both default to status <code>received</code>. The <code>document_number</code> column is nullable; if the LLM cannot extract a statement number the field is left blank.</p>
+                <p>Both default to status <code>queued</code>, then move to <code>received</code> once extraction completes. From there: <code>queued → received → reviewed → reconciled</code> (<code>reviewed</code> is optional — <code>received</code> can go straight to <code>reconciled</code>). <code>reconciled</code> is terminal; there is no <code>posted</code> status for a statement, since a statement never posts. The <code>document_number</code> column is nullable; if the LLM cannot extract a statement number the field is left blank.</p>
 
                 <h2 id="upload-flow">Upload flow</h2>
                 <ol>
@@ -44,10 +48,19 @@
                     <li><strong>LlmService::extractBankStatement()</strong> — calls the Claude API with <code>resources/views/prompts/bank-statement-extraction.blade.php</code>. Layout hints from the <code>BankTemplate</code> and any user hint are included. Returns an <code>ExtractedBankStatement</code> DTO containing header metadata and an array of <code>ExtractedBankTransaction</code> objects.</li>
                     <li>The <code>Document</code> record is updated with extracted header fields (bank name, account name, statement number, period, opening/closing balances, currency). Balance reconciliation is checked and recorded in <code>metadata.balance_reconciled</code>.</li>
                     <li>Outstanding sales invoices are pre-indexed by <code>document_number</code> (status <code>sent</code> or <code>partially_paid</code>).</li>
-                    <li>One <code>DocumentLine</code> is created per transaction. Amounts are stored as signed values (negative = debit/expense). If the LLM suggests an account code, it is resolved to an <code>account_id</code>. If the LLM suggests a matching invoice number, a <code>linked_document_id</code> is set.</li>
+                    <li>One <code>DocumentLine</code> is created per transaction. Amounts are stored as signed values (negative = debit/expense). If the LLM suggests an account code, it is resolved to an <code>account_id</code>. If the LLM suggests a matching invoice number, a <code>linked_document_id</code> is set — this is only a <em>suggestion</em> for the reconciliation screen, not a confirmed match; see <a href="#reconciliation">Reconciliation</a>.</li>
                     <li>Document totals are recalculated and an <code>llm_extracted</code> activity is logged.</li>
                 </ol>
                 <p>Like <code>InvoiceProcessingService</code>, this service only <em>appends</em> lines. Any reprocess must delete existing lines first — <code>DocumentService::reprocess()</code> handles this.</p>
+
+                <h2 id="reconciliation">Reconciliation</h2>
+                <p>Once extracted, each transaction line is reconciled one of two ways — nothing about this step posts anything by itself:</p>
+                <ul>
+                    <li><strong>Match against an existing document</strong> — <code>DocumentService::matchReconciliation(DocumentLine $statementLine, Document $document, User $by)</code> records the link in a <code>BankReconciliationMatch</code> row (one per statement line, <code>updateOrCreate</code> so re-confirming or correcting a match is idempotent). The matched document is assumed already posted, or was posted by whatever created it — this method never posts on its own. A suggested match (from <code>linked_document_id</code>) can be confirmed with one click; <strong>Confirm All Suggested</strong> does this for every suggested line at once. <code>unmatchReconciliation()</code> removes a match.</li>
+                    <li><strong>Post directly to a GL account</strong> — for a transaction with no document behind it at all (a bank charge, interest), <code>DocumentService::reconcileToGlAccount(DocumentLine $statementLine, string $glAccountId, User $by)</code> creates a new <code>payment</code>-type <code>Document</code> on the spot (already <code>posted</code>, direction taken from the transaction's sign, <code>contra_account_id</code> set to the statement's own bank/credit-card account) and reconciles the line against it in one step.</li>
+                </ul>
+                <p>A line can also be reconciled by first creating a brand-new document for it (e.g. a payment that was never recorded) via the same create flow used elsewhere in the app, then matching the statement line against the document just created.</p>
+                <p>Once every line on the statement is reconciled, mark the statement itself <strong>Reconciled</strong> (<code>DocumentService::markStatementReconciled()</code>) to close it out. This only changes the statement's own status — it still never posts anything.</p>
 
                 <h2 id="bank-templates">Bank templates</h2>
                 <p><code>BankTemplate</code> stores bank-specific layout hints passed to the LLM. Fields:</p>
@@ -63,7 +76,7 @@
                 <p>Bank templates are managed directly in the database; there is no UI page for them yet.</p>
 
                 <h2 id="reprocess-with-hint">Reprocess with hint</h2>
-                <p>Statements in any non-posted status can be reprocessed. The reprocess action opens a modal where the user can enter an optional hint — free text that is appended to the LLM prompt to guide the extraction (e.g. "Debit card fee rows are bank charges, not supplier payments"). The hint is passed through <code>ProcessBankStatementDocument</code> → <code>BankStatementProcessingService::process()</code> → <code>LlmService::extractBankStatement()</code>.</p>
+                <p>Statements in any non-<code>reconciled</code> status can be reprocessed. The reprocess action opens a modal where the user can enter an optional hint — free text that is appended to the LLM prompt to guide the extraction (e.g. "Debit card fee rows are bank charges, not supplier payments"). The hint is passed through <code>ProcessBankStatementDocument</code> → <code>BankStatementProcessingService::process()</code> → <code>LlmService::extractBankStatement()</code>.</p>
 
                 <h2 id="document-model-fields">Document model fields</h2>
                 <p>Bank statement documents use these <code>Document</code> columns beyond the standard fields:</p>
@@ -83,7 +96,7 @@
                 <ul>
                     <li><code>documents-view-any</code> / <code>documents-view</code> — to view the list and detail flyout</li>
                     <li><code>documents-create</code> — to upload statements</li>
-                    <li><code>documents-update</code> — to edit line accounts and reprocess</li>
+                    <li><code>documents-update</code> — to edit line accounts, reprocess, and reconcile lines (match, unmatch, post to a GL account, mark the statement reconciled)</li>
                 </ul>
             </article>
         </main>

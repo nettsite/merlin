@@ -31,6 +31,7 @@
                     <li><strong>Recurring invoices</strong> — set up schedules that generate and optionally send sales invoices automatically</li>
                     <li><strong>Payment terms</strong> — reusable due-date rules that can be attached to suppliers, clients, and individual invoices</li>
                     <li><strong>Chart of accounts</strong> — a structured general ledger with account groups and account types; a default chart is seeded on installation</li>
+                    <li><strong>Manual journals</strong> — balanced, debit/credit general ledger entries for adjustments that don't come from an invoice, credit note, or payment</li>
                     <li><strong>Reports</strong> — expenses by account, expenses by supplier, and AI extraction performance metrics</li>
                     <li><strong>Roles and permissions</strong> — fine-grained access control; every action is gated by a named permission that can be assigned to any role</li>
                     <li><strong>Audit log</strong> — all significant actions are recorded with the user who performed them and a timestamp</li>
@@ -57,7 +58,7 @@
                     </thead>
                     <tbody>
                         <tr><td>Framework</td><td>Laravel 13, PHP 8.4</td></tr>
-                        <tr><td>Frontend</td><td>Livewire 3, Volt, Flux UI, Alpine.js, Tailwind CSS 3</td></tr>
+                        <tr><td>Frontend</td><td>Livewire 4 (single-file classes, no Volt), Flux UI, Alpine.js, Tailwind CSS 3</td></tr>
                         <tr><td>Auth</td><td>Laravel Breeze (Livewire stack)</td></tr>
                         <tr><td>Roles &amp; permissions</td><td>spatie/laravel-permission</td></tr>
                         <tr><td>Audit log</td><td>spatie/laravel-activitylog</td></tr>
