@@ -31,6 +31,7 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
     Route::livewire('recurring-invoices', 'pages.recurring-invoices.index')->name('recurring-invoices.index');
 
     // Accounting
+    Route::livewire('journals', 'pages.journals.index')->name('journals.index');
     Route::livewire('bank-statements', 'pages.bank-statements.index')->name('bank-statements.index');
     Route::livewire('bank-templates', 'pages.bank-templates.index')->name('bank-templates.index');
     Route::livewire('accounts', 'pages.accounts.index')->name('accounts.index');

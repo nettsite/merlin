@@ -108,6 +108,7 @@ Routes use `Route::livewire()` unless marked *view*. Any test that renders a vie
 | `/suppliers/{id}` | `suppliers/show.blade.php` | Read-only detail |
 | `/purchase-invoices` | `purchase-invoices/index.blade.php` | **Fully custom** — file upload, LLM pipeline, inline line editing, status machine |
 | `/payment-notifications` | `payment-notifications/index.blade.php` | **Fully custom** — unmatched supplier payment notifications, link-to-invoice workflow |
+| `/journals` | `journals/index.blade.php` | **Fully custom** — manual GL journal entries, debit/credit line editor, balance-gated posting. See "Manual journals" below |
 | `/bank-statements` | `bank-statements/index.blade.php` | **Fully custom** — upload PDF statements, LLM extraction, reconciliation (match against an existing document, or create one on the spot), reprocess with hint. Statements never post — see Journal section |
 | `/bank-templates` | `bank-templates/index.blade.php` | CRUD |
 | `/posting-rules` | `posting-rules/index.blade.php` | CRUD |
@@ -272,6 +273,40 @@ through `posted`/`partially_paid`/`paid`).
 **`credits_applied` on `Document`** stores a credit note's raw, uncapped amount; `Document::recalculateBalance()` is the single formula (`total − amount_paid − credits_applied`, floored at zero) every writer of `balance_due` must go through — `applyCreditNote()`, `recordPayment()`, and `Document::recalculateTotals()` all call it rather than assigning `balance_due` directly, which is what let a credit note get silently reversed by the invoice's next payment before this existed.
 
 **Eloquent `'date'`-cast columns store a full `Y-m-d H:i:s` value**, not a clean date (`fromDateTime()` uses the connection's datetime format regardless of cast type) — every date-column query in this app, including `postings.entry_date`, must use `whereDate()`, never a raw `where()` comparison, or the stored value's trailing time component silently fails the match.
+
+### Manual journals
+
+`document_type = 'journal'` reuses `Document`/`DocumentLine` rather than a separate table. A
+line's signed `line_total` (positive = debit, negative = credit) is produced for free by
+`DocumentLine::calculateTotals()` as long as journal lines are always created with `quantity = 1`,
+`discount = 0`, `tax_rate = null` — `line_total` then equals `unit_price` exactly, so `unit_price`
+carries the signed amount. `direction` is `'internal'`, a value used by no other document type and
+read by no posting/report logic — it exists only because the column is `NOT NULL`.
+
+**Draft → posted is the entire state machine** (`DocumentService::getAllowedTransitions()['journal']`)
+— no review step, and posted is terminal. `DocumentService::postJournal()` validates before
+transitioning: the lines must sum to zero (`abs(difference) <= 0.01`, the same rounding tolerance
+used elsewhere), and no line may target an AR/AP control account — journals adjust the general
+ledger directly, they never touch a customer/supplier balance, which stays the job of
+invoices/credit notes/payments. `DocumentService::controlAccountIds()` builds that exclusion list
+from `BillingSettings::default_receivable_account_id` and `PurchasingSettings::default_payable_account`
+plus each one's immediate sub-accounts — `Account` has no "is this AR/AP" flag of its own, so this
+is necessarily built from the same two Settings pointers every other control-account lookup in the
+app already relies on, not a database-enforced classification.
+
+**A posted journal is immutable exactly like a posted invoice** — `Document::statusCountsAsIssued()`
+treats `journal`/`posted` as issued, so the existing header and line guards (see "Issued documents'
+lines are immutable" above) apply with no journal-specific code. **The only correction is
+`DocumentService::createReversingJournal()`** — a new draft with every line's sign flipped, dated
+today (or an explicit discovery date) rather than the original's date, same principle as credit
+notes: a mistake found in July never rewrites March.
+
+The `postings` view's journal branch is the one branch that maps a document's lines onto ledger
+rows 1:1 rather than reproducing a fixed two-leg shape — each line's own sign already says debit or
+credit, so there's nothing to derive. This is also why adding journals cost nothing on the
+reporting side: trial balance, balance sheet, income statement, and account registers all read
+`postings` directly and never filter by `source`, so a posted journal appears in every one of them
+automatically.
 
 ### `document_balances` — the only mutable part of a document
 

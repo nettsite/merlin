@@ -34,9 +34,10 @@
     <flux:dropdown>
         <flux:navbar.item
             icon:trailing="chevron-down"
-            :current="request()->is('accounts*', 'account-groups*', 'reports*', 'bank-statements*', 'bank-templates*')"
+            :current="request()->is('accounts*', 'account-groups*', 'reports*', 'journals*', 'bank-statements*', 'bank-templates*')"
         >Accounting</flux:navbar.item>
         <flux:navmenu>
+            <flux:navmenu.item href="{{ route('journals.index') }}" wire:navigate>Journals</flux:navmenu.item>
             <flux:navmenu.item href="{{ route('bank-statements.index') }}" wire:navigate>Bank Statements</flux:navmenu.item>
             <flux:navmenu.item href="{{ route('bank-templates.index') }}" wire:navigate>Bank Templates</flux:navmenu.item>
             <flux:navmenu.item href="{{ route('accounts.index') }}" wire:navigate>Accounts</flux:navmenu.item>

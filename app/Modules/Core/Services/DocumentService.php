@@ -3,6 +3,8 @@
 namespace App\Modules\Core\Services;
 
 use App\Exceptions\InvalidDocumentStateException;
+use App\Exceptions\JournalNotBalancedException;
+use App\Modules\Accounting\Models\Account;
 use App\Modules\Billing\Settings\BillingSettings;
 use App\Modules\Core\Models\BankReconciliationMatch;
 use App\Modules\Core\Models\Document;
@@ -12,6 +14,7 @@ use App\Modules\Core\Models\DocumentRelationship;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Settings\CurrencySettings;
 use App\Modules\Purchasing\Services\PaymentEvidenceRecorder;
+use App\Modules\Purchasing\Settings\PurchasingSettings;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -21,6 +24,7 @@ class DocumentService
     public function __construct(
         private readonly CurrencySettings $currencySettings,
         private readonly BillingSettings $billingSettings,
+        private readonly PurchasingSettings $purchasingSettings,
     ) {}
 
     // -------------------------------------------------------------------------
@@ -221,6 +225,119 @@ class DocumentService
             // used to read from $invoice transiently, just persisted instead.
             $creditNote->receivable_account_id ??= $invoice->receivable_account_id;
             $creditNote->saveQuietly();
+        });
+    }
+
+    /**
+     * Post a draft journal: validates it balances (debits = credits, within
+     * a cent for rounding) and that every line targets a GL account rather
+     * than an AR/AP control account — journals adjust the general ledger
+     * directly, they don't touch customer/supplier balances, which stay the
+     * job of invoices/credit notes/payments — then transitions it. Once
+     * posted a journal is immutable (see Document::guardAgainstIssuedMutation
+     * and DocumentLine::guardAgainstPostedMutation); the only way to correct
+     * it afterwards is createReversingJournal().
+     */
+    public function postJournal(Document $journal, ?User $by): void
+    {
+        $lines = $journal->lines()->get();
+
+        $difference = round((float) $lines->sum('line_total'), 2);
+
+        if (abs($difference) > 0.01) {
+            throw JournalNotBalancedException::forDocument($journal->document_number, $difference);
+        }
+
+        $controlAccountIds = $this->controlAccountIds();
+
+        foreach ($lines as $line) {
+            if ($line->account_id !== null && in_array($line->account_id, $controlAccountIds, true)) {
+                throw JournalNotBalancedException::controlAccountUsed(
+                    $journal->document_number,
+                    $line->account?->name ?? $line->account_id,
+                );
+            }
+        }
+
+        $this->transition($journal, 'posted', $by, 'Journal posted.');
+    }
+
+    /**
+     * AR/AP control accounts a journal line must never post to directly —
+     * the configured receivable/payable root plus its immediate sub-accounts
+     * (per-client/per-supplier receivable accounts hang one level below the
+     * root; see ClientReceivableAccountService). Not a database-enforced
+     * classification (Account has no "is this AR/AP" flag), so this is
+     * necessarily built from the same two Settings pointers every other
+     * control-account lookup in the app already relies on.
+     *
+     * Public so the journal UI can filter its account picker with the same
+     * list, rather than re-deriving it.
+     *
+     * @return array<int, string>
+     */
+    public function controlAccountIds(): array
+    {
+        $ids = [];
+
+        $receivableRoot = $this->billingSettings->default_receivable_account_id;
+
+        if ($receivableRoot !== null) {
+            $ids[] = $receivableRoot;
+            $ids = array_merge($ids, Account::where('parent_id', $receivableRoot)->pluck('id')->all());
+        }
+
+        $payableRoot = Account::where('code', $this->purchasingSettings->default_payable_account)->value('id');
+
+        if ($payableRoot !== null) {
+            $ids[] = $payableRoot;
+            $ids = array_merge($ids, Account::where('parent_id', $payableRoot)->pluck('id')->all());
+        }
+
+        return $ids;
+    }
+
+    /**
+     * The only way to correct a posted journal — never edit or delete one.
+     * Builds a new draft with every line's sign flipped (debit becomes
+     * credit and vice versa), dated today (or an explicit discovery date)
+     * rather than the original's date, so the correction lands in the
+     * period it's actually discovered in — same principle as
+     * createCreditNoteFromInvoice(). Left as a draft so the operator can
+     * review it, or add further adjusting lines, before posting.
+     */
+    public function createReversingJournal(Document $journal, User $by, ?CarbonInterface $date = null): Document
+    {
+        return DB::transaction(function () use ($journal, $by, $date): Document {
+            $reversal = Document::create([
+                'document_type' => 'journal',
+                'direction' => 'internal',
+                'status' => 'draft',
+                'issue_date' => ($date ?? now())->toDateString(),
+                'reference' => "Reversal of {$journal->document_number}",
+                'currency' => $journal->currency,
+                'exchange_rate' => 1.0,
+                'source' => 'manual',
+            ]);
+
+            foreach ($journal->lines as $line) {
+                $reversal->lines()->create([
+                    'line_number' => $line->line_number,
+                    'type' => $line->type,
+                    'description' => $line->description,
+                    'account_id' => $line->account_id,
+                    'quantity' => 1,
+                    'unit_price' => -(float) $line->unit_price,
+                    'discount_percent' => 0,
+                    'discount_amount' => 0,
+                    'tax_rate' => null,
+                ]);
+            }
+
+            $this->linkDocuments($journal, $reversal, 'reversed_by');
+            $this->recordActivity($journal, $by, 'reversed', "Reversed by journal {$reversal->document_number} (pending posting).");
+
+            return $reversal;
         });
     }
 
@@ -677,6 +794,13 @@ class DocumentService
                 'received' => ['reviewed', 'reconciled'],
                 'reviewed' => ['reconciled'],
                 'reconciled' => [],
+            ],
+            // Terminal once posted — no edit, no void. A mistake is corrected
+            // by createReversingJournal(), a new document dated in the period
+            // it's discovered, same principle as credit notes.
+            'journal' => [
+                'draft' => ['posted'],
+                'posted' => [],
             ],
         ];
     }

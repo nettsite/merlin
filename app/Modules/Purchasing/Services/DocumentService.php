@@ -23,7 +23,7 @@ class DocumentService extends BaseDocumentService
         private readonly PurchasingSettings $purchasingSettings,
         private readonly MagikaService $magika,
     ) {
-        parent::__construct($currencySettings, $billingSettings);
+        parent::__construct($currencySettings, $billingSettings, $purchasingSettings);
     }
 
     /**

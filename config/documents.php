@@ -117,6 +117,13 @@ return [
             'requires_due_date' => false,
             'auto_number' => false,
         ],
+        'journal' => [
+            'label' => 'Journal Entry',
+            'direction' => 'internal',
+            'prefix' => 'JNL',
+            'default_status' => 'draft',
+            'requires_due_date' => false,
+        ],
         'payment_notification' => [
             'label' => 'Payment Notification',
             'direction' => 'inbound',

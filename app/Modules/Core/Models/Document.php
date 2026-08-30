@@ -381,6 +381,11 @@ class Document extends Model implements HasMedia
         return $query->where('document_type', 'credit_note');
     }
 
+    public function scopeJournals(Builder $query): Builder
+    {
+        return $query->where('document_type', 'journal');
+    }
+
     public function scopeBankStatements(Builder $query): Builder
     {
         return $query->where('document_type', 'bank_statement');
@@ -523,6 +528,7 @@ class Document extends Model implements HasMedia
             'sales_invoice' => ! in_array($status, self::UNRECOGNISED_SALES_STATUSES, true),
             'purchase_invoice' => in_array($status, self::POSTED_STATUSES, true),
             'credit_note' => in_array($status, ['issued', 'applied'], true),
+            'journal' => $status === 'posted',
             default => false,
         };
     }
@@ -569,8 +575,30 @@ class Document extends Model implements HasMedia
             - (float) $this->credits_applied);
     }
 
+    /**
+     * A journal's lines are signed (positive = debit, negative = credit) and
+     * always net to zero when balanced — summing them the way every other
+     * document type does would make `total` always show 0, useless for a
+     * list view. Instead `total` is the sum of the debit legs only (equal to
+     * the credit legs, once balanced), and there is no tax or balance_due
+     * concept for a journal at all.
+     */
+    private function recalculateJournalTotals(): void
+    {
+        $this->subtotal = (float) $this->lines()->where('line_total', '>', 0)->sum('line_total');
+        $this->tax_total = 0;
+        $this->total = $this->subtotal;
+        $this->saveQuietly();
+    }
+
     public function recalculateTotals(): void
     {
+        if ($this->document_type === 'journal') {
+            $this->recalculateJournalTotals();
+
+            return;
+        }
+
         $subtotal = (float) $this->lines()->sum('line_total');
         $taxTotal = (float) $this->lines()->sum('tax_amount');
         $total = $subtotal + $taxTotal;
