@@ -52,4 +52,10 @@ return [
         'down_ttl' => (int) env('ANTHROPIC_MODEL_DOWN_TTL', 3600),
     ],
 
+    'typesafe' => [
+        'key' => env('TYPESAFE_API_KEY'),
+        'model' => env('TYPESAFE_MODEL', 'jev-latest'),
+        'base_url' => env('TYPESAFE_BASE_URL', 'https://api.typesafe.ai'),
+    ],
+
 ];

@@ -7,6 +7,25 @@ use App\Modules\Core\Services\PartyService;
 use App\Modules\Purchasing\DTO\ExtractedInvoice;
 use App\Modules\Purchasing\Services\SupplierResolver;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
+
+function fakeJevChoice(string $choice, float $confidence): void
+{
+    Http::fake([
+        'api.typesafe.ai/*' => Http::response([
+            'model' => 'jev-1.13.0',
+            'answers' => [
+                'pick' => [
+                    'type' => 'choice',
+                    'choice' => $choice,
+                    'probabilities' => [$choice => $confidence],
+                    'confidence' => $confidence,
+                ],
+            ],
+            'usage' => ['input_tokens' => 10, 'output_tokens' => 5],
+        ]),
+    ]);
+}
 
 uses(RefreshDatabase::class);
 
@@ -113,6 +132,58 @@ it('does not match a different party when another business shares the name', fun
 
     expect($document->fresh()->party_id)->toBe($target->id)
         ->and($document->fresh()->party_id)->not->toBe($decoy->id);
+});
+
+it('matches supplier via Jev choice when exact name match fails and confidence is high', function (): void {
+    $supplier = $this->service->createBusiness([
+        'business_type' => 'company',
+        'legal_name' => 'Acme Corporation Pty Ltd',
+        'trading_name' => 'Acme Corp',
+    ], relationships: ['supplier']);
+
+    fakeJevChoice((string) $supplier->id, 0.92);
+
+    $document = Document::factory()->purchaseInvoice()->create(['party_id' => null]);
+
+    $this->resolver->resolve($document, extractedInvoice('Acme Corp (Pty) Ltd t/a Acme'));
+
+    expect($document->fresh()->party_id)->toBe($supplier->id);
+});
+
+it('falls through to a pending supplier when Jev confidence is below threshold', function (): void {
+    $supplier = $this->service->createBusiness([
+        'business_type' => 'company',
+        'legal_name' => 'Acme Corporation Pty Ltd',
+        'trading_name' => 'Acme Corp',
+    ], relationships: ['supplier']);
+
+    fakeJevChoice((string) $supplier->id, 0.4);
+
+    $document = Document::factory()->purchaseInvoice()->create(['party_id' => null]);
+
+    $this->resolver->resolve($document, extractedInvoice('Acme Corp (Pty) Ltd t/a Acme'));
+
+    $document->refresh();
+    expect($document->party_id)->not->toBe($supplier->id);
+    expect(Party::find($document->party_id)->status)->toBe('pending');
+});
+
+it('falls through to a pending supplier when Jev picks none', function (): void {
+    $supplier = $this->service->createBusiness([
+        'business_type' => 'company',
+        'legal_name' => 'Acme Corporation Pty Ltd',
+        'trading_name' => 'Acme Corp',
+    ], relationships: ['supplier']);
+
+    fakeJevChoice('none', 0.95);
+
+    $document = Document::factory()->purchaseInvoice()->create(['party_id' => null]);
+
+    $this->resolver->resolve($document, extractedInvoice('Totally Unrelated Supplier'));
+
+    $document->refresh();
+    expect($document->party_id)->not->toBe($supplier->id);
+    expect(Party::find($document->party_id)->status)->toBe('pending');
 });
 
 it('creates a pending supplier when no match is found', function (): void {
