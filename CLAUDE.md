@@ -391,7 +391,7 @@ Current metadata shapes:
 
 `PartyRelationship` exposes getter-only Eloquent Attribute accessors so callers read via `$rel->default_payable_account_id` etc. as normal properties. **For writing, always use `$rel->mergeMetadata([...])` — never assign to the accessor properties directly.** Eloquent `Attribute` setters that return `['metadata' => array]` bypass the 'array' cast encoder, leaving a raw PHP array in `$attributes` that breaks subsequent `json_decode` calls on the same request.
 
-## Key Rules
+## Key Rules (things Claude gets wrong)
 
 - **Auditing:** `spatie/laravel-activitylog` — models use `LogsActivity` trait + `getActivitylogOptions()`. No `owen-it/laravel-auditing`. Import as `Spatie\Activitylog\Support\LogOptions` (not `Spatie\Activitylog\LogOptions` — that namespace does not exist).
 - **Auth:** Laravel Breeze owns `/login`, `/register`, auth tests. Do not touch `tests/Feature/Auth/` or `tests/Feature/Settings/`.
