@@ -5,268 +5,210 @@
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
 <title>Invoice {{ $invoice->document_number }}</title>
 <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: Helvetica, Arial, sans-serif; font-size: 11px; color: #1a1a1a; }
-    .page { padding: 40px; }
+    /* DomPDF applies `*` to the page box too, so the page margin lives on body. */
+    @page { margin: 0; }
+    * { margin: 0; padding: 0; }
+    body { margin: 45px 30px 30px; font-family: Helvetica, Arial, sans-serif; font-size: 12px; color: #000; line-height: 1.55; }
+    table { width: 100%; border-collapse: collapse; }
+    td, th { vertical-align: top; }
 
-    /* Header */
-    .header-table { width: 100%; border-collapse: collapse; margin-bottom: 32px; }
-    .company-name { font-size: 22px; font-weight: bold; color: #1a1a1a; }
-    .invoice-title { font-size: 28px; font-weight: bold; color: #374151; text-align: right; }
-    .invoice-meta { text-align: right; margin-top: 8px; }
-    .invoice-meta table { margin-left: auto; border-collapse: collapse; }
-    .invoice-meta td { padding: 2px 0 2px 16px; }
-    .meta-label { color: #6b7280; font-weight: bold; text-align: right; }
-    .meta-value { text-align: right; }
+    .muted { color: #a3a3a3; line-height: 1.7; }
+    .accent { color: #2a8bad; }
+    .icon { width: 12px; height: 12px; margin-right: 5px; position: relative; top: 2px; }
 
-    /* Bill to / from */
-    .parties-table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
-    .section-label { font-size: 9px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.08em; color: #6b7280; margin-bottom: 4px; }
-    .party-name { font-size: 13px; font-weight: bold; margin-bottom: 2px; }
-    .party-detail { color: #374151; line-height: 1.5; }
+    .client-label { margin-bottom: 2px; }
+    .client-name { font-size: 16px; color: #2a8bad; margin-bottom: 2px; }
 
-    /* Divider */
-    .divider { border: none; border-top: 1px solid #e5e7eb; margin: 24px 0; }
+    .info-box { background: #2a8bad; color: #fff; border-radius: 10px; padding: 12px 16px 14px; }
+    .info-box td { padding: 2px 0; }
+    .info-box .value { text-align: right; }
 
-    /* Line items table */
-    .items-table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
-    .items-table th {
-        font-size: 9px;
-        font-weight: bold;
-        text-transform: uppercase;
-        letter-spacing: 0.08em;
-        color: #6b7280;
-        padding: 6px 8px;
-        border-bottom: 2px solid #e5e7eb;
-    }
-    .items-table th.right { text-align: right; }
-    .items-table td { padding: 8px 8px; border-bottom: 1px solid #f3f4f6; vertical-align: top; }
-    .items-table td.right { text-align: right; }
-    .items-table .desc { font-weight: 500; }
-    .items-table .account { font-size: 9px; color: #9ca3af; margin-top: 2px; }
+    .items th { background: #2a8bad; color: #fff; font-weight: normal; text-align: left; padding: 11px 14px; }
+    .items th.right, .items td.right { text-align: right; }
+    .items td { background: #f5f5f5; padding: 10px 14px; }
 
-    /* Totals */
-    .totals-table { width: 100%; border-collapse: collapse; }
-    .totals-table td { padding: 3px 8px; }
-    .totals-table .label { text-align: right; color: #6b7280; width: 80%; }
-    .totals-table .amount { text-align: right; width: 20%; min-width: 80px; }
-    .totals-table .grand-total td { font-size: 13px; font-weight: bold; border-top: 2px solid #1a1a1a; padding-top: 6px; }
-    .totals-table .payment-row td { color: #374151; }
-    .totals-table .balance-due td { font-size: 13px; font-weight: bold; border-top: 2px solid #1a1a1a; padding-top: 6px; }
-    .totals-table .balance-paid td { color: #16a34a; }
-    .paid-stamp { display: inline-block; border: 3px solid #16a34a; color: #16a34a; font-size: 18px; font-weight: bold; letter-spacing: 0.12em; padding: 4px 12px; border-radius: 4px; transform: rotate(-8deg); margin-top: 12px; }
+    .totals td { padding: 3px 14px; }
+    .totals .amount { text-align: right; }
+    .totals .balance td { background: #2a8bad; color: #fff; padding: 5px 14px; }
 
-    /* Notes */
-    .notes-section { margin-top: 24px; padding-top: 16px; border-top: 1px solid #e5e7eb; }
-    .notes-label { font-size: 9px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.08em; color: #6b7280; margin-bottom: 4px; }
-
-    /* Footer */
-    .footer { margin-top: 40px; padding-top: 16px; border-top: 1px solid #e5e7eb; font-size: 9px; color: #9ca3af; text-align: center; }
+    .terms-label { }
+    .bank { margin-top: 40px; border-top: 2px solid #2a8bad; padding-top: 10px; }
+    .bank-title { color: #2a8bad; margin-bottom: 6px; }
+    .bank td { padding-right: 16px; }
+    .bank-label { color: #737373; font-size: 10.5px; }
+    .footer { margin-top: 24px; }
 </style>
 </head>
 <body>
-<div class="page">
 
 @php
     $currencySymbol = \App\Modules\Purchasing\Services\ExchangeRateService::currencySymbol($invoice->currency);
+    $money = fn ($amount): string => $currencySymbol.number_format((float) $amount, 2, '.', ',');
+    $quantity = fn ($value): string => rtrim(rtrim(number_format((float) $value, 4, '.', ''), '0'), '.');
+
+    /* Ninja stores terms/footer as HTML (<p>..</p>) or plain text with newlines; print both as escaped text. */
+    $plainText = function (?string $value): string {
+        $text = preg_replace('/<\s*br\s*\/?>|<\/p>/i', "\n", (string) $value);
+
+        return trim(html_entity_decode(strip_tags($text), ENT_QUOTES | ENT_HTML5));
+    };
+
     $company = app(\App\Modules\Core\Settings\CompanySettings::class);
+    $billing = app(\App\Modules\Billing\Settings\BillingSettings::class);
     $companyName = $company->name ?: config('app.name');
     $logoPath = $company->logo_path ? \Illuminate\Support\Facades\Storage::disk('public')->path($company->logo_path) : null;
+    $companyLocality = trim(implode(', ', array_filter([$company->city, $company->state_province])).' '.$company->postal_code);
+
+    $business = $invoice->party?->business;
+    $address = $invoice->party?->addresses()->where('is_active', true)->orderByDesc('is_primary')->first();
+    $clientLocality = $address
+        ? trim(implode(', ', array_filter([$address->city, $address->state_province])).' '.$address->postal_code)
+        : '';
+
+    $terms = $plainText($invoice->terms) ?: $plainText($billing->default_invoice_terms);
+    $footer = $plainText($invoice->footer) ?: $plainText($billing->default_invoice_footer);
+    $notes = $plainText($invoice->notes);
+
+    $bankDetails = array_filter([
+        'Bank' => $company->bank_name,
+        'Account Name' => $company->bank_account_name,
+        'Account Number' => $company->bank_account_number,
+        'Branch Code' => $company->bank_branch_code,
+    ]);
+
+    /* Heroicons outline paths as inline SVG: DomPDF has no emoji/icon font. */
+    $icon = fn (string $path): string => 'data:image/svg+xml;base64,'.base64_encode(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#a3a3a3" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="'.$path.'"/></svg>'
+    );
+    $emailIcon = $icon('M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75');
+    $phoneIcon = $icon('M2.25 6.75c0 8.284 6.716 15 15 15h2.25a2.25 2.25 0 0 0 2.25-2.25v-1.372c0-.516-.351-.966-.852-1.091l-4.423-1.106c-.44-.11-.902.055-1.173.417l-.97 1.293c-.282.376-.769.542-1.21.38a12.035 12.035 0 0 1-7.143-7.143c-.162-.441.004-.928.38-1.21l1.293-.97c.363-.271.527-.734.417-1.173L6.963 3.102a1.125 1.125 0 0 0-1.091-.852H4.5A2.25 2.25 0 0 0 2.25 4.5v2.25Z');
+
+    /* Ninja-era footers are the bank details; don't print the same account twice. */
+    $accountDigits = preg_replace('/\D/', '', $company->bank_account_number);
+    if ($accountDigits !== '' && str_contains(preg_replace('/\D/', '', $footer), $accountDigits)) {
+        $footer = '';
+    }
 @endphp
 
-    {{-- ===== Header ===== --}}
-    <table class="header-table">
-        <tr>
-            <td style="vertical-align: top; width: 50%;">
-                @if($logoPath && file_exists($logoPath))
-                    <img src="{{ $logoPath }}" alt="{{ $companyName }}" style="max-height: 60px; max-width: 200px; margin-bottom: 6px; display: block;">
-                @else
-                    <div class="company-name">{{ $companyName }}</div>
-                @endif
-                @if($company->address_line_1)
-                    <div style="font-size: 10px; color: #6b7280; margin-top: 4px; line-height: 1.6;">
-                        <div>{{ $company->address_line_1 }}</div>
-                        @if($company->address_line_2)<div>{{ $company->address_line_2 }}</div>@endif
-                        @if($company->city || $company->postal_code)
-                            <div>{{ implode(' ', array_filter([$company->city, $company->postal_code])) }}</div>
-                        @endif
-                        @if($company->country)<div>{{ $company->country }}</div>@endif
-                        @if($company->phone)<div>{{ $company->phone }}</div>@endif
-                        @if($company->email)<div>{{ $company->email }}</div>@endif
-                        @if($company->tax_number)<div>Tax No: {{ $company->tax_number }}</div>@endif
-                    </div>
-                @endif
-            </td>
-            <td style="vertical-align: top; text-align: right; width: 50%;">
-                <div class="invoice-title">INVOICE</div>
-                <div class="invoice-meta">
-                    <table>
-                        <tr>
-                            <td class="meta-label">Invoice #</td>
-                            <td class="meta-value">{{ $invoice->document_number ?? '—' }}</td>
-                        </tr>
-                        <tr>
-                            <td class="meta-label">Date</td>
-                            <td class="meta-value">{{ $invoice->issue_date?->format('d M Y') ?? '—' }}</td>
-                        </tr>
-                        @if($invoice->due_date)
-                        <tr>
-                            <td class="meta-label">Due Date</td>
-                            <td class="meta-value">{{ $invoice->due_date->format('d M Y') }}</td>
-                        </tr>
-                        @endif
-                        @if($invoice->reference)
-                        <tr>
-                            <td class="meta-label">Reference</td>
-                            <td class="meta-value">{{ $invoice->reference }}</td>
-                        </tr>
-                        @endif
-                    </table>
-                </div>
-            </td>
-        </tr>
-    </table>
-
-    {{-- ===== Bill To ===== --}}
-    @if($invoice->party)
-    <table class="parties-table">
-        <tr>
-            <td style="vertical-align: top; width: 50%;">
-                <div class="section-label">Bill To</div>
-                <div class="party-name">{{ $invoice->party->business?->display_name ?? $invoice->party->displayName }}</div>
-                @php
-                    $address = $invoice->party->addresses()->where('is_primary', true)->where('is_active', true)->first()
-                        ?? $invoice->party->addresses()->where('is_active', true)->first();
-                @endphp
-                @if($address)
-                <div class="party-detail">
-                    @if($address->line_1)<div>{{ $address->line_1 }}</div>@endif
-                    @if($address->line_2)<div>{{ $address->line_2 }}</div>@endif
-                    @if($address->city || $address->state_province)
-                        <div>{{ implode(', ', array_filter([$address->city, $address->state_province])) }}@if($address->postal_code) {{ $address->postal_code }}@endif</div>
-                    @endif
-                    @if($address->country)<div>{{ $address->country }}</div>@endif
-                </div>
-                @endif
-                @if($invoice->party->primary_email)
-                    <div class="party-detail" style="margin-top: 4px;">{{ $invoice->party->primary_email }}</div>
-                @endif
-                @if($invoice->party->business?->tax_number)
-                    <div class="party-detail">Tax No: {{ $invoice->party->business->tax_number }}</div>
-                @endif
-            </td>
-        </tr>
-    </table>
-    @endif
-
-    <hr class="divider">
-
-    {{-- ===== Line Items ===== --}}
-    <table class="items-table">
-        <thead>
-            <tr>
-                <th style="text-align: left;">Description</th>
-                <th class="right" style="width: 60px;">Qty</th>
-                <th class="right" style="width: 90px;">Unit Price</th>
-                <th class="right" style="width: 60px;">Tax %</th>
-                <th class="right" style="width: 90px;">Amount</th>
-            </tr>
-        </thead>
-        <tbody>
-            @forelse($lines as $line)
-            <tr>
-                <td>
-                    <div class="desc">{{ $line->description }}</div>
-                </td>
-                <td class="right">{{ rtrim(rtrim(number_format((float)$line->quantity, 4, '.', ''), '0'), '.') }}</td>
-                <td class="right">{{ number_format((float)$line->unit_price, 2, '.', ',') }}</td>
-                <td class="right">{{ $line->tax_rate > 0 ? number_format((float)$line->tax_rate, 0).'%' : '—' }}</td>
-                <td class="right">{{ number_format((float)$line->line_total, 2, '.', ',') }}</td>
-            </tr>
-            @empty
-            <tr>
-                <td colspan="5" style="text-align: center; color: #9ca3af; padding: 16px;">No line items.</td>
-            </tr>
-            @endforelse
-        </tbody>
-    </table>
-
-    {{-- ===== Totals ===== --}}
-    <table class="totals-table">
-        <tr>
-            <td class="label">Subtotal</td>
-            <td class="amount">{{ $currencySymbol }}{{ number_format((float)$invoice->subtotal, 2, '.', ',') }}</td>
-        </tr>
-        @if((float)$invoice->tax_total > 0)
-        <tr>
-            <td class="label">Tax</td>
-            <td class="amount">{{ $currencySymbol }}{{ number_format((float)$invoice->tax_total, 2, '.', ',') }}</td>
-        </tr>
-        @endif
-        <tr class="grand-total">
-            <td class="label">Invoice Total</td>
-            <td class="amount">{{ $currencySymbol }}{{ number_format((float)$invoice->total, 2, '.', ',') }}</td>
-        </tr>
-
-        @php
-            $payments = $invoice->childDocuments()
-                ->wherePivot('relationship_type', 'payment_for')
-                ->orderBy('issue_date')
-                ->get();
-        @endphp
-
-        @if($payments->isNotEmpty())
-            @foreach($payments as $payment)
-            <tr class="payment-row">
-                <td class="label">
-                    Payment received {{ $payment->issue_date?->format('d M Y') }}
-                    @if($payment->reference) - {{ $payment->reference }}@endif
-                </td>
-                <td class="amount">{{ $currencySymbol }}{{ number_format((float)$payment->total, 2, '.', ',') }}</td>
-            </tr>
-            @endforeach
-
-            @if((float)$invoice->balance_due <= 0)
-            <tr class="balance-paid">
-                <td class="label">Balance Due</td>
-                <td class="amount">{{ $currencySymbol }}0.00</td>
-            </tr>
+{{-- ===== Header: logo, company contact, company address ===== --}}
+<table>
+    <tr>
+        <td style="width: 46%;">
+            @if($logoPath && file_exists($logoPath))
+                <img src="{{ $logoPath }}" alt="{{ $companyName }}" style="max-height: 62px; max-width: 250px;">
             @else
-            <tr class="balance-due">
-                <td class="label">Balance Due</td>
-                <td class="amount">{{ $currencySymbol }}{{ number_format((float)$invoice->balance_due, 2, '.', ',') }}</td>
-            </tr>
+                <div style="font-size: 22px; font-weight: bold;">{{ $companyName }}</div>
             @endif
-        @endif
-    </table>
+        </td>
+        <td style="width: 27%;" class="muted">
+            <div>{{ $companyName }}</div>
+            @if($company->website)<div>{{ $company->website }}</div>@endif
+            @if($company->email)<div><img src="{{ $emailIcon }}" class="icon" alt="">{{ $company->email }}</div>@endif
+            @if($company->phone)<div><img src="{{ $phoneIcon }}" class="icon" alt="">{{ $company->phone }}</div>@endif
+        </td>
+        <td style="width: 27%;" class="muted">
+            @if($company->address_line_1)<div>{{ $company->address_line_1 }}</div>@endif
+            @if($company->address_line_2)<div>{{ $company->address_line_2 }}</div>@endif
+            @if($companyLocality)<div>{{ $companyLocality }}</div>@endif
+            @if($company->country)<div>{{ $company->country }}</div>@endif
+        </td>
+    </tr>
+</table>
 
-    @if(in_array($invoice->status, ['paid']) )
-    <div style="text-align: right; margin-top: 8px;">
-        <span class="paid-stamp">PAID</span>
+{{-- ===== Client + invoice summary ===== --}}
+<table style="margin-top: 30px;">
+    <tr>
+        <td style="width: 62%; padding: 8px 0 0 16px;">
+            <div class="client-label">Invoice issued to:</div>
+            <div class="client-name">{{ $business?->display_name ?? $invoice->party?->displayName }}</div>
+            @if($address)
+                @if($address->line_1)<div>{{ $address->line_1 }}</div>@endif
+                @if($address->line_2)<div>{{ $address->line_2 }}</div>@endif
+                @if($clientLocality)<div>{{ $clientLocality }}</div>@endif
+            @endif
+            @if($business?->tax_number)<div>{{ $business->tax_number }}</div>@endif
+            @if($business?->registration_number)<div>{{ $business->registration_number }}</div>@endif
+        </td>
+        <td style="width: 38%;">
+            <div class="info-box">
+                <table>
+                    <tr><td>Invoice Number</td><td class="value">{{ $invoice->document_number }}</td></tr>
+                    <tr><td>Invoice Date</td><td class="value">{{ $invoice->issue_date?->format('F j, Y') }}</td></tr>
+                    @if($invoice->due_date)
+                        <tr><td>Due Date</td><td class="value">{{ $invoice->due_date->format('F j, Y') }}</td></tr>
+                    @endif
+                    <tr><td>Invoice Total</td><td class="value">{{ $money($invoice->total) }}</td></tr>
+                </table>
+            </div>
+        </td>
+    </tr>
+</table>
+
+{{-- ===== Line items ===== --}}
+<table class="items" style="margin-top: 34px;">
+    <thead>
+        <tr>
+            <th style="width: 57%;">Description</th>
+            <th style="width: 14%;">Unit Cost</th>
+            <th style="width: 12%;">Quantity</th>
+            <th class="right" style="width: 17%;">Line Total</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach($lines as $line)
+            <tr>
+                <td>{{ $line->description }}</td>
+                <td>{{ $money($line->unit_price) }}</td>
+                <td>{{ $quantity($line->quantity) }}</td>
+                <td class="right">{{ $money($line->line_total) }}</td>
+            </tr>
+        @endforeach
+    </tbody>
+</table>
+
+{{-- ===== Terms + totals ===== --}}
+<table style="margin-top: 30px;">
+    <tr>
+        <td style="width: 62%; padding: 0 24px 0 12px;">
+            @if($notes)
+                <div style="margin-bottom: 12px;">{!! nl2br(e($notes)) !!}</div>
+            @endif
+            @if($terms)
+                <div class="terms-label">Invoice Terms:</div>
+                <div>{!! nl2br(e($terms)) !!}</div>
+            @endif
+        </td>
+        <td style="width: 38%;">
+            <table class="totals">
+                <tr><td>Net</td><td class="amount">{{ $money($invoice->subtotal) }}</td></tr>
+                <tr><td>Subtotal</td><td class="amount">{{ $money($invoice->subtotal) }}</td></tr>
+                @if((float) $invoice->tax_total > 0)
+                    <tr><td>Tax</td><td class="amount">{{ $money($invoice->tax_total) }}</td></tr>
+                @endif
+                <tr><td>Total</td><td class="amount">{{ $money($invoice->total) }}</td></tr>
+                <tr><td>Paid to Date</td><td class="amount">{{ $money($invoice->amount_paid) }}</td></tr>
+                <tr class="balance"><td>Balance Due</td><td class="amount">{{ $money(max(0, (float) $invoice->balance_due)) }}</td></tr>
+            </table>
+        </td>
+    </tr>
+</table>
+
+@if($bankDetails)
+    <div class="bank">
+        <div class="bank-title">Banking Details for EFT Payment</div>
+        <table>
+            <tr>
+                @foreach($bankDetails as $label => $value)
+                    <td><span class="bank-label">{{ $label }}</span><br>{{ $value }}</td>
+                @endforeach
+            </tr>
+        </table>
     </div>
-    @endif
+@endif
 
-    {{-- ===== Notes ===== --}}
-    @if($invoice->notes)
-    <div class="notes-section">
-        <div class="notes-label">Notes</div>
-        <div>{{ $invoice->notes }}</div>
-    </div>
-    @endif
+@if($footer)
+    <div class="footer">{!! nl2br(e($footer)) !!}</div>
+@endif
 
-    {{-- ===== Terms ===== --}}
-    @if($invoice->paymentTerm)
-    <div class="notes-section">
-        <div class="notes-label">Payment Terms</div>
-        <div>{{ $invoice->paymentTerm->name }}</div>
-    </div>
-    @endif
-
-    {{-- ===== Footer ===== --}}
-    <div class="footer">
-        {{ $companyName }} &bull; Generated {{ now()->format('d M Y') }}
-    </div>
-
-</div>
 </body>
 </html>

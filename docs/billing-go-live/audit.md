@@ -76,6 +76,10 @@ Plan: `docs/billing-go-live/plan.md` (step 1).
 | E4 Sender | From name, from address and reply-to are set in **Settings → General → Outgoing Email** and applied to every client email at send time. A fresh install seeds them from `NETTMAIL_FROM_*` / `NETTMAIL_REPLY_TO_ADDRESS` (defaults: NettSite / support@nettsite.co.za). | Done |
 | Numbering | Continue the R-series: next is `R6537` (max numeric R-number + 1). | Done |
 
+Invoice PDF: `resources/views/pdf/sales-invoice.blade.php` now follows the InvoiceNinja layout (Invoice_R6551.pdf), without Ninja branding. Recurring generation copies a template's terms and footer onto the invoice and strips the import's `[ninja_id:N]` marker from notes, which would otherwise print.
+
+Known gap (not a go-live blocker): editing an invoice's lines recalculates the invoice total without a document-level audit entry, so `documents:verify-audit-trail` flags manual drafts edited in the UI (seen on test drafts R6537/R6538).
+
 Also fixed: `documents:verify-audit-trail` crashed on every run after the first, because it cached a Carbon object under `serializable_classes = false`. That included the daily 05:35 run.
 
 ## Runbook
@@ -87,7 +91,10 @@ Also fixed: `documents:verify-audit-trail` crashed on every run after the first,
    NETTMAIL_FROM_ADDRESS=support@nettsite.co.za
    NETTMAIL_FROM_NAME=NettSite
    ```
-   The sandbox is already on because `APP_ENV=local`. Confirm with `php artisan config:show mail.mailers.nettmail` that `to ⇁ address` shows william@nettsite.co.za. After `migrate:fresh`, check Settings → General → Outgoing Email.
+   The sandbox is already on because `APP_ENV=local`. Confirm with `php artisan config:show mail.mailers.nettmail` that `to ⇁ address` shows william@nettsite.co.za.
+   After `migrate:fresh`, fill in the settings that the invoice PDF prints:
+   - **General:** company address (139 Clulee Road / Linbro Park, Gauteng 2090 / South Africa), **Website**, logo, Outgoing Email, and **Banking Details** (bank, account name, account number, branch code), which print as the EFT block on every invoice.
+   - **Billing → Invoice Document:** default terms ("All invoices are payable by due date."), printed on every invoice whose recurring template has none (22 of 27). The footer is optional extra text. A footer that repeats the configured account number (Ninja's "Our Bank Details" line) is skipped, so it doesn't print twice.
 2. **You run** (Claude is blocked from this; it wipes `merlin`: today 1 manual journal, 2 users, settings, all imports):
    ```bash
    php artisan migrate:fresh --seed
@@ -108,7 +115,7 @@ Also fixed: `documents:verify-audit-trail` crashed on every run after the first,
 
 1. Deploy `main` and create the DB (e.g. `merlin_nettsite`). Set `.env`: `APP_ENV=production`, `NETTMAIL_DRIVER`, `NETTMAIL_FROM_ADDRESS`, `NETTMAIL_FROM_NAME`, `NETTMAIL_REPLY_TO_ADDRESS`.
 2. Recommended: also set `NETTMAIL_SANDBOX_ADDRESS=william@nettsite.co.za` for a first smoke send on production.
-3. `php artisan migrate --force && php artisan db:seed --force`, then `ninja:import` as above. Check Settings → General → Outgoing Email.
+3. `php artisan migrate --force && php artisan db:seed --force`, then `ninja:import` as above. Fill in the same General and Billing → Invoice Document settings as on the test run.
 4. `billing:generate-recurring`, review the drafts.
 5. Go live: clear `NETTMAIL_SANDBOX_ADDRESS` (blank = real delivery in production), run `php artisan config:clear` (or `config:cache`), then Send.
 6. Run `/post-deploy-verify`.

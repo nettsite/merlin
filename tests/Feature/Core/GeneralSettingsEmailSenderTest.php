@@ -1,5 +1,6 @@
 <?php
 
+use App\Modules\Billing\Settings\BillingSettings;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Settings\CompanySettings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -51,6 +52,48 @@ it('rejects invalid sender addresses', function (): void {
         ->set('emailReplyToAddress', 'also bad')
         ->call('save')
         ->assertHasErrors(['emailFromName', 'emailFromAddress', 'emailReplyToAddress']);
+});
+
+it('saves the company website printed on invoices', function (): void {
+    Livewire::test('pages.settings.index')
+        ->set('companyName', 'NettSite')
+        ->set('website', 'https://nettsite.co.za')
+        ->call('save')
+        ->assertHasNoErrors();
+
+    expect(app(CompanySettings::class)->website)->toBe('https://nettsite.co.za');
+});
+
+it('saves the banking details printed on invoices', function (): void {
+    Livewire::test('pages.settings.index')
+        ->set('companyName', 'NettSite')
+        ->set('bankName', 'First National Bank')
+        ->set('bankAccountName', 'NettSite')
+        ->set('bankAccountNumber', ' 62508948033 ')
+        ->set('bankBranchCode', '250655')
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $company = app(CompanySettings::class);
+
+    expect($company->bank_name)->toBe('First National Bank')
+        ->and($company->bank_account_name)->toBe('NettSite')
+        ->and($company->bank_account_number)->toBe('62508948033')
+        ->and($company->bank_branch_code)->toBe('250655');
+});
+
+it('saves default invoice terms and footer on the Billing tab', function (): void {
+    Livewire::test('pages.settings.index', ['tab' => 'billing'])
+        ->set('tab', 'billing')
+        ->set('defaultInvoiceTerms', 'All invoices are payable by due date.')
+        ->set('defaultInvoiceFooter', 'Our Bank Details: FNB')
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $billing = app(BillingSettings::class);
+
+    expect($billing->default_invoice_terms)->toBe('All invoices are payable by due date.')
+        ->and($billing->default_invoice_footer)->toBe('Our Bank Details: FNB');
 });
 
 it('shows the Outgoing Email section on the General settings URL', function (): void {

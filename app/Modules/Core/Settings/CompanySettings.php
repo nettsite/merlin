@@ -24,6 +24,8 @@ class CompanySettings extends Settings
 
     public string $email = '';
 
+    public string $website = '';
+
     public string $tax_number = '';
 
     public ?string $logo_path = null;
@@ -33,6 +35,14 @@ class CompanySettings extends Settings
     public string $email_from_address = '';
 
     public string $email_reply_to_address = '';
+
+    public string $bank_name = '';
+
+    public string $bank_account_name = '';
+
+    public string $bank_account_number = '';
+
+    public string $bank_branch_code = '';
 
     public static function group(): string
     {

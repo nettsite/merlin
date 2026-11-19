@@ -44,6 +44,8 @@ new #[Layout('components.layout.app')] class extends Component
 
     public string $companyEmail = '';
 
+    public string $website = '';
+
     public string $taxNumber = '';
 
     public $logo = null;
@@ -56,6 +58,15 @@ new #[Layout('components.layout.app')] class extends Component
     public string $emailFromAddress = '';
 
     public string $emailReplyToAddress = '';
+
+    // ── General / Banking Details ──────────────────────────────────────────
+    public string $bankName = '';
+
+    public string $bankAccountName = '';
+
+    public string $bankAccountNumber = '';
+
+    public string $bankBranchCode = '';
 
     // ── General / Currency ─────────────────────────────────────────────────
     public string $baseCurrency = '';
@@ -77,6 +88,10 @@ new #[Layout('components.layout.app')] class extends Component
     public int $billingPeriodDay = 1;
 
     public ?string $baseEmailTemplateId = null;
+
+    public string $defaultInvoiceTerms = '';
+
+    public string $defaultInvoiceFooter = '';
 
     // ── Email Templates ────────────────────────────────────────────────────
     public ?string $editingTemplateId = null;
@@ -107,10 +122,15 @@ new #[Layout('components.layout.app')] class extends Component
         $this->country = $company->country;
         $this->phone = $company->phone;
         $this->companyEmail = $company->email;
+        $this->website = $company->website;
         $this->taxNumber = $company->tax_number;
         $this->emailFromName = $company->email_from_name;
         $this->emailFromAddress = $company->email_from_address;
         $this->emailReplyToAddress = $company->email_reply_to_address;
+        $this->bankName = $company->bank_name;
+        $this->bankAccountName = $company->bank_account_name;
+        $this->bankAccountNumber = $company->bank_account_number;
+        $this->bankBranchCode = $company->bank_branch_code;
 
         if ($company->logo_path && Storage::disk('public')->exists($company->logo_path)) {
             $this->existingLogoUrl = Storage::disk('public')->url($company->logo_path);
@@ -130,6 +150,8 @@ new #[Layout('components.layout.app')] class extends Component
         $this->taxLiabilityAccountId = $billing->tax_liability_account_id;
         $this->billingPeriodDay = $billing->billing_period_day;
         $this->baseEmailTemplateId = $billing->base_email_template_id;
+        $this->defaultInvoiceTerms = $billing->default_invoice_terms;
+        $this->defaultInvoiceFooter = $billing->default_invoice_footer;
 
         if ($this->tab === 'templates') {
             $this->autoSelectFirstTemplate();
@@ -200,10 +222,15 @@ new #[Layout('components.layout.app')] class extends Component
             'country' => 'nullable|string|max:100',
             'phone' => 'nullable|string|max:50',
             'companyEmail' => 'nullable|email|max:255',
+            'website' => 'nullable|url|max:255',
             'taxNumber' => 'nullable|string|max:50',
             'emailFromName' => 'required|string|max:255',
             'emailFromAddress' => 'required|email|max:255',
             'emailReplyToAddress' => 'required|email|max:255',
+            'bankName' => 'nullable|string|max:100',
+            'bankAccountName' => 'nullable|string|max:100',
+            'bankAccountNumber' => 'nullable|string|max:30',
+            'bankBranchCode' => 'nullable|string|max:20',
             'logo' => 'nullable|image|max:2048',
             'baseCurrency' => 'required|string|min:3|max:3',
             'locale' => 'required|string|max:20',
@@ -219,10 +246,15 @@ new #[Layout('components.layout.app')] class extends Component
         $company->country = $this->country;
         $company->phone = $this->phone;
         $company->email = $this->companyEmail;
+        $company->website = $this->website;
         $company->tax_number = $this->taxNumber;
         $company->email_from_name = $this->emailFromName;
         $company->email_from_address = $this->emailFromAddress;
         $company->email_reply_to_address = $this->emailReplyToAddress;
+        $company->bank_name = trim($this->bankName);
+        $company->bank_account_name = trim($this->bankAccountName);
+        $company->bank_account_number = trim($this->bankAccountNumber);
+        $company->bank_branch_code = trim($this->bankBranchCode);
 
         if ($this->logo !== null) {
             if ($company->logo_path) {
@@ -283,6 +315,8 @@ new #[Layout('components.layout.app')] class extends Component
             'taxLiabilityAccountId' => 'nullable|uuid|exists:accounts,id',
             'billingPeriodDay' => 'required|integer|min:1|max:28',
             'baseEmailTemplateId' => 'nullable|uuid|exists:nettmail_templates,id',
+            'defaultInvoiceTerms' => 'nullable|string|max:2000',
+            'defaultInvoiceFooter' => 'nullable|string|max:2000',
         ]);
 
         $settings = app(BillingSettings::class);
@@ -292,6 +326,8 @@ new #[Layout('components.layout.app')] class extends Component
         $settings->tax_liability_account_id = $this->taxLiabilityAccountId ?: null;
         $settings->billing_period_day = $this->billingPeriodDay;
         $settings->base_email_template_id = $this->baseEmailTemplateId ?: null;
+        $settings->default_invoice_terms = $this->defaultInvoiceTerms;
+        $settings->default_invoice_footer = $this->defaultInvoiceFooter;
         $settings->save();
 
         $this->saved = true;
@@ -618,6 +654,12 @@ new #[Layout('components.layout.app')] class extends Component
                         </div>
 
                         <flux:field>
+                            <flux:label>Website</flux:label>
+                            <flux:input type="url" wire:model="website" placeholder="https://company.co.za" class="max-w-sm" />
+                            <flux:error name="website" />
+                        </flux:field>
+
+                        <flux:field>
                             <flux:label>Tax / VAT Number</flux:label>
                             <flux:input wire:model="taxNumber" placeholder="4123456789" class="max-w-xs" />
                             <flux:error name="taxNumber" />
@@ -696,6 +738,41 @@ new #[Layout('components.layout.app')] class extends Component
                             <flux:input type="email" wire:model="emailReplyToAddress" placeholder="support@company.co.za" class="max-w-xs" />
                             <flux:error name="emailReplyToAddress" />
                         </flux:field>
+                    </div>
+                </div>
+
+                {{-- Banking Details --}}
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-8 py-8">
+                    <div>
+                        <h3 class="text-sm font-semibold text-ink">Banking Details</h3>
+                        <p class="mt-1 text-sm text-ink-muted">Printed on invoices so clients can pay by EFT.</p>
+                    </div>
+                    <div class="col-span-2 space-y-5">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <flux:field>
+                                <flux:label>Bank</flux:label>
+                                <flux:input wire:model="bankName" placeholder="First National Bank" />
+                                <flux:error name="bankName" />
+                            </flux:field>
+                            <flux:field>
+                                <flux:label>Account Name</flux:label>
+                                <flux:input wire:model="bankAccountName" placeholder="Acme (Pty) Ltd" />
+                                <flux:error name="bankAccountName" />
+                            </flux:field>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <flux:field>
+                                <flux:label>Account Number</flux:label>
+                                <flux:input wire:model="bankAccountNumber" placeholder="62000000000" />
+                                <flux:error name="bankAccountNumber" />
+                            </flux:field>
+                            <flux:field>
+                                <flux:label>Branch Code</flux:label>
+                                <flux:input wire:model="bankBranchCode" placeholder="250655" />
+                                <flux:error name="bankBranchCode" />
+                            </flux:field>
+                        </div>
                     </div>
                 </div>
 
@@ -854,6 +931,28 @@ new #[Layout('components.layout.app')] class extends Component
                                 <flux:error name="billingPeriodDay" />
                             </flux:field>
                         </div>
+                    </div>
+                </div>
+
+                {{-- Invoice Document --}}
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-8 py-8">
+                    <div>
+                        <h3 class="text-sm font-semibold text-ink">Invoice Document</h3>
+                        <p class="mt-1 text-sm text-ink-muted">Printed on invoices that have no terms or footer of their own.</p>
+                    </div>
+                    <div class="col-span-2 space-y-5">
+                        <flux:field>
+                            <flux:label>Default Invoice Terms</flux:label>
+                            <flux:textarea wire:model="defaultInvoiceTerms" rows="2" placeholder="All invoices are payable by due date." />
+                            <flux:error name="defaultInvoiceTerms" />
+                        </flux:field>
+
+                        <flux:field>
+                            <flux:label>Default Invoice Footer</flux:label>
+                            <flux:textarea wire:model="defaultInvoiceFooter" rows="2" placeholder="Thank you for your business." />
+                            <flux:description>Extra text at the foot of the invoice. Banking details come from Settings → General.</flux:description>
+                            <flux:error name="defaultInvoiceFooter" />
+                        </flux:field>
                     </div>
                 </div>
 

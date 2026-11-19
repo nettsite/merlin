@@ -135,7 +135,10 @@ class RecurringInvoiceService
             $doc = $this->billingService->createDraft($template->client, [
                 'issue_date' => $issueDate->toDateString(),
                 'payment_term_id' => $template->payment_term_id,
-                'notes' => $template->notes,
+                // The Ninja import keeps its [ninja_id:N] dedupe marker in notes; it must never print on a client invoice.
+                'notes' => trim(preg_replace('/\[ninja_id:\d+\]/', '', $template->notes ?? '')) ?: null,
+                'terms' => $template->terms,
+                'footer' => $template->footer,
             ]);
 
             // Link document back to this template via metadata

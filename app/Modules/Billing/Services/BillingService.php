@@ -28,7 +28,7 @@ class BillingService
     /**
      * Create a draft sales invoice for the given client.
      *
-     * @param  array<string, mixed>  $data  Accepted keys: issue_date, payment_term_id, notes, reference
+     * @param  array<string, mixed>  $data  Accepted keys: issue_date, payment_term_id, notes, reference, terms, footer
      */
     public function createDraft(Party $client, array $data): Document
     {
@@ -57,6 +57,8 @@ class BillingService
             'source' => 'manual',
             'notes' => $data['notes'] ?? null,
             'reference' => $data['reference'] ?? null,
+            'terms' => $data['terms'] ?? null,
+            'footer' => $data['footer'] ?? null,
         ]);
     }
 

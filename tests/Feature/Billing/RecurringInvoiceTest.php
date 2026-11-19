@@ -180,6 +180,46 @@ it('generates a sales invoice from a template', function (): void {
         ->and($doc->metadata['recurring_invoice_id'])->toBe($template->id);
 });
 
+it('copies terms and footer to the invoice and drops the Ninja import marker from notes', function (): void {
+    Mail::fake();
+
+    $template = RecurringInvoice::create([
+        'client_id' => recurringClient()->id,
+        'frequency' => RecurringFrequency::Monthly,
+        'billing_period_day' => 1,
+        'start_date' => '2026-05-01',
+        'next_invoice_date' => '2026-05-01',
+        'status' => RecurringInvoiceStatus::Active,
+        'currency' => 'ZAR',
+        'notes' => "VAT nr 4830290708\n[ninja_id:341]",
+        'terms' => 'All invoices are payable by due date.',
+        'footer' => 'Our Bank Details: FNB 250655',
+    ]);
+
+    $doc = app(RecurringInvoiceService::class)->generateFromTemplate($template);
+
+    expect($doc->notes)->toBe('VAT nr 4830290708')
+        ->and($doc->terms)->toBe('All invoices are payable by due date.')
+        ->and($doc->footer)->toBe('Our Bank Details: FNB 250655');
+});
+
+it('leaves notes empty when the template only holds the Ninja import marker', function (): void {
+    Mail::fake();
+
+    $template = RecurringInvoice::create([
+        'client_id' => recurringClient()->id,
+        'frequency' => RecurringFrequency::Monthly,
+        'billing_period_day' => 1,
+        'start_date' => '2026-05-01',
+        'next_invoice_date' => '2026-05-01',
+        'status' => RecurringInvoiceStatus::Active,
+        'currency' => 'ZAR',
+        'notes' => '[ninja_id:150]',
+    ]);
+
+    expect(app(RecurringInvoiceService::class)->generateFromTemplate($template)->notes)->toBeNull();
+});
+
 it('pro rata generation adjusts the quantity below 1', function (): void {
     Mail::fake();
 

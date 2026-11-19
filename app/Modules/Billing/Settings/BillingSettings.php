@@ -24,6 +24,12 @@ class BillingSettings extends Settings
     /** NettMail/Unlayer template used as the branded wrapper for all billing emails. Must contain {{email_body}}. */
     public ?string $base_email_template_id = null;
 
+    /** Printed under "Invoice Terms:" when an invoice has no terms of its own. */
+    public string $default_invoice_terms = '';
+
+    /** Printed at the foot of the invoice (e.g. bank details) when an invoice has no footer of its own. */
+    public string $default_invoice_footer = '';
+
     public static function group(): string
     {
         return 'billing';
