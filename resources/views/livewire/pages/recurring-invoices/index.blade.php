@@ -35,6 +35,9 @@ new #[Layout('components.layout.app')] class extends Component
     #[Validate('nullable|date|after_or_equal:startDate')]
     public string $endDate = '';
 
+    /** Edit only: new templates derive it from the start date. Validated in update(). */
+    public string $nextInvoiceDate = '';
+
     #[Validate('nullable|uuid|exists:payment_terms,id')]
     public string $paymentTermId = '';
 
@@ -97,7 +100,7 @@ new #[Layout('components.layout.app')] class extends Component
     public function create(): void
     {
         $this->authorize('create', RecurringInvoice::class);
-        $this->reset(['clientId', 'paymentTermId', 'notes', 'endDate', 'formLines']);
+        $this->reset(['clientId', 'paymentTermId', 'notes', 'endDate', 'nextInvoiceDate', 'formLines']);
         $this->autoSend = true;
         $this->frequency = 'monthly';
         $this->billingPeriodDay = 1;
@@ -117,6 +120,7 @@ new #[Layout('components.layout.app')] class extends Component
         $this->billingPeriodDay = $template->billing_period_day;
         $this->startDate = $template->start_date->toDateString();
         $this->endDate = $template->end_date?->toDateString() ?? '';
+        $this->nextInvoiceDate = $template->next_invoice_date->toDateString();
         $this->paymentTermId = $template->payment_term_id ?? '';
         $this->notes = $template->notes ?? '';
         $this->autoSend = $template->auto_send;
@@ -152,9 +156,18 @@ new #[Layout('components.layout.app')] class extends Component
     protected function update(): void
     {
         $this->validate();
+        $this->validate(['nextInvoiceDate' => 'required|date']);
 
         $template = RecurringInvoice::findOrFail($this->editingId);
         $this->authorize('update', $template);
+
+        // Runs advance from next_period_anchor, so a manually chosen date must move the anchor too.
+        if ($this->nextInvoiceDate !== $template->next_invoice_date->toDateString()) {
+            $template->update([
+                'next_invoice_date' => $this->nextInvoiceDate,
+                'next_period_anchor' => $this->nextInvoiceDate,
+            ]);
+        }
 
         $template->update([
             'client_id' => $this->clientId,
@@ -469,6 +482,15 @@ new #[Layout('components.layout.app')] class extends Component
                         <flux:description>Leave blank for indefinite</flux:description>
                         <flux:error name="endDate" />
                     </flux:field>
+
+                    @if($editingId)
+                        <flux:field>
+                            <flux:label>Next Invoice Date <span class="text-danger">*</span></flux:label>
+                            <flux:input type="date" wire:model="nextInvoiceDate" />
+                            <flux:description>Following invoices repeat from this date</flux:description>
+                            <flux:error name="nextInvoiceDate" />
+                        </flux:field>
+                    @endif
 
                     <flux:field class="col-span-2">
                         <flux:label>Payment Terms</flux:label>

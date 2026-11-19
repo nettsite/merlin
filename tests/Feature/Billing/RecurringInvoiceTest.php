@@ -782,3 +782,90 @@ it('command skips non-due templates', function (): void {
 
     expect(Document::salesInvoices()->count())->toBe(0);
 });
+
+// --- Edit next invoice date ---
+
+function editableTemplate(): RecurringInvoice
+{
+    $template = RecurringInvoice::create([
+        'client_id' => recurringClient()->id,
+        'frequency' => RecurringFrequency::Monthly,
+        'billing_period_day' => 25,
+        'start_date' => '2026-01-25',
+        'next_invoice_date' => '2026-05-25',
+        'next_period_anchor' => '2026-05-25',
+        'status' => RecurringInvoiceStatus::Active,
+        'currency' => 'ZAR',
+        'auto_send' => false,
+    ]);
+    $template->lines()->create([
+        'line_number' => 1,
+        'description' => 'Hosting',
+        'quantity' => 1,
+        'unit_price' => 395,
+        'discount_percent' => 0,
+    ]);
+
+    return $template;
+}
+
+it('loads and saves the next invoice date, moving the schedule anchor with it', function (): void {
+    $this->actingAs(riUserWith(['recurring-invoices-view-any', 'recurring-invoices-update']));
+    $template = editableTemplate();
+
+    Livewire::test('pages.recurring-invoices.index')
+        ->call('edit', $template->id)
+        ->assertSet('nextInvoiceDate', '2026-05-25')
+        ->assertSee('Next Invoice Date')
+        ->set('nextInvoiceDate', '2026-07-20')
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $template->refresh();
+
+    expect($template->next_invoice_date->toDateString())->toBe('2026-07-20')
+        ->and($template->next_period_anchor->toDateString())->toBe('2026-07-20');
+});
+
+it('generates on the edited date and then repeats from it', function (): void {
+    $this->actingAs(riUserWith(['recurring-invoices-view-any', 'recurring-invoices-update']));
+    $template = editableTemplate();
+
+    Livewire::test('pages.recurring-invoices.index')
+        ->call('edit', $template->id)
+        ->set('nextInvoiceDate', '2026-05-15')
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $doc = app(RecurringInvoiceService::class)->generateFromTemplate($template->fresh());
+
+    expect($doc->issue_date->toDateString())->toBe('2026-05-15')
+        ->and($template->fresh()->next_period_anchor->toDateString())->toBe('2026-06-15');
+});
+
+it('leaves the anchor alone when the next date is not changed', function (): void {
+    $this->actingAs(riUserWith(['recurring-invoices-view-any', 'recurring-invoices-update']));
+    $template = editableTemplate();
+    $template->update(['next_invoice_date' => '2026-05-22']);
+
+    Livewire::test('pages.recurring-invoices.index')
+        ->call('edit', $template->id)
+        ->set('notes', 'Updated note')
+        ->call('save')
+        ->assertHasNoErrors();
+
+    expect($template->fresh()->next_period_anchor->toDateString())->toBe('2026-05-25');
+});
+
+it('requires a next invoice date when editing', function (): void {
+    $this->actingAs(riUserWith(['recurring-invoices-view-any', 'recurring-invoices-update']));
+    $template = editableTemplate();
+
+    Livewire::test('pages.recurring-invoices.index')
+        ->call('edit', $template->id)
+        ->set('nextInvoiceDate', '')
+        ->call('save')
+        ->assertHasErrors(['nextInvoiceDate']);
+
+    expect($template->fresh()->next_invoice_date->toDateString())->toBe('2026-05-25');
+});
