@@ -97,8 +97,9 @@ Also fixed: `documents:verify-audit-trail` crashed on every run after the first,
    - **Billing → Invoice Document:** default terms ("All invoices are payable by due date."), printed on every invoice whose recurring template has none (22 of 27). The footer is optional extra text. A footer that repeats the configured account number (Ninja's "Our Bank Details" line) is skipped, so it doesn't print twice.
 2. **You run** (Claude is blocked from this; it wipes `merlin`: today 1 manual journal, 2 users, settings, all imports):
    ```bash
-   php artisan migrate:fresh --seed
+   php artisan migrate:fresh --seed --drop-views
    ```
+   `--drop-views` is required: plain `migrate:fresh` leaves the `postings` view behind, and the migration that creates it then fails with "Table 'postings' already exists".
 3. Re-import Ninja (dry run first):
    ```bash
    php artisan ninja:import /path/to/ninja --dry-run
