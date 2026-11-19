@@ -869,3 +869,46 @@ it('requires a next invoice date when editing', function (): void {
 
     expect($template->fresh()->next_invoice_date->toDateString())->toBe('2026-05-25');
 });
+
+// --- InvoiceNinja date placeholders ---
+
+it('resolves InvoiceNinja date placeholders relative to the invoice date', function (string $text, string $date, string $expected): void {
+    expect(app(RecurringInvoiceService::class)->resolveDatePlaceholders($text, Carbon::parse($date)))->toBe($expected);
+})->with([
+    'month plus one' => ['VPS100: SSD 100 Cloud VPS for :MONTH+1', '2026-10-26', 'VPS100: SSD 100 Cloud VPS for November'],
+    'month and year' => ['Managed WordPress web hosting :MONTH+1 :YEAR', '2026-10-26', 'Managed WordPress web hosting November 2026'],
+    'year range' => ['Renewal from :MONTH :YEAR to :MONTH :YEAR+1', '2026-10-20', 'Renewal from October 2026 to October 2027'],
+    'year plus two' => ['from 15/01/:YEAR+1 to 14/01/:YEAR+2', '2026-12-10', 'from 15/01/2027 to 14/01/2028'],
+    'monthyear rolls the year' => ['Hosting :MONTHYEAR+1', '2026-12-20', 'Hosting January 2027'],
+    'month minus one' => ['Usage for :MONTH-1', '2026-01-25', 'Usage for December'],
+    'month end does not overflow' => [':MONTH+1', '2026-01-31', 'February'],
+    'no placeholders' => ['Plain description', '2026-10-26', 'Plain description'],
+]);
+
+it('writes resolved placeholders into generated invoice lines and notes', function (): void {
+    Mail::fake();
+
+    $template = RecurringInvoice::create([
+        'client_id' => recurringClient()->id,
+        'frequency' => RecurringFrequency::Monthly,
+        'billing_period_day' => 26,
+        'start_date' => '2026-01-26',
+        'next_invoice_date' => '2026-10-26',
+        'status' => RecurringInvoiceStatus::Active,
+        'currency' => 'ZAR',
+        'notes' => 'Service period :MONTH+1 :YEAR',
+    ]);
+    $template->lines()->create([
+        'line_number' => 1,
+        'description' => 'VPS100: SSD 100 Cloud VPS for :MONTH+1',
+        'quantity' => 1,
+        'unit_price' => 450,
+        'discount_percent' => 0,
+    ]);
+
+    $doc = app(RecurringInvoiceService::class)->generateFromTemplate($template);
+
+    expect($doc->lines->first()->description)->toBe('VPS100: SSD 100 Cloud VPS for November')
+        ->and($doc->notes)->toBe('Service period November 2026')
+        ->and($template->fresh()->lines->first()->description)->toBe('VPS100: SSD 100 Cloud VPS for :MONTH+1');
+});

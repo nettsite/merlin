@@ -11,6 +11,7 @@ use App\Modules\Core\Models\Person;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Settings\CurrencySettings;
 use Carbon\Carbon;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
@@ -136,7 +137,7 @@ class RecurringInvoiceService
                 'issue_date' => $issueDate->toDateString(),
                 'payment_term_id' => $template->payment_term_id,
                 // The Ninja import keeps its [ninja_id:N] dedupe marker in notes; it must never print on a client invoice.
-                'notes' => trim(preg_replace('/\[ninja_id:\d+\]/', '', $template->notes ?? '')) ?: null,
+                'notes' => $this->resolveDatePlaceholders(trim(preg_replace('/\[ninja_id:\d+\]/', '', $template->notes ?? '')), $issueDate) ?: null,
                 'terms' => $template->terms,
                 'footer' => $template->footer,
             ]);
@@ -151,9 +152,11 @@ class RecurringInvoiceService
                     ? round((float) $line->quantity * $proRataData['factor'], 4)
                     : (float) $line->quantity;
 
-                $description = $isProRata
-                    ? $line->description.' (pro rata '.round($proRataData['factor'] * 100, 1).'%)'
-                    : $line->description;
+                $description = $this->resolveDatePlaceholders($line->description, $issueDate);
+
+                if ($isProRata) {
+                    $description .= ' (pro rata '.round($proRataData['factor'] * 100, 1).'%)';
+                }
 
                 $doc->lines()->create([
                     'line_number' => $i + 1,
@@ -211,6 +214,24 @@ class RecurringInvoiceService
             'next_period_anchor' => $nextAnchor->toDateString(),
             'next_invoice_date' => $this->workingDays->latestWorkingDayOnOrBefore($nextAnchor)->toDateString(),
         ]);
+    }
+
+    /**
+     * Replace InvoiceNinja's date placeholders, relative to the invoice date as Ninja does:
+     * :MONTH → "November", :YEAR → "2026", :MONTHYEAR → "November 2026", each with an
+     * optional +n/-n offset (:MONTH+1, :YEAR+1). Tokens resolve independently, like Ninja.
+     */
+    public function resolveDatePlaceholders(string $text, CarbonInterface $date): string
+    {
+        return preg_replace_callback('/:(MONTHYEAR|MONTH|YEAR)([+-]\d+)?/', function (array $match) use ($date): string {
+            $offset = (int) ($match[2] ?? 0);
+
+            return match ($match[1]) {
+                'MONTHYEAR' => $date->copy()->addMonthsNoOverflow($offset)->format('F Y'),
+                'MONTH' => $date->copy()->addMonthsNoOverflow($offset)->format('F'),
+                'YEAR' => (string) ($date->year + $offset),
+            };
+        }, $text);
     }
 
     /**
