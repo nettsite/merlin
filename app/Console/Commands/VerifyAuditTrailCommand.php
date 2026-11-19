@@ -31,7 +31,9 @@ class VerifyAuditTrailCommand extends Command
 
     public function handle(): int
     {
-        $since = Cache::get(self::CACHE_KEY, now()->subDay());
+        // Stored as a string: cache.serializable_classes = false turns a cached Carbon into __PHP_Incomplete_Class.
+        $cached = Cache::get(self::CACHE_KEY);
+        $since = is_string($cached) ? Carbon::parse($cached) : now()->subDay();
         $startedAt = now();
 
         $orphans = [
@@ -39,7 +41,7 @@ class VerifyAuditTrailCommand extends Command
             ...$this->findOrphans(DocumentLine::withTrashed()->where('updated_at', '>=', $since), 'document_line', fn (Model $line) => $line->document_id),
         ];
 
-        Cache::forever(self::CACHE_KEY, $startedAt);
+        Cache::forever(self::CACHE_KEY, $startedAt->toIso8601String());
 
         if ($orphans === []) {
             $this->info('No unaudited changes found.');

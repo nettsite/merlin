@@ -85,3 +85,12 @@ it('flags a document line changed with logging disabled as an orphan', function 
 
     $this->artisan('documents:verify-audit-trail')->assertExitCode(1);
 });
+
+it('runs again after a previous run cached its watermark', function (): void {
+    // Production stores serialize values with serializable_classes = false; a cached Carbon came back as __PHP_Incomplete_Class.
+    config(['cache.stores.array.serialize' => true]);
+    Cache::purge('array');
+
+    $this->artisan('documents:verify-audit-trail')->assertExitCode(0);
+    $this->artisan('documents:verify-audit-trail')->assertExitCode(0);
+});
