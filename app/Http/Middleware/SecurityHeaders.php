@@ -29,6 +29,10 @@ class SecurityHeaders
      * fonts.googleapis.com / fonts.gstatic.com by the app layouts. In the
      * local environment the Vite dev server (and its HMR websocket) must
      * also be allowed or `composer run dev` serves blocked assets.
+     *
+     * The NettMail email editor (prebuilt GrapesJS) loads its toolbar icons
+     * from Font Awesome 4.7.0 on cdnjs; only that versioned folder is allowed.
+     * Its telemetry call to app.grapesjs.com stays blocked on purpose.
      */
     private function contentSecurityPolicy(): string
     {
@@ -36,10 +40,12 @@ class SecurityHeaders
             ? ' http://localhost:5173 http://127.0.0.1:5173 ws://localhost:5173 ws://127.0.0.1:5173'
             : '';
 
+        $editorIcons = ' https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/';
+
         return "default-src 'self'; "
             ."script-src 'self' 'unsafe-inline' 'unsafe-eval'{$vite}; "
-            ."style-src 'self' 'unsafe-inline' https://fonts.googleapis.com{$vite}; "
-            ."font-src 'self' https://fonts.gstatic.com{$vite}; "
+            ."style-src 'self' 'unsafe-inline' https://fonts.googleapis.com{$editorIcons}{$vite}; "
+            ."font-src 'self' https://fonts.gstatic.com{$editorIcons}{$vite}; "
             ."img-src 'self' data:; "
             ."connect-src 'self'{$vite}; "
             ."object-src 'none'; "

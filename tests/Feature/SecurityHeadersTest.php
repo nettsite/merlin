@@ -12,6 +12,11 @@ it('sends security headers on web responses', function () {
         ->and($csp)->toContain("frame-ancestors 'self'")
         ->and($csp)->not->toContain('localhost:5173');
 
+    expect($csp)->toMatch("#style-src [^;]*https://cdnjs\.cloudflare\.com/ajax/libs/font-awesome/4\.7\.0/#")
+        ->and($csp)->toMatch("#font-src [^;]*https://cdnjs\.cloudflare\.com/ajax/libs/font-awesome/4\.7\.0/#")
+        ->and($csp)->not->toMatch('#script-src [^;]*cdnjs#')
+        ->and($csp)->not->toContain('grapesjs.com');
+
     expect($response->headers->get('X-Content-Type-Options'))->toBe('nosniff');
     expect($response->headers->get('Referrer-Policy'))->toBe('strict-origin-when-cross-origin');
 });
