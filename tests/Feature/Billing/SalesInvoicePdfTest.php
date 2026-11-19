@@ -141,17 +141,37 @@ it('omits the banking block when no bank details are set', function (): void {
     expect(renderInvoicePdf(pdfInvoice()))->not->toContain('Banking Details for EFT Payment');
 });
 
-it('skips a footer that repeats the configured bank account', function (): void {
+it('drops Ninja bank-detail footers even when the account number differs from settings', function (): void {
+    $company = app(CompanySettings::class);
+    $company->bank_account_number = '6200000000';
+    $company->save();
+
+    $html = renderInvoicePdf(pdfInvoice([
+        'footer' => '<p>Our Bank Details: First National Bank Branch Code 250655 Account Number 62508948033</p>',
+    ]));
+
+    expect($html)->toContain('6200000000')
+        ->not->toContain('Our Bank Details')
+        ->not->toContain('62508948033');
+});
+
+it('drops every line of a multi-line Ninja bank footer but keeps other lines', function (): void {
     $company = app(CompanySettings::class);
     $company->bank_account_number = '62508948033';
     $company->save();
 
     $html = renderInvoicePdf(pdfInvoice([
-        'footer' => '<p>Our Bank Details: First National Bank Branch Code 250655 Account Number 6250 8948 033</p>',
+        'footer' => "Our Bank Details:\r\nFirst National Bank\r\nBranch Code 250655\r\nAccount Number 62508948033\r\nThank you for your business.",
     ]));
 
-    expect($html)->toContain('62508948033')
-        ->not->toContain('Our Bank Details');
+    expect($html)->not->toContain('Our Bank Details')
+        ->not->toContain('Branch Code 250655')
+        ->toContain('Thank you for your business.');
+});
+
+it('keeps a Ninja bank footer when no banking details are configured', function (): void {
+    expect(renderInvoicePdf(pdfInvoice(['footer' => '<p>Our Bank Details: FNB Account Number 62508948033</p>'])))
+        ->toContain('Our Bank Details: FNB Account Number 62508948033');
 });
 
 it('still prints a footer that is not about the bank account', function (): void {
