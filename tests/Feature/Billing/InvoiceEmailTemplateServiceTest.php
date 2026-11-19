@@ -265,3 +265,19 @@ it('renders the logo tags empty when no logo is set', function (): void {
 
     expect(app(InvoiceEmailTemplateService::class)->render(templateDraft())['html'])->toBe('[][]');
 });
+
+it('uses the Email Logo URL from General settings instead of this server', function (): void {
+    Storage::fake('public');
+    Storage::disk('public')->put('company/logo.png', 'png-bytes');
+
+    $company = app(CompanySettings::class);
+    $company->name = 'NettSite';
+    $company->logo_path = 'company/logo.png';
+    $company->email_logo_url = 'https://nettsite.co.za/logo.png';
+    $company->save();
+
+    nettMailInvoiceEmail('{{company_logo}}|{{company_logo_url}}');
+
+    expect(app(InvoiceEmailTemplateService::class)->render(templateDraft())['html'])
+        ->toBe('<img src="https://nettsite.co.za/logo.png" alt="NettSite" style="max-height:60px;max-width:250px;border:0;">|https://nettsite.co.za/logo.png');
+});

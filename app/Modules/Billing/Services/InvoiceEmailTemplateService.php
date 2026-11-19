@@ -142,11 +142,16 @@ class InvoiceEmailTemplateService
     }
 
     /**
-     * Absolute public URL of the logo from General settings; email clients fetch it
-     * over the internet, so it is built from APP_URL.
+     * Address email clients fetch the logo from, over the internet: the Email Logo
+     * URL from General settings when set (needed when this server is not public),
+     * otherwise the uploaded logo under APP_URL.
      */
     private function companyLogoUrl(): string
     {
+        if (filled($this->companySettings->email_logo_url)) {
+            return $this->companySettings->email_logo_url;
+        }
+
         $path = $this->companySettings->logo_path;
 
         if (! $path || ! Storage::disk('public')->exists($path)) {

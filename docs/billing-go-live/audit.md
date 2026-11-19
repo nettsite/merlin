@@ -115,7 +115,7 @@ Also fixed: `documents:verify-audit-trail` crashed on every run after the first,
 
 ### Tomorrow — go live on the new instance
 
-1. Deploy `main` and create the DB (e.g. `merlin_nettsite`). Run `php artisan storage:link`, and set `APP_URL` to the public https address: the `{{company_logo}}` email tag links to `APP_URL/storage/...`, which email clients fetch over the internet. Set `.env`: `APP_ENV=production`, `NETTMAIL_DRIVER`, `NETTMAIL_FROM_ADDRESS`, `NETTMAIL_FROM_NAME`, `NETTMAIL_REPLY_TO_ADDRESS`.
+1. Deploy `main` and create the DB (e.g. `merlin_nettsite`). Production runs on a box that is **not reachable from the internet**, so: set **Settings → General → Email Logo URL** to a public copy of the logo (e.g. on nettsite.co.za), which `{{company_logo}}` then uses; and leave `{{invoice_url}}` (client portal link) out of the invoice email, since clients can't open it. Set `.env`: `APP_ENV=production`, `NETTMAIL_DRIVER`, `NETTMAIL_FROM_ADDRESS`, `NETTMAIL_FROM_NAME`, `NETTMAIL_REPLY_TO_ADDRESS`.
 2. Recommended: also set `NETTMAIL_SANDBOX_ADDRESS=william@nettsite.co.za` for a first smoke send on production.
 3. `php artisan migrate --force && php artisan db:seed --force`, then `ninja:import` as above. Fill in the same General and Billing → Invoice Document settings as on the test run.
 4. `billing:generate-recurring`, review the drafts.

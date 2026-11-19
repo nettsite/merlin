@@ -30,6 +30,9 @@ class CompanySettings extends Settings
 
     public ?string $logo_path = null;
 
+    /** Public web address of the logo for emails; used when this server is not reachable from the internet. */
+    public string $email_logo_url = '';
+
     public string $email_from_name = '';
 
     public string $email_from_address = '';

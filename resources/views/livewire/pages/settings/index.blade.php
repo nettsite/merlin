@@ -50,6 +50,8 @@ new #[Layout('components.layout.app')] class extends Component
 
     public $logo = null;
 
+    public string $emailLogoUrl = '';
+
     public ?string $existingLogoUrl = null;
 
     // ── General / Outgoing Email ───────────────────────────────────────────
@@ -125,6 +127,7 @@ new #[Layout('components.layout.app')] class extends Component
         $this->phone = $company->phone;
         $this->companyEmail = $company->email;
         $this->website = $company->website;
+        $this->emailLogoUrl = $company->email_logo_url;
         $this->taxNumber = $company->tax_number;
         $this->emailFromName = $company->email_from_name;
         $this->emailFromAddress = $company->email_from_address;
@@ -227,6 +230,8 @@ new #[Layout('components.layout.app')] class extends Component
 
     private function saveGeneral(): void
     {
+        $this->emailLogoUrl = trim($this->emailLogoUrl);
+
         $this->validate([
             'companyName' => 'required|string|max:255',
             'addressLine1' => 'nullable|string|max:255',
@@ -247,6 +252,7 @@ new #[Layout('components.layout.app')] class extends Component
             'bankAccountNumber' => 'nullable|string|max:30',
             'bankBranchCode' => 'nullable|string|max:20',
             'logo' => 'nullable|image|max:2048',
+            'emailLogoUrl' => 'nullable|url:https|max:500',
             'baseCurrency' => 'required|string|min:3|max:3',
             'locale' => 'required|string|max:20',
         ]);
@@ -262,6 +268,7 @@ new #[Layout('components.layout.app')] class extends Component
         $company->phone = $this->phone;
         $company->email = $this->companyEmail;
         $company->website = $this->website;
+        $company->email_logo_url = $this->emailLogoUrl;
         $company->tax_number = $this->taxNumber;
         $company->email_from_name = $this->emailFromName;
         $company->email_from_address = $this->emailFromAddress;
@@ -826,6 +833,13 @@ new #[Layout('components.layout.app')] class extends Component
                                 class="block text-sm text-ink-muted file:mr-3 file:py-1.5 file:px-3 file:rounded file:border file:border-line file:text-sm file:bg-surface-alt file:text-ink hover:file:bg-surface cursor-pointer"
                             />
                             <flux:error name="logo" />
+                        </flux:field>
+
+                        <flux:field>
+                            <flux:label>Email Logo URL</flux:label>
+                            <flux:input type="url" wire:model="emailLogoUrl" placeholder="https://company.co.za/logo.png" />
+                            <flux:description>Public web address of your logo for emails. Needed when Merlin is not reachable from the internet; leave blank to use the uploaded logo.</flux:description>
+                            <flux:error name="emailLogoUrl" />
                         </flux:field>
                     </div>
                 </div>

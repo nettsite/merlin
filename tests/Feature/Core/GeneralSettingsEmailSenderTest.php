@@ -143,3 +143,19 @@ it('requires permission to open the settings page', function (): void {
 
     Livewire::test('pages.settings.index')->assertForbidden();
 });
+
+it('saves a public https Email Logo URL and rejects anything else', function (): void {
+    Livewire::test('pages.settings.index')
+        ->set('companyName', 'NettSite')
+        ->set('emailLogoUrl', 'http://nettsite.co.za/logo.png')
+        ->call('save')
+        ->assertHasErrors(['emailLogoUrl']);
+
+    Livewire::test('pages.settings.index')
+        ->set('companyName', 'NettSite')
+        ->set('emailLogoUrl', ' https://nettsite.co.za/logo.png ')
+        ->call('save')
+        ->assertHasNoErrors();
+
+    expect(app(CompanySettings::class)->email_logo_url)->toBe('https://nettsite.co.za/logo.png');
+});
