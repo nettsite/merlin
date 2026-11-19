@@ -117,7 +117,17 @@ Also fixed: `documents:verify-audit-trail` crashed on every run after the first,
 
 1. Deploy `main` and create the DB (e.g. `merlin_nettsite`). Production runs on a box that is **not reachable from the internet**, so: set **Settings → General → Email Logo URL** to a public copy of the logo (e.g. on nettsite.co.za), which `{{company_logo}}` then uses; and leave `{{invoice_url}}` (client portal link) out of the invoice email, since clients can't open it. Set `.env`: `APP_ENV=production`, `NETTMAIL_DRIVER`, `NETTMAIL_FROM_ADDRESS`, `NETTMAIL_FROM_NAME`, `NETTMAIL_REPLY_TO_ADDRESS`.
 2. Recommended: also set `NETTMAIL_SANDBOX_ADDRESS=william@nettsite.co.za` for a first smoke send on production.
-3. `php artisan migrate --force && php artisan db:seed --force`, then `ninja:import` as above. Fill in the same General and Billing → Invoice Document settings as on the test run.
+3. `php artisan migrate --force && php artisan db:seed --force`, then `ninja:import` as above.
+   Copy settings, the NettMail invoice email, billing email texts and the logo from the test instance, instead of re-entering them:
+   ```bash
+   # on the test instance (merlin)
+   php artisan settings:export ~/merlin-settings.json
+   # on production
+   php artisan settings:import ~/merlin-settings.json --dry-run
+   php artisan settings:import ~/merlin-settings.json
+   rm ~/merlin-settings.json   # contains banking details
+   ```
+   The dry run should end "0 skipped". Account, payment-term and template references are matched by code/name, so run the import **after** seeding.
 4. `billing:generate-recurring`, review the drafts.
 5. Go live: clear `NETTMAIL_SANDBOX_ADDRESS` (blank = real delivery in production), run `php artisan config:clear` (or `config:cache`), then Send.
 6. Run `/post-deploy-verify`.
