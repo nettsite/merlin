@@ -50,6 +50,13 @@ new #[Layout('components.layout.app')] class extends Component
 
     public ?string $existingLogoUrl = null;
 
+    // ── General / Outgoing Email ───────────────────────────────────────────
+    public string $emailFromName = '';
+
+    public string $emailFromAddress = '';
+
+    public string $emailReplyToAddress = '';
+
     // ── General / Currency ─────────────────────────────────────────────────
     public string $baseCurrency = '';
 
@@ -101,6 +108,9 @@ new #[Layout('components.layout.app')] class extends Component
         $this->phone = $company->phone;
         $this->companyEmail = $company->email;
         $this->taxNumber = $company->tax_number;
+        $this->emailFromName = $company->email_from_name;
+        $this->emailFromAddress = $company->email_from_address;
+        $this->emailReplyToAddress = $company->email_reply_to_address;
 
         if ($company->logo_path && Storage::disk('public')->exists($company->logo_path)) {
             $this->existingLogoUrl = Storage::disk('public')->url($company->logo_path);
@@ -165,6 +175,8 @@ new #[Layout('components.layout.app')] class extends Component
 
     public function save(): void
     {
+        $this->authorize('access-panel');
+
         $this->saved = false;
 
         match ($this->tab) {
@@ -189,6 +201,9 @@ new #[Layout('components.layout.app')] class extends Component
             'phone' => 'nullable|string|max:50',
             'companyEmail' => 'nullable|email|max:255',
             'taxNumber' => 'nullable|string|max:50',
+            'emailFromName' => 'required|string|max:255',
+            'emailFromAddress' => 'required|email|max:255',
+            'emailReplyToAddress' => 'required|email|max:255',
             'logo' => 'nullable|image|max:2048',
             'baseCurrency' => 'required|string|min:3|max:3',
             'locale' => 'required|string|max:20',
@@ -205,6 +220,9 @@ new #[Layout('components.layout.app')] class extends Component
         $company->phone = $this->phone;
         $company->email = $this->companyEmail;
         $company->tax_number = $this->taxNumber;
+        $company->email_from_name = $this->emailFromName;
+        $company->email_from_address = $this->emailFromAddress;
+        $company->email_reply_to_address = $this->emailReplyToAddress;
 
         if ($this->logo !== null) {
             if ($company->logo_path) {
@@ -649,6 +667,34 @@ new #[Layout('components.layout.app')] class extends Component
                             <flux:label>Country</flux:label>
                             <flux:input wire:model="country" placeholder="South Africa" class="max-w-xs" />
                             <flux:error name="country" />
+                        </flux:field>
+                    </div>
+                </div>
+
+                {{-- Outgoing Email --}}
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-8 py-8">
+                    <div>
+                        <h3 class="text-sm font-semibold text-ink">Outgoing Email</h3>
+                        <p class="mt-1 text-sm text-ink-muted">Sender on invoices and other emails to clients.</p>
+                    </div>
+                    <div class="col-span-2 space-y-5">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <flux:field>
+                                <flux:label>From Name <span class="text-danger">*</span></flux:label>
+                                <flux:input wire:model="emailFromName" placeholder="NettSite" />
+                                <flux:error name="emailFromName" />
+                            </flux:field>
+                            <flux:field>
+                                <flux:label>From Address <span class="text-danger">*</span></flux:label>
+                                <flux:input type="email" wire:model="emailFromAddress" placeholder="support@company.co.za" />
+                                <flux:error name="emailFromAddress" />
+                            </flux:field>
+                        </div>
+
+                        <flux:field>
+                            <flux:label>Reply-To Address <span class="text-danger">*</span></flux:label>
+                            <flux:input type="email" wire:model="emailReplyToAddress" placeholder="support@company.co.za" class="max-w-xs" />
+                            <flux:error name="emailReplyToAddress" />
                         </flux:field>
                     </div>
                 </div>

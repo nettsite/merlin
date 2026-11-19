@@ -73,7 +73,7 @@ Plan: `docs/billing-go-live/plan.md` (step 1).
 | A4 Tax | None. | No change |
 | E1 Sandbox | `nettmail` mailer always-to `NETTMAIL_SANDBOX_ADDRESS` (cc/bcc dropped). **Defaults to william@nettsite.co.za whenever APP_ENV ≠ production.** | Done |
 | E3 Schedule | `billing:generate-recurring` removed from the schedule. Manual trigger only, same as Ninja. | Done |
-| E4 Sender | From and reply-to `support@nettsite.co.za`; name from `NETTMAIL_FROM_NAME` (default "NettSite"). | Done; local `.env` still overrides (see runbook) |
+| E4 Sender | From name, from address and reply-to are set in **Settings → General → Outgoing Email** and applied to every client email at send time. A fresh install seeds them from `NETTMAIL_FROM_*` / `NETTMAIL_REPLY_TO_ADDRESS` (defaults: NettSite / support@nettsite.co.za). | Done |
 | Numbering | Continue the R-series: next is `R6537` (max numeric R-number + 1). | Done |
 
 Also fixed: `documents:verify-audit-trail` crashed on every run after the first, because it cached a Carbon object under `serializable_classes = false`. That included the daily 05:35 run.
@@ -82,12 +82,12 @@ Also fixed: `documents:verify-audit-trail` crashed on every run after the first,
 
 ### Today — test run on `merlin` (sandboxed)
 
-1. Edit local `.env`, which currently overrides the new sender:
+1. Edit local `.env` so a fresh database seeds the right sender:
    ```dotenv
    NETTMAIL_FROM_ADDRESS=support@nettsite.co.za
    NETTMAIL_FROM_NAME=NettSite
    ```
-   The sandbox is already on because `APP_ENV=local`. Confirm with `php artisan config:show mail.mailers.nettmail` that `to ⇁ address` shows william@nettsite.co.za.
+   The sandbox is already on because `APP_ENV=local`. Confirm with `php artisan config:show mail.mailers.nettmail` that `to ⇁ address` shows william@nettsite.co.za. After `migrate:fresh`, check Settings → General → Outgoing Email.
 2. **You run** (Claude is blocked from this; it wipes `merlin`: today 1 manual journal, 2 users, settings, all imports):
    ```bash
    php artisan migrate:fresh --seed
@@ -108,7 +108,7 @@ Also fixed: `documents:verify-audit-trail` crashed on every run after the first,
 
 1. Deploy `main` and create the DB (e.g. `merlin_nettsite`). Set `.env`: `APP_ENV=production`, `NETTMAIL_DRIVER`, `NETTMAIL_FROM_ADDRESS`, `NETTMAIL_FROM_NAME`, `NETTMAIL_REPLY_TO_ADDRESS`.
 2. Recommended: also set `NETTMAIL_SANDBOX_ADDRESS=william@nettsite.co.za` for a first smoke send on production.
-3. `php artisan migrate --force && php artisan db:seed --force`, then `ninja:import` as above.
+3. `php artisan migrate --force && php artisan db:seed --force`, then `ninja:import` as above. Check Settings → General → Outgoing Email.
 4. `billing:generate-recurring`, review the drafts.
 5. Go live: clear `NETTMAIL_SANDBOX_ADDRESS` (blank = real delivery in production), run `php artisan config:clear` (or `config:cache`), then Send.
 6. Run `/post-deploy-verify`.

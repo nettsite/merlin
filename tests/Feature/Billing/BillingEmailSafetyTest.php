@@ -1,10 +1,14 @@
 <?php
 
+use App\Modules\Core\Settings\CompanySettings;
 use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Mail\Message;
 use Illuminate\Support\Facades\Mail;
 use Symfony\Component\Mime\Address;
 use Symfony\Component\Mime\Email;
+
+uses(RefreshDatabase::class);
 
 function sendThroughNettMail(): Email
 {
@@ -39,18 +43,45 @@ it('delivers to the real recipient when no sandbox address is set', function ():
     expect($email->getTo()[0]->getAddress())->toBe('client@example.test');
 });
 
-it('sends from and replies to the configured support address', function (): void {
-    config([
-        'mail.mailers.nettmail.to.address' => null,
-        'mail.mailers.nettmail.from' => ['address' => 'support@nettsite.co.za', 'name' => 'NettSite'],
-        'mail.mailers.nettmail.reply_to' => ['address' => 'support@nettsite.co.za', 'name' => 'NettSite'],
-    ]);
+it('sends from and replies to the addresses in General settings', function (): void {
+    $company = app(CompanySettings::class);
+    $company->email_from_name = 'NettSite';
+    $company->email_from_address = 'support@nettsite.co.za';
+    $company->email_reply_to_address = 'help@nettsite.co.za';
+    $company->save();
 
     $email = sendThroughNettMail();
 
-    expect($email->getFrom()[0]->getAddress())->toBe('support@nettsite.co.za')
+    expect($email->getFrom())->toHaveCount(1)
+        ->and($email->getFrom()[0]->getAddress())->toBe('support@nettsite.co.za')
         ->and($email->getFrom()[0]->getName())->toBe('NettSite')
-        ->and($email->getReplyTo()[0]->getAddress())->toBe('support@nettsite.co.za');
+        ->and($email->getReplyTo())->toHaveCount(1)
+        ->and($email->getReplyTo()[0]->getAddress())->toBe('help@nettsite.co.za');
+});
+
+it('falls back to the mailer config sender when General settings are blank', function (): void {
+    $company = app(CompanySettings::class);
+    $company->email_from_address = '';
+    $company->email_reply_to_address = '';
+    $company->save();
+
+    config(['mail.mailers.nettmail.from' => ['address' => 'fallback@example.test', 'name' => 'Fallback']]);
+
+    expect(sendThroughNettMail()->getFrom()[0]->getAddress())->toBe('fallback@example.test');
+});
+
+it('leaves mail from other mailers alone', function (): void {
+    $company = app(CompanySettings::class);
+    $company->email_from_address = 'support@nettsite.co.za';
+    $company->save();
+
+    config(['mail.default' => 'array', 'mail.from' => ['address' => 'system@example.test', 'name' => 'System']]);
+    app('mail.manager')->purge('array');
+
+    Mail::raw('Password reset', fn (Message $message) => $message->to('user@example.test'));
+
+    expect(app('mail.manager')->mailer('array')->getSymfonyTransport()->messages()->last()->getOriginalMessage()->getFrom()[0]->getAddress())
+        ->toBe('system@example.test');
 });
 
 it('defaults the sandbox on outside production', function (): void {

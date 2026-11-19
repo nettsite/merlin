@@ -31,6 +31,7 @@ use App\Modules\Core\Models\User;
 use App\Modules\Core\Policies\AllModulesPolicy;
 use App\Modules\Core\Services\IncidentSyncService;
 use App\Modules\Core\Services\Pdf\MagikaService;
+use App\Modules\Core\Settings\CompanySettings;
 use App\Modules\Core\Settings\CurrencySettings;
 use App\Modules\Purchasing\Models\PostingRule;
 use App\Modules\Purchasing\Services\ExchangeRateService;
@@ -38,12 +39,15 @@ use App\Modules\Purchasing\Services\InvalidPurchasingSettingsIncidentDetector;
 use App\Modules\Purchasing\Services\UnpostedInvoicesIncidentDetector;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Relations\Relation;
+use Illuminate\Mail\Events\MessageSending;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
 use Livewire\Livewire;
+use Symfony\Component\Mime\Address as SymfonyAddress;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -78,9 +82,34 @@ class AppServiceProvider extends ServiceProvider
         $this->configureMorphMap();
         $this->configureDefaults();
         $this->configureAuthorization();
+        $this->configureOutgoingEmailSender();
 
         // Override published NettMail views so they survive composer updates.
         Livewire::addNamespace('nettmail', resource_path('views/vendor/nettmail/livewire'));
+    }
+
+    /**
+     * Apply the sender from General settings to client email (the nettmail mailer).
+     * Read at send time so a settings change takes effect without a restart; blank
+     * settings fall back to the mailer config.
+     */
+    protected function configureOutgoingEmailSender(): void
+    {
+        Event::listen(function (MessageSending $event): void {
+            if (($event->data['mailer'] ?? null) !== 'nettmail') {
+                return;
+            }
+
+            $company = app(CompanySettings::class);
+
+            if (filled($company->email_from_address)) {
+                $event->message->from(new SymfonyAddress($company->email_from_address, $company->email_from_name));
+            }
+
+            if (filled($company->email_reply_to_address)) {
+                $event->message->replyTo(new SymfonyAddress($company->email_reply_to_address, $company->email_from_name));
+            }
+        });
     }
 
     /**

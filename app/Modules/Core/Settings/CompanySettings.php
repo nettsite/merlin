@@ -28,6 +28,12 @@ class CompanySettings extends Settings
 
     public ?string $logo_path = null;
 
+    public string $email_from_name = '';
+
+    public string $email_from_address = '';
+
+    public string $email_reply_to_address = '';
+
     public static function group(): string
     {
         return 'company';
