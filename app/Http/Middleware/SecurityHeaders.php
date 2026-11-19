@@ -33,6 +33,8 @@ class SecurityHeaders
      * The NettMail email editor (prebuilt GrapesJS) loads its toolbar icons
      * from Font Awesome 4.7.0 on cdnjs; only that versioned folder is allowed.
      * Its telemetry call to app.grapesjs.com stays blocked on purpose.
+     * The billing email text editor loads Quill 2.0.3 from jsdelivr, pinned
+     * with SRI hashes in settings/index.blade.php.
      */
     private function contentSecurityPolicy(): string
     {
@@ -41,10 +43,11 @@ class SecurityHeaders
             : '';
 
         $editorIcons = ' https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/';
+        $quill = ' https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/';
 
         return "default-src 'self'; "
-            ."script-src 'self' 'unsafe-inline' 'unsafe-eval'{$vite}; "
-            ."style-src 'self' 'unsafe-inline' https://fonts.googleapis.com{$editorIcons}{$vite}; "
+            ."script-src 'self' 'unsafe-inline' 'unsafe-eval'{$quill}{$vite}; "
+            ."style-src 'self' 'unsafe-inline' https://fonts.googleapis.com{$editorIcons}{$quill}{$vite}; "
             ."font-src 'self' https://fonts.gstatic.com{$editorIcons}{$vite}; "
             ."img-src 'self' data:; "
             ."connect-src 'self'{$vite}; "

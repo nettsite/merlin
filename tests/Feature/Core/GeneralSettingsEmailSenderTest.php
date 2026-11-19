@@ -1,5 +1,6 @@
 <?php
 
+use App\Modules\Billing\Models\BillingEmailTemplate;
 use App\Modules\Billing\Settings\BillingSettings;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Settings\CompanySettings;
@@ -102,6 +103,39 @@ it('shows the Outgoing Email section on the General settings URL', function (): 
         ->assertOk()
         ->assertSee('Outgoing Email')
         ->assertSee('Reply-To Address');
+});
+
+it('loads the email text editor from the CDN version the CSP allows, with integrity hashes', function (): void {
+    $html = $this->get('/settings?tab=templates')->assertOk()->getContent();
+
+    expect($html)
+        ->toContain('https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.js" integrity="sha384-')
+        ->toContain('https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.snow.css" integrity="sha384-')
+        ->not->toContain('quill@2/');
+});
+
+it('keeps the email body editor setup unchanged across a save so Quill is not started twice', function (): void {
+    BillingEmailTemplate::create([
+        'type' => 'invoice',
+        'name' => 'Invoice',
+        'subject' => 'Invoice {{invoice_number}}',
+        'body' => '<p>Original body</p>',
+        'enabled' => true,
+    ]);
+
+    $component = Livewire::withQueryParams(['tab' => 'templates'])->test('pages.settings.index');
+
+    $editorSetup = fn (): string => preg_match('/x-data="(\{\s*cursorIndex.*?)"\s+x-on:sync-and-save-template/s', $component->html(), $m) === 1 ? $m[1] : '';
+
+    $before = $editorSetup();
+
+    expect($before)->not->toBe('')
+        ->not->toContain('Original body')
+        ->and($component->html())->toContain('data-initial-body="&lt;p&gt;Original body&lt;/p&gt;"');
+
+    $component->set('tplBody', '<p>Edited body</p>')->call('save')->assertHasNoErrors();
+
+    expect($editorSetup())->toBe($before);
 });
 
 it('requires permission to open the settings page', function (): void {

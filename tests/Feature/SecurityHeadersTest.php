@@ -15,6 +15,9 @@ it('sends security headers on web responses', function () {
     expect($csp)->toMatch("#style-src [^;]*https://cdnjs\.cloudflare\.com/ajax/libs/font-awesome/4\.7\.0/#")
         ->and($csp)->toMatch("#font-src [^;]*https://cdnjs\.cloudflare\.com/ajax/libs/font-awesome/4\.7\.0/#")
         ->and($csp)->not->toMatch('#script-src [^;]*cdnjs#')
+        ->and($csp)->toMatch('#script-src [^;]*https://cdn\.jsdelivr\.net/npm/quill@2\.0\.3/dist/#')
+        ->and($csp)->toMatch('#style-src [^;]*https://cdn\.jsdelivr\.net/npm/quill@2\.0\.3/dist/#')
+        ->and($csp)->not->toMatch('#https://cdn\.jsdelivr\.net/(?!npm/quill@2\.0\.3/dist/)#')
         ->and($csp)->not->toContain('grapesjs.com');
 
     expect($response->headers->get('X-Content-Type-Options'))->toBe('nosniff');

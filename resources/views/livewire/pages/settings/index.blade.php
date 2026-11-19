@@ -392,8 +392,9 @@ new #[Layout('components.layout.app')] class extends Component
 }; ?>
 
 @assets
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/quill@2/dist/quill.snow.css">
-<script src="https://cdn.jsdelivr.net/npm/quill@2/dist/quill.js"></script>
+{{-- Pinned with SRI; the CSP allows only this versioned folder (SecurityHeaders). Bump all three together. --}}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.snow.css" integrity="sha384-ecIckRi4QlKYya/FQUbBUjS4qp65jF/J87Guw5uzTbO1C1Jfa/6kYmd6dXUF6D7i" crossorigin="anonymous">
+<script src="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.js" integrity="sha384-utBUCeG4SYaCm4m7GQZYr8Hy8Fpy3V4KGjBZaf4WTKOcwhCYpt/0PfeEe3HNlwx8" crossorigin="anonymous"></script>
 @endassets
 
 <div>
@@ -482,6 +483,10 @@ new #[Layout('components.layout.app')] class extends Component
                     x-data="{
                         cursorIndex: 0,
                         init() {
+                            // Alpine can re-run init on the same element; a second Quill
+                            // on it would stack a second toolbar.
+                            if (this.$refs.editorEl.__quill) return;
+
                             // Use style-based size so output has inline font-size (email-safe).
                             const SizeStyle = Quill.import('attributors/style/size');
                             SizeStyle.whitelist = ['12px', '13px', '14px', '15px', '16px', '18px', '20px'];
@@ -507,7 +512,10 @@ new #[Layout('components.layout.app')] class extends Component
                             // Use the clipboard API, not quill.root.innerHTML — assigning
                             // innerHTML directly desyncs Quill's internal Delta model from
                             // the DOM, breaking typing and index-based inserts.
-                            quill.clipboard.dangerouslyPasteHTML(@js($tplBody));
+                            // Seeded from a data attribute inside wire:ignore, not interpolated
+                            // here: a changing x-data expression makes Livewire's morph re-init
+                            // this component after every save.
+                            quill.clipboard.dangerouslyPasteHTML(this.$refs.editorEl.dataset.initialBody ?? '');
                             quill.on('text-change', () => {
                                 $wire.set('tplBody', quill.root.innerHTML, false);
                                 // selection-change does NOT fire while typing, so the
@@ -595,7 +603,7 @@ new #[Layout('components.layout.app')] class extends Component
                         <flux:field>
                             <flux:label>Body</flux:label>
                             <div wire:ignore class="border border-line rounded-md overflow-hidden [&_.ql-toolbar]:border-0 [&_.ql-toolbar]:border-b [&_.ql-toolbar]:border-line [&_.ql-container]:border-0">
-                                <div x-ref="editorEl" class="min-h-64 text-sm"></div>
+                                <div x-ref="editorEl" data-initial-body="{{ $tplBody }}" class="min-h-64 text-sm"></div>
                             </div>
                             <flux:error name="tplBody" />
                         </flux:field>
