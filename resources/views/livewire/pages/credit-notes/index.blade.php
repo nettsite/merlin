@@ -566,7 +566,7 @@ new #[Layout('components.layout.app')] class extends Component
 
             <flux:field>
                 <flux:label>Reference</flux:label>
-                <flux:input wire:model="createForm.reference" placeholder="e.g. SINV-2026-00042" />
+                <flux:input wire:model="createForm.reference" placeholder="e.g. R6537" />
                 <flux:error name="createForm.reference" />
             </flux:field>
 

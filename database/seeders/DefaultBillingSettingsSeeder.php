@@ -26,7 +26,7 @@ class DefaultBillingSettingsSeeder extends Seeder
     {
         $receivableAccount = Account::where('code', '1100')->firstOrFail();
         $bankAccount = Account::where('code', '1000')->firstOrFail();
-        $eomTerm = PaymentTerm::where('name', 'EOM')->firstOrFail();
+        $defaultTerm = PaymentTerm::where('name', '1st of Next Month')->firstOrFail();
 
         $template = Template::firstOrCreate(
             ['name' => 'Sales Invoice'],
@@ -40,7 +40,7 @@ class DefaultBillingSettingsSeeder extends Seeder
         $settings = app(BillingSettings::class);
         $settings->default_receivable_account_id = $receivableAccount->id;
         $settings->default_contra_account_id = $bankAccount->id;
-        $settings->default_payment_term_id = $eomTerm->id;
+        $settings->default_payment_term_id = $defaultTerm->id;
         $settings->billing_period_day = 25;
         $settings->base_email_template_id = $template->id;
         $settings->save();

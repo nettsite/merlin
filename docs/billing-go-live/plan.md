@@ -38,7 +38,7 @@ flowchart LR
 **Goal:** Side-by-side match against real InvoiceNinja output.
 
 > [!WARNING]
-> No real client must receive an email before go-live is confirmed. Before any test run today, confirm `MAIL_MAILER` is set to `log` (or another non-delivering driver) in this environment, or run with `Mail::fake()` / a test mailbox — never the real SMTP/sendmail path. Double-check the actual env value, don't just assume.
+> No real client must receive an email before go-live is confirmed. Invoices send through the `nettmail` mailer, so `MAIL_MAILER` has no effect. The safeguard is the NettMail sandbox: outside production every message goes to `NETTMAIL_SANDBOX_ADDRESS` (default william@nettsite.co.za). Confirm with `php artisan config:show mail.mailers.nettmail` before any test send. See `audit.md` → Runbook.
 
 - For each real client, generate from the migrated template and diff against the last real Ninja invoice (client, lines, amounts, due date).
 - Dry-run `billing:generate-recurring --dry-run` against all templates; manually check output.

@@ -36,6 +36,12 @@ class PaymentTermSeeder extends Seeder
                 'day_of_month' => null,
             ],
             [
+                'name' => '1st of Next Month',
+                'rule' => PaymentTermRule::NthOfFollowingMonth,
+                'days' => null,
+                'day_of_month' => 1,
+            ],
+            [
                 'name' => '25th of Month',
                 'rule' => PaymentTermRule::NthOfFollowingMonth,
                 'days' => null,

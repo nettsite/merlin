@@ -67,6 +67,20 @@ return [
 
         'nettmail' => [
             'transport' => 'nettmail',
+            'from' => [
+                'address' => env('NETTMAIL_FROM_ADDRESS', 'support@nettsite.co.za'),
+                'name' => env('NETTMAIL_FROM_NAME', 'NettSite'),
+            ],
+            'reply_to' => [
+                'address' => env('NETTMAIL_REPLY_TO_ADDRESS', 'support@nettsite.co.za'),
+                'name' => env('NETTMAIL_FROM_NAME', 'NettSite'),
+            ],
+            // Sandbox: when set, every message goes only to this address (cc/bcc dropped).
+            // Fail-safe: outside production it defaults on, so a test run can never reach a client.
+            'to' => [
+                'address' => env('NETTMAIL_SANDBOX_ADDRESS') ?: (env('APP_ENV') === 'production' ? null : 'william@nettsite.co.za'),
+                'name' => 'NettMail Sandbox',
+            ],
         ],
 
         'sendmail' => [

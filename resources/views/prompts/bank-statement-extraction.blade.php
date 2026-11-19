@@ -59,7 +59,7 @@ DEBITS (money paid out — negative amounts):
     Tiebreaker when multiple invoices match at the same priority level: prefer the invoice with the most recent issue_date that is still on or before the transaction date (payments arrive after the invoice is issued). If all tied invoices are after the transaction date, prefer the oldest.
     Never suggest a match solely because the amount is "close" when an exact match exists for the same client.
   - "invoice_match_confidence": float 0–1 for the invoice match, or null if no match suggested
-  - "invoice_match_reason": one-line explanation of why this invoice was matched (e.g. "Invoice number SINV-2026-00042 found in description", "Client Target Labs, exact amount R3880 matches balance_due on most recent invoice before payment date", or "Client Medhold, amount R6480 matches balance due")
+  - "invoice_match_reason": one-line explanation of why this invoice was matched (e.g. "Invoice number R6537 found in description", "Client Target Labs, exact amount R3880 matches balance_due on most recent invoice before payment date", or "Client Medhold, amount R6480 matches balance due")
 - For DEBIT transactions, "suggested_invoice_number", "invoice_match_confidence", and "invoice_match_reason" must be null.
 - Do NOT skip any rows — include fees, interest, transfers, and reversals.
 - Dates must be YYYY-MM-DD. Infer the year from the statement period if only day/month are printed.

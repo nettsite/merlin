@@ -36,7 +36,18 @@ it('sequences independently per document type', function (): void {
     $sales = Document::factory()->salesInvoice()->create();
 
     expect($invoice->document_number)->toBe("PINV-{$year}-00001")
-        ->and($sales->document_number)->toBe("SINV-{$year}-00001");
+        ->and($sales->document_number)->toBe('R1');
+});
+
+it('continues the InvoiceNinja R-series numerically for sales invoices', function (): void {
+    Document::factory()->salesInvoice()->withNumber('R999')->create();
+    Document::factory()->salesInvoice()->withNumber('R6536')->create();
+    Document::factory()->salesInvoice()->withNumber('5302')->create();
+    Document::factory()->salesInvoice()->withNumber('R-CUSTOM')->create();
+
+    $next = Document::factory()->salesInvoice()->create();
+
+    expect($next->document_number)->toBe('R6537');
 });
 
 // --- Line total calculations ---

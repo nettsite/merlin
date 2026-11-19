@@ -69,7 +69,9 @@ return [
         'sales_invoice' => [
             'label' => 'Sales Invoice',
             'direction' => 'outbound',
-            'prefix' => 'SINV',
+            // Continues InvoiceNinja's R-series (R6536 → R6537): no year, no padding.
+            'prefix' => 'R',
+            'number_format' => 'sequential',
             'default_status' => 'draft',
             'requires_due_date' => true,
         ],
