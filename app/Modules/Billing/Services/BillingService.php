@@ -8,6 +8,7 @@ use App\Modules\Core\Models\Document;
 use App\Modules\Core\Models\DocumentRelationship;
 use App\Modules\Core\Models\Party;
 use App\Modules\Core\Models\PaymentTerm;
+use App\Modules\Core\Models\Person;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Services\DocumentService;
 use App\Modules\Core\Settings\CurrencySettings;
@@ -103,9 +104,13 @@ class BillingService
 
         $invoice->refresh();
 
-        $rendered = app(InvoiceEmailTemplateService::class)->render($invoice);
+        $templates = app(InvoiceEmailTemplateService::class);
 
+        // Rendered per recipient: {{first_name}} is the contact receiving that copy.
         foreach ($recipientEmails as $email) {
+            $firstName = (string) Person::where('email', $email)->value('first_name');
+            $rendered = $templates->render($invoice, null, $firstName);
+
             Mail::mailer('nettmail')->to($email)->send(new SalesInvoiceMail($invoice, $rendered['subject'], $rendered['html']));
         }
 

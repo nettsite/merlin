@@ -3,12 +3,15 @@
 use App\Mail\SalesInvoiceMail;
 use App\Modules\Billing\Models\BillingEmailTemplate;
 use App\Modules\Billing\Services\BillingService;
+use App\Modules\Billing\Settings\BillingSettings;
 use App\Modules\Core\Models\Document;
 use App\Modules\Core\Models\Party;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Services\PartyService;
 use Illuminate\Support\Facades\Mail;
 use Livewire\Livewire;
+use Nettsite\NettMail\Core\Domain\Templates\TemplateType;
+use NettSite\NettMail\Models\Template;
 
 beforeEach(function (): void {
     BillingEmailTemplate::firstOrCreate(
@@ -231,4 +234,73 @@ it('confirmSend sends mail and marks doc sent', function (): void {
 
     expect($doc->fresh()->status)->toBe('sent');
     Mail::assertSent(SalesInvoiceMail::class);
+});
+
+it('sends only once when Send is clicked twice', function (): void {
+    Mail::fake();
+
+    $client = sendClient();
+    addInvoiceRecipient($client, 'billing@client.com');
+    $doc = sendDraft($client);
+
+    $this->actingAs(sendUserWith(['documents-view-any', 'documents-view', 'can-send-sales-invoices']));
+
+    Livewire::test('pages.sales-invoices.index')
+        ->call('openDetail', $doc->id)
+        ->call('openSendModal')
+        ->call('confirmSend')
+        ->call('confirmSend');
+
+    Mail::assertSentCount(1);
+});
+
+it('refuses to send with no recipients selected instead of mailing every contact', function (): void {
+    Mail::fake();
+
+    $client = sendClient();
+    addInvoiceRecipient($client, 'billing@client.com');
+    $doc = sendDraft($client);
+
+    $this->actingAs(sendUserWith(['documents-view-any', 'documents-view', 'can-send-sales-invoices']));
+
+    Livewire::test('pages.sales-invoices.index')
+        ->call('openDetail', $doc->id)
+        ->call('openSendModal')
+        ->set('sendRecipients.0.selected', false)
+        ->call('confirmSend')
+        ->assertSet('sendError', 'Select at least one recipient.')
+        ->assertSet('showSendModal', true);
+
+    Mail::assertNothingSent();
+    expect($doc->fresh()->status)->toBe('draft');
+});
+
+it('greets each recipient by their own first name with the NettMail invoice email', function (): void {
+    Mail::fake();
+
+    $template = Template::create([
+        'name' => 'Invoice Email',
+        'type' => TemplateType::Transactional,
+        'subject' => 'Invoice {{invoice_number}}',
+        'html' => '<p>Dear {{first_name}},</p>',
+    ]);
+    $settings = app(BillingSettings::class);
+    $settings->invoice_email_template_id = $template->id;
+    $settings->save();
+
+    $client = sendClient();
+    foreach (['Ann' => 'ann@example.com', 'Ben' => 'ben@example.com'] as $first => $email) {
+        $personParty = app(PartyService::class)->createPerson([
+            'first_name' => $first,
+            'last_name' => 'Client',
+            'email' => $email,
+            'status' => 'active',
+        ]);
+        $client->assignContact($personParty->person, ['role' => 'billing', 'receives_invoices' => true, 'is_active' => true]);
+    }
+
+    app(BillingService::class)->sendInvoice(sendDraft($client), null);
+
+    Mail::assertSent(SalesInvoiceMail::class, fn (SalesInvoiceMail $mail): bool => $mail->hasTo('ann@example.com') && $mail->emailHtml === '<p>Dear Ann,</p>');
+    Mail::assertSent(SalesInvoiceMail::class, fn (SalesInvoiceMail $mail): bool => $mail->hasTo('ben@example.com') && $mail->emailHtml === '<p>Dear Ben,</p>');
 });

@@ -3,9 +3,14 @@
 use App\Modules\Billing\Models\BillingEmailTemplate;
 use App\Modules\Billing\Services\BillingService;
 use App\Modules\Billing\Services\InvoiceEmailTemplateService;
+use App\Modules\Billing\Settings\BillingSettings;
 use App\Modules\Core\Models\Document;
 use App\Modules\Core\Models\Party;
 use App\Modules\Core\Services\PartyService;
+use App\Modules\Core\Settings\CompanySettings;
+use Illuminate\Support\Facades\Storage;
+use Nettsite\NettMail\Core\Domain\Templates\TemplateType;
+use NettSite\NettMail\Models\Template;
 
 function templateClient(): Party
 {
@@ -140,4 +145,123 @@ it('throws when no template is configured', function (): void {
 
     expect(fn () => app(InvoiceEmailTemplateService::class)->render($doc))
         ->toThrow(RuntimeException::class);
+});
+
+// --- Complete invoice email from a NettMail template ---
+
+function nettMailInvoiceEmail(string $html, string $subject = 'Invoice {{invoice_number}} from {{company_name}}'): void
+{
+    $template = Template::create([
+        'name' => 'Invoice Email',
+        'type' => TemplateType::Transactional,
+        'subject' => $subject,
+        'html' => $html,
+    ]);
+
+    $settings = app(BillingSettings::class);
+    $settings->invoice_email_template_id = $template->id;
+    $settings->save();
+}
+
+it('uses the chosen NettMail template as the whole invoice email', function (): void {
+    shortcodeTemplate('<p>Settings text that must not appear</p>');
+    nettMailInvoiceEmail('<p>Dear {{first_name}}, invoice {{invoice_number}} for {{client_name}}: {{amount_due}} due {{due_date}}.</p>');
+
+    $company = app(CompanySettings::class);
+    $company->name = 'NettSite';
+    $company->save();
+
+    $doc = templateDraft();
+    $doc->update(['total' => 450, 'balance_due' => 450, 'currency' => 'ZAR', 'due_date' => '2026-12-01']);
+
+    $rendered = app(InvoiceEmailTemplateService::class)->render($doc->fresh(), null, 'Ramson');
+
+    expect($rendered['subject'])->toBe("Invoice {$doc->document_number} from NettSite")
+        ->and($rendered['html'])->toBe("<p>Dear Ramson, invoice {$doc->document_number} for Template Client: ZAR 450.00 due 01 Dec 2026.</p>")
+        ->and($rendered['html'])->not->toContain('Settings text');
+});
+
+it('escapes merge values in the invoice email html but not in the subject', function (): void {
+    nettMailInvoiceEmail('<p>{{client_name}}</p>', 'For {{client_name}}');
+
+    $client = app(PartyService::class)->createBusiness([
+        'business_type' => 'company',
+        'legal_name' => 'Smith & Sons <b>',
+        'status' => 'active',
+    ], ['client']);
+
+    $rendered = app(InvoiceEmailTemplateService::class)->render(templateDraft($client));
+
+    expect($rendered['html'])->toBe('<p>Smith &amp; Sons &lt;b&gt;</p>')
+        ->and($rendered['subject'])->toBe('For Smith & Sons <b>');
+});
+
+it('falls back to a default subject when the NettMail template has none', function (): void {
+    nettMailInvoiceEmail('<p>Hi</p>', '');
+    $doc = templateDraft();
+
+    expect(app(InvoiceEmailTemplateService::class)->render($doc)['subject'])
+        ->toBe("Invoice {$doc->document_number} from ".config('app.name'));
+});
+
+it('keeps reminders on the Settings text inside the base layout', function (): void {
+    nettMailInvoiceEmail('<p>Whole invoice email</p>');
+
+    $layout = Template::create([
+        'name' => 'Layout',
+        'type' => TemplateType::Transactional,
+        'subject' => 'x',
+        'html' => '<div class="brand">[email_body]</div>',
+    ]);
+    $settings = app(BillingSettings::class);
+    $settings->base_email_template_id = $layout->id;
+    $settings->save();
+
+    $reminder = BillingEmailTemplate::create([
+        'type' => 'reminder',
+        'name' => 'First Reminder',
+        'subject' => 'Reminder {{invoice_number}}',
+        'body' => '<p>Please pay {{amount_outstanding}}</p>',
+        'offset_days' => 1,
+        'enabled' => true,
+    ]);
+
+    $rendered = app(InvoiceEmailTemplateService::class)->render(templateDraft(), $reminder);
+
+    expect($rendered['html'])->toContain('<div class="brand">')
+        ->toContain('Please pay')
+        ->not->toContain('Whole invoice email');
+});
+
+it('uses the company name from General settings for {{company_name}}', function (): void {
+    shortcodeTemplate('From {{company_name}}');
+
+    $company = app(CompanySettings::class);
+    $company->name = 'NettSite';
+    $company->save();
+
+    expect(app(InvoiceEmailTemplateService::class)->render(templateDraft())['html'])->toBe('From NettSite');
+});
+
+it('renders the company logo as an image and as a url', function (): void {
+    Storage::fake('public');
+    Storage::disk('public')->put('company/logo.png', 'png-bytes');
+
+    $company = app(CompanySettings::class);
+    $company->name = 'NettSite & Co';
+    $company->logo_path = 'company/logo.png';
+    $company->save();
+
+    nettMailInvoiceEmail('{{company_logo}}|<img src="{{company_logo_url}}">');
+
+    $html = app(InvoiceEmailTemplateService::class)->render(templateDraft())['html'];
+    $url = Storage::disk('public')->url('company/logo.png');
+
+    expect($html)->toBe('<img src="'.e($url).'" alt="NettSite &amp; Co" style="max-height:60px;max-width:250px;border:0;">|<img src="'.e($url).'">');
+});
+
+it('renders the logo tags empty when no logo is set', function (): void {
+    nettMailInvoiceEmail('[{{company_logo}}][{{company_logo_url}}]');
+
+    expect(app(InvoiceEmailTemplateService::class)->render(templateDraft())['html'])->toBe('[][]');
 });

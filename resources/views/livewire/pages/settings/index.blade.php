@@ -89,6 +89,8 @@ new #[Layout('components.layout.app')] class extends Component
 
     public ?string $baseEmailTemplateId = null;
 
+    public ?string $invoiceEmailTemplateId = null;
+
     public string $defaultInvoiceTerms = '';
 
     public string $defaultInvoiceFooter = '';
@@ -150,6 +152,7 @@ new #[Layout('components.layout.app')] class extends Component
         $this->taxLiabilityAccountId = $billing->tax_liability_account_id;
         $this->billingPeriodDay = $billing->billing_period_day;
         $this->baseEmailTemplateId = $billing->base_email_template_id;
+        $this->invoiceEmailTemplateId = $billing->invoice_email_template_id;
         $this->defaultInvoiceTerms = $billing->default_invoice_terms;
         $this->defaultInvoiceFooter = $billing->default_invoice_footer;
 
@@ -167,11 +170,23 @@ new #[Layout('components.layout.app')] class extends Component
         $this->saved = false;
     }
 
+    /**
+     * With a NettMail invoice email chosen, the invoice text here is unused, so only
+     * reminders are listed: one place to edit each email.
+     *
+     * @return \Illuminate\Database\Eloquent\Builder<BillingEmailTemplate>
+     */
+    private function editableEmailTemplates(): \Illuminate\Database\Eloquent\Builder
+    {
+        return BillingEmailTemplate::query()
+            ->when($this->invoiceEmailTemplateId, fn ($query) => $query->where('type', '!=', 'invoice'))
+            ->orderByRaw("type = 'invoice' DESC")
+            ->orderBy('offset_days');
+    }
+
     private function autoSelectFirstTemplate(): void
     {
-        $first = BillingEmailTemplate::orderByRaw("type = 'invoice' DESC")
-            ->orderBy('offset_days')
-            ->first();
+        $first = $this->editableEmailTemplates()->first();
 
         if ($first) {
             $this->loadTemplate($first->id);
@@ -315,6 +330,7 @@ new #[Layout('components.layout.app')] class extends Component
             'taxLiabilityAccountId' => 'nullable|uuid|exists:accounts,id',
             'billingPeriodDay' => 'required|integer|min:1|max:28',
             'baseEmailTemplateId' => 'nullable|uuid|exists:nettmail_templates,id',
+            'invoiceEmailTemplateId' => 'nullable|uuid|exists:nettmail_templates,id',
             'defaultInvoiceTerms' => 'nullable|string|max:2000',
             'defaultInvoiceFooter' => 'nullable|string|max:2000',
         ]);
@@ -326,6 +342,7 @@ new #[Layout('components.layout.app')] class extends Component
         $settings->tax_liability_account_id = $this->taxLiabilityAccountId ?: null;
         $settings->billing_period_day = $this->billingPeriodDay;
         $settings->base_email_template_id = $this->baseEmailTemplateId ?: null;
+        $settings->invoice_email_template_id = $this->invoiceEmailTemplateId ?: null;
         $settings->default_invoice_terms = $this->defaultInvoiceTerms;
         $settings->default_invoice_footer = $this->defaultInvoiceFooter;
         $settings->save();
@@ -382,9 +399,7 @@ new #[Layout('components.layout.app')] class extends Component
         }
 
         if ($this->tab === 'templates') {
-            $data['allTemplates'] = BillingEmailTemplate::orderByRaw("type = 'invoice' DESC")
-                ->orderBy('offset_days')
-                ->get();
+            $data['allTemplates'] = $this->editableEmailTemplates()->get();
         }
 
         return $data;
@@ -968,18 +983,30 @@ new #[Layout('components.layout.app')] class extends Component
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-8 py-8">
                     <div>
                         <h3 class="text-sm font-semibold text-ink">Email</h3>
-                        <p class="mt-1 text-sm text-ink-muted">NettMail/Unlayer template used as the branded wrapper for all billing emails. Must contain <code class="text-xs bg-surface-alt px-1 rounded">[email_body]</code> where the message body should appear.</p>
+                        <p class="mt-1 text-sm text-ink-muted">NettMail templates used for billing emails. Edit them under Emails → Templates.</p>
                     </div>
-                    <div class="col-span-2">
+                    <div class="col-span-2 space-y-5">
                         <flux:field>
-                            <flux:label>Base Email Template</flux:label>
+                            <flux:label>Invoice Email</flux:label>
+                            <flux:select wire:model="invoiceEmailTemplateId" class="max-w-sm">
+                                <flux:select.option value="">— Use the Email Templates tab text —</flux:select.option>
+                                @foreach ($emailTemplates as $template)
+                                    <flux:select.option value="{{ $template->id }}">{{ $template->name }}</flux:select.option>
+                                @endforeach
+                            </flux:select>
+                            <flux:description>The complete invoice email: subject and body, with merge tags such as <code class="text-xs bg-surface-alt px-1 rounded">@{{first_name}}</code>, <code class="text-xs bg-surface-alt px-1 rounded">@{{invoice_number}}</code> and <code class="text-xs bg-surface-alt px-1 rounded">@{{amount_due}}</code>.</flux:description>
+                            <flux:error name="invoiceEmailTemplateId" />
+                        </flux:field>
+
+                        <flux:field>
+                            <flux:label>Reminder Email Layout</flux:label>
                             <flux:select wire:model="baseEmailTemplateId" class="max-w-sm">
                                 <flux:select.option value="">— None —</flux:select.option>
                                 @foreach ($emailTemplates as $template)
                                     <flux:select.option value="{{ $template->id }}">{{ $template->name }}</flux:select.option>
                                 @endforeach
                             </flux:select>
-                            <flux:description>Edit individual email content under the Email Templates tab.</flux:description>
+                            <flux:description>Branded wrapper for reminder emails. Must contain <code class="text-xs bg-surface-alt px-1 rounded">[email_body]</code> where the reminder text (Email Templates tab) goes.</flux:description>
                             <flux:error name="baseEmailTemplateId" />
                         </flux:field>
                     </div>

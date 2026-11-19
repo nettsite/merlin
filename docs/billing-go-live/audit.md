@@ -94,6 +94,7 @@ Also fixed: `documents:verify-audit-trail` crashed on every run after the first,
    The sandbox is already on because `APP_ENV=local`. Confirm with `php artisan config:show mail.mailers.nettmail` that `to ⇁ address` shows william@nettsite.co.za.
    After `migrate:fresh`, fill in the settings that the invoice PDF prints:
    - **General:** company address (139 Clulee Road / Linbro Park, Gauteng 2090 / South Africa), **Website**, logo, Outgoing Email, and **Banking Details** (bank, account name, account number, branch code), which print as the EFT block on every invoice.
+   - **Billing → Email → Invoice Email:** the NettMail template that is the whole invoice email (subject and body). A fresh database seeds and selects "Invoice Email"; restyle it under Emails → Templates. Tags: `{{first_name}}` (each recipient's own), `{{client_name}}`, `{{invoice_number}}`, `{{invoice_date}}`, `{{amount_due}}`, `{{due_date}}`, `{{company_name}}`, `{{invoice_url}}`, `{{reference}}`. Reminders still use the Email Templates tab text inside the "Reminder Email Layout".
    - **Billing → Invoice Document:** default terms ("All invoices are payable by due date."), printed on every invoice whose recurring template has none (22 of 27). The footer is optional extra text. A footer that repeats the configured account number (Ninja's "Our Bank Details" line) is skipped, so it doesn't print twice.
 2. **You run** (Claude is blocked from this; it wipes `merlin`: today 1 manual journal, 2 users, settings, all imports):
    ```bash
@@ -114,7 +115,7 @@ Also fixed: `documents:verify-audit-trail` crashed on every run after the first,
 
 ### Tomorrow — go live on the new instance
 
-1. Deploy `main` and create the DB (e.g. `merlin_nettsite`). Set `.env`: `APP_ENV=production`, `NETTMAIL_DRIVER`, `NETTMAIL_FROM_ADDRESS`, `NETTMAIL_FROM_NAME`, `NETTMAIL_REPLY_TO_ADDRESS`.
+1. Deploy `main` and create the DB (e.g. `merlin_nettsite`). Run `php artisan storage:link`, and set `APP_URL` to the public https address: the `{{company_logo}}` email tag links to `APP_URL/storage/...`, which email clients fetch over the internet. Set `.env`: `APP_ENV=production`, `NETTMAIL_DRIVER`, `NETTMAIL_FROM_ADDRESS`, `NETTMAIL_FROM_NAME`, `NETTMAIL_REPLY_TO_ADDRESS`.
 2. Recommended: also set `NETTMAIL_SANDBOX_ADDRESS=william@nettsite.co.za` for a first smoke send on production.
 3. `php artisan migrate --force && php artisan db:seed --force`, then `ninja:import` as above. Fill in the same General and Billing → Invoice Document settings as on the test run.
 4. `billing:generate-recurring`, review the drafts.

@@ -377,12 +377,26 @@ new #[Layout('components.layout.app')] class extends Component
     public function confirmSend(): void
     {
         $this->authorize('can-send-sales-invoices');
+
+        // A double click queues a second call that runs after the first closed the
+        // modal and cleared the list; it must not send again.
+        if (! $this->showSendModal) {
+            return;
+        }
+
         $doc = Document::findOrFail($this->detailId);
 
         $emails = array_column(
             array_filter($this->sendRecipients, fn ($r) => $r['selected']),
             'email',
         );
+
+        // An empty list would make sendInvoice() fall back to every flagged contact.
+        if ($emails === []) {
+            $this->sendError = 'Select at least one recipient.';
+
+            return;
+        }
 
         try {
             app(BillingService::class)->sendInvoice($doc, Auth::user(), $emails);
@@ -1170,6 +1184,8 @@ new #[Layout('components.layout.app')] class extends Component
             <flux:button
                 variant="primary"
                 wire:click="confirmSend"
+                wire:loading.attr="disabled"
+                wire:target="confirmSend"
                 :disabled="count(array_filter($sendRecipients, fn($r) => $r['selected'])) === 0"
             >
                 {{ $detail?->status === 'draft' ? 'Send Invoice' : 'Resend Invoice' }}

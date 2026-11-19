@@ -24,6 +24,9 @@ class BillingSettings extends Settings
     /** NettMail/Unlayer template used as the branded wrapper for all billing emails. Must contain {{email_body}}. */
     public ?string $base_email_template_id = null;
 
+    /** NettMail template used as the complete invoice email (subject + body). Null = Settings text in the base layout. */
+    public ?string $invoice_email_template_id = null;
+
     /** Printed under "Invoice Terms:" when an invoice has no terms of its own. */
     public string $default_invoice_terms = '';
 
