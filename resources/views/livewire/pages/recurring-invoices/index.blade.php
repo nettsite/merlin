@@ -12,6 +12,9 @@ use App\Modules\Core\Models\Party;
 use App\Modules\Core\Models\Document;
 use App\Modules\Purchasing\Services\ExchangeRateService;
 use App\Modules\Core\Settings\CurrencySettings;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use Illuminate\Validation\Rule;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Validate;
 use Livewire\Component;
@@ -56,6 +59,24 @@ new #[Layout('components.layout.app')] class extends Component
 
     public bool $filterThisMonth = false;
 
+    /** @var array<int, string> */
+    public array $selectedIds = [];
+
+    public bool $selectAllFiltered = false;
+
+    public bool $showBulkEdit = false;
+
+    // Bulk edit: '' means "no change" for every field.
+    public string $bulkStatus = '';
+
+    public string $bulkNextDate = '';
+
+    /** '' = no change, 'none' = use the client's term, otherwise a payment term id. */
+    public string $bulkPaymentTermId = '';
+
+    /** '' = no change, '1' = on, '0' = off. */
+    public string $bulkAutoSend = '';
+
     public string $activeTab = 'details';
 
     public function mount(): void
@@ -82,28 +103,174 @@ new #[Layout('components.layout.app')] class extends Component
         $this->resetPage();
     }
 
+    // Changing what is listed clears the selection, so "all matching" can never
+    // silently mean a different set than the one the user selected.
+
     public function updatedSearch(): void
     {
         session(['ri.search' => $this->search]);
         $this->resetPage();
+        $this->clearSelection();
     }
 
     public function updatedFilterFrequency(): void
     {
         session(['ri.filterFrequency' => $this->filterFrequency]);
         $this->resetPage();
+        $this->clearSelection();
     }
 
     public function updatedFilterStatus(): void
     {
         session(['ri.filterStatus' => $this->filterStatus]);
         $this->resetPage();
+        $this->clearSelection();
     }
 
     public function updatedFilterThisMonth(): void
     {
         session(['ri.filterThisMonth' => $this->filterThisMonth]);
         $this->resetPage();
+        $this->clearSelection();
+    }
+
+    public function updatedSelectedIds(): void
+    {
+        $this->selectAllFiltered = false;
+    }
+
+    // -------------------------------------------------------------------------
+    // Bulk selection and bulk edit
+    // -------------------------------------------------------------------------
+
+    /**
+     * @param  array<int, string>  $pageIds
+     */
+    public function toggleSelectPage(array $pageIds): void
+    {
+        $allSelected = count($pageIds) > 0
+            && count(array_intersect($this->selectedIds, $pageIds)) === count($pageIds);
+
+        $this->selectedIds = $allSelected
+            ? array_values(array_diff($this->selectedIds, $pageIds))
+            : array_values(array_unique(array_merge($this->selectedIds, $pageIds)));
+
+        $this->selectAllFiltered = false;
+    }
+
+    public function markSelectAllFiltered(): void
+    {
+        $this->selectAllFiltered = true;
+    }
+
+    public function clearSelection(): void
+    {
+        $this->selectedIds = [];
+        $this->selectAllFiltered = false;
+    }
+
+    public function openBulkEdit(): void
+    {
+        $this->authorize('update', new RecurringInvoice);
+
+        if (! $this->selectAllFiltered && $this->selectedIds === []) {
+            return;
+        }
+
+        $this->reset(['bulkStatus', 'bulkNextDate', 'bulkPaymentTermId', 'bulkAutoSend']);
+        $this->resetErrorBag();
+        $this->showBulkEdit = true;
+    }
+
+    public function applyBulkEdit(): void
+    {
+        $this->authorize('update', new RecurringInvoice);
+
+        $this->validate([
+            'bulkStatus' => 'nullable|in:active,paused',
+            'bulkNextDate' => 'nullable|date',
+            'bulkPaymentTermId' => ['nullable', Rule::when(
+                $this->bulkPaymentTermId !== 'none',
+                ['uuid', 'exists:payment_terms,id'],
+            )],
+            'bulkAutoSend' => 'nullable|in:0,1',
+        ]);
+
+        $changes = [];
+
+        if ($this->bulkStatus !== '') {
+            $changes['status'] = RecurringInvoiceStatus::from($this->bulkStatus);
+        }
+
+        if ($this->bulkPaymentTermId !== '') {
+            $changes['payment_term_id'] = $this->bulkPaymentTermId === 'none' ? null : $this->bulkPaymentTermId;
+        }
+
+        if ($this->bulkAutoSend !== '') {
+            $changes['auto_send'] = $this->bulkAutoSend === '1';
+        }
+
+        // Runs advance from next_period_anchor, so a chosen date must move it too
+        // (same rule as editing a single template).
+        if ($this->bulkNextDate !== '') {
+            $changes['next_invoice_date'] = $this->bulkNextDate;
+            $changes['next_period_anchor'] = $this->bulkNextDate;
+        }
+
+        if ($changes === []) {
+            $this->addError('bulkEdit', 'Choose at least one change.');
+
+            return;
+        }
+
+        $templates = RecurringInvoice::whereIn('id', $this->resolveTargetIds())->get();
+
+        foreach ($templates as $template) {
+            $this->authorize('update', $template);
+        }
+
+        // One model update per template so each change lands in the activity log.
+        DB::transaction(function () use ($templates, $changes): void {
+            foreach ($templates as $template) {
+                $template->update($changes);
+            }
+        });
+
+        session()->flash('success', "Updated {$templates->count()} recurring invoice".($templates->count() === 1 ? '' : 's').'.');
+
+        $this->showBulkEdit = false;
+        $this->clearSelection();
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function resolveTargetIds(): array
+    {
+        if ($this->selectAllFiltered) {
+            return $this->filteredQuery()->pluck('recurring_invoices.id')->all();
+        }
+
+        // Ids come from the browser: keep only well-formed ones; each template is
+        // still authorized individually before it is changed.
+        return array_values(array_filter($this->selectedIds, fn ($id) => Str::isUuid($id)));
+    }
+
+    /**
+     * The filtered set shown in the table, without relations, sorting or paging.
+     *
+     * @return \Illuminate\Database\Eloquent\Builder<RecurringInvoice>
+     */
+    private function filteredQuery(): \Illuminate\Database\Eloquent\Builder
+    {
+        return RecurringInvoice::query()
+            ->when($this->search, fn ($q) => $q->whereHas('client.business', fn ($b) => $b
+                ->where('trading_name', 'like', "%{$this->search}%")
+                ->orWhere('legal_name', 'like', "%{$this->search}%")
+            ))
+            ->when($this->filterFrequency, fn ($q) => $q->where('frequency', $this->filterFrequency))
+            ->when($this->filterStatus, fn ($q) => $q->where('status', $this->filterStatus))
+            ->when($this->filterThisMonth, fn ($q) => $q->generatingThisMonth());
     }
 
     public function create(): void
@@ -260,24 +427,28 @@ new #[Layout('components.layout.app')] class extends Component
                 ->get();
         }
 
+        $rows = $this->filteredQuery()
+            ->with(['client.business', 'lines'])
+            ->when(
+                $this->sortBy === 'client',
+                fn ($q) => $q
+                    ->join('businesses', 'businesses.id', '=', 'recurring_invoices.client_id')
+                    ->orderBy('businesses.trading_name', $this->sortDir)
+                    ->select('recurring_invoices.*'),
+                fn ($q) => $q->orderBy($this->sortBy ?: 'next_invoice_date', $this->sortDir)
+            )
+            ->paginate($this->perPage);
+
+        $pageIds = collect($rows->items())->pluck('id')->all();
+        $allPageSelected = count($pageIds) > 0
+            && count(array_intersect($this->selectedIds, $pageIds)) === count($pageIds);
+
         return [
-            'rows' => RecurringInvoice::with(['client.business', 'lines'])
-                ->when($this->search, fn ($q) => $q->whereHas('client.business', fn ($b) => $b
-                    ->where('trading_name', 'like', "%{$this->search}%")
-                    ->orWhere('legal_name', 'like', "%{$this->search}%")
-                ))
-                ->when($this->filterFrequency, fn ($q) => $q->where('frequency', $this->filterFrequency))
-                ->when($this->filterStatus, fn ($q) => $q->where('status', $this->filterStatus))
-                ->when($this->filterThisMonth, fn ($q) => $q->generatingThisMonth())
-                ->when(
-                    $this->sortBy === 'client',
-                    fn ($q) => $q
-                        ->join('businesses', 'businesses.id', '=', 'recurring_invoices.client_id')
-                        ->orderBy('businesses.trading_name', $this->sortDir)
-                        ->select('recurring_invoices.*'),
-                    fn ($q) => $q->orderBy($this->sortBy ?: 'next_invoice_date', $this->sortDir)
-                )
-                ->paginate($this->perPage),
+            'rows' => $rows,
+            'pageIds' => $pageIds,
+            'totalFiltered' => $rows->total(),
+            'allPageSelected' => $allPageSelected,
+            'selectedCount' => $this->selectAllFiltered ? $rows->total() : count($this->selectedIds),
             // Client dropdown only renders inside the form flyout.
             'clients' => $this->showForm ? Party::clients()->with('business')->get() : collect(),
             'paymentTerms' => PaymentTerm::orderBy('name')->get(['id', 'name']),
@@ -342,11 +513,45 @@ new #[Layout('components.layout.app')] class extends Component
                 </flux:select>
             </div>
         </div>
+
+        {{-- Bulk action bar --}}
+        @if($selectedCount > 0 || $selectAllFiltered)
+            <div class="flex items-center gap-3 border-b border-line bg-blue-50 px-6 py-2 text-sm">
+                <span class="font-medium text-ink">
+                    @if($selectAllFiltered)
+                        All {{ $totalFiltered }} {{ \Illuminate\Support\Str::plural('template', $totalFiltered) }} selected
+                    @else
+                        {{ $selectedCount }} selected
+                    @endif
+                </span>
+
+                @if(! $selectAllFiltered && $selectedCount < $totalFiltered)
+                    <button wire:click="markSelectAllFiltered" class="text-accent-600 hover:underline">
+                        Select all {{ $totalFiltered }} matching
+                    </button>
+                @endif
+
+                @can('update', new \App\Modules\Billing\Models\RecurringInvoice)
+                    <flux:button wire:click="openBulkEdit" size="sm" variant="ghost" icon="pencil-square">Bulk edit</flux:button>
+                @endcan
+
+                <button wire:click="clearSelection" class="ml-auto text-ink-muted hover:text-ink">Clear</button>
+            </div>
+        @endif
     </x-slot>
 
     <table class="w-full text-sm">
         <thead>
             <tr>
+                <th class="w-10 px-4 py-3">
+                    <input
+                        type="checkbox"
+                        wire:click="toggleSelectPage({{ json_encode($pageIds) }})"
+                        @checked($selectAllFiltered || $allPageSelected)
+                        class="rounded border-line"
+                        @if($selectAllFiltered) disabled @endif
+                    />
+                </th>
                 <x-crud.th column="client" :sort-by="$sortBy" :sort-dir="$sortDir">Client</x-crud.th>
                 <x-crud.th :right="true">Amount (ex tax)</x-crud.th>
                 <x-crud.th column="frequency" :sort-by="$sortBy" :sort-dir="$sortDir">Frequency</x-crud.th>
@@ -363,6 +568,18 @@ new #[Layout('components.layout.app')] class extends Component
                     );
                 @endphp
                 <tr class="group border-t border-line hover:bg-surface-alt transition-colors">
+                    <td class="px-4 py-3">
+                        @if($selectAllFiltered)
+                            <input type="checkbox" checked disabled class="rounded border-line opacity-60" />
+                        @else
+                            <input
+                                type="checkbox"
+                                wire:model.live="selectedIds"
+                                value="{{ $template->id }}"
+                                class="rounded border-line"
+                            />
+                        @endif
+                    </td>
                     <td class="px-4 py-3 font-medium text-ink">
                         {{ $template->client?->business?->display_name ?? '—' }}
                     </td>
@@ -408,7 +625,7 @@ new #[Layout('components.layout.app')] class extends Component
                 </tr>
             @empty
                 <tr>
-                    <td colspan="6" class="px-4 py-12 text-center">
+                    <td colspan="7" class="px-4 py-12 text-center">
                         <p class="font-medium text-ink">No recurring invoice templates yet.</p>
                         <p class="mt-1 text-sm text-ink-muted">Create a template to automate invoice generation.</p>
                     </td>
@@ -421,6 +638,64 @@ new #[Layout('components.layout.app')] class extends Component
         {{ $rows->links() }}
     </x-slot>
 </x-crud.table>
+
+{{-- ===== Bulk edit ===== --}}
+<flux:modal name="bulk-edit" wire:model.self="showBulkEdit" class="w-[480px]">
+    <form wire:submit="applyBulkEdit" class="p-6 space-y-5">
+        <div>
+            <flux:heading size="lg" class="font-semibold">
+                Bulk edit {{ $selectedCount }} {{ \Illuminate\Support\Str::plural('template', $selectedCount) }}
+            </flux:heading>
+            <p class="mt-1 text-sm text-ink-muted">Only the fields you change are updated; everything else stays as it is.</p>
+        </div>
+
+        <flux:field>
+            <flux:label>Status</flux:label>
+            <flux:select wire:model="bulkStatus">
+                <option value="">— No change —</option>
+                <option value="active">Active</option>
+                <option value="paused">Paused</option>
+            </flux:select>
+            <flux:error name="bulkStatus" />
+        </flux:field>
+
+        <flux:field>
+            <flux:label>Next invoice date</flux:label>
+            <flux:input type="date" wire:model="bulkNextDate" />
+            <flux:description>Leave blank to keep each template's own date. Following invoices repeat from the date you choose.</flux:description>
+            <flux:error name="bulkNextDate" />
+        </flux:field>
+
+        <flux:field>
+            <flux:label>Payment terms</flux:label>
+            <flux:select wire:model="bulkPaymentTermId">
+                <option value="">— No change —</option>
+                <option value="none">— Use client default —</option>
+                @foreach($paymentTerms as $term)
+                    <option value="{{ $term->id }}">{{ $term->name }}</option>
+                @endforeach
+            </flux:select>
+            <flux:error name="bulkPaymentTermId" />
+        </flux:field>
+
+        <flux:field>
+            <flux:label>Send automatically</flux:label>
+            <flux:select wire:model="bulkAutoSend">
+                <option value="">— No change —</option>
+                <option value="1">On</option>
+                <option value="0">Off</option>
+            </flux:select>
+            <flux:error name="bulkAutoSend" />
+        </flux:field>
+
+        <flux:error name="bulkEdit" />
+
+        <div class="flex justify-end gap-3 pt-2">
+            <flux:button type="button" variant="ghost" wire:click="$set('showBulkEdit', false)">Cancel</flux:button>
+            <flux:button type="submit" variant="primary">Apply to {{ $selectedCount }} {{ \Illuminate\Support\Str::plural('template', $selectedCount) }}</flux:button>
+        </div>
+    </form>
+</flux:modal>
 
 {{-- ===== Form Flyout ===== --}}
 <flux:modal name="crud-form" flyout wire:model.self="showForm" class="w-[640px]">

@@ -6,14 +6,19 @@ use App\Modules\Billing\Enums\RecurringInvoiceStatus;
 use App\Modules\Billing\Models\BillingEmailTemplate;
 use App\Modules\Billing\Models\RecurringInvoice;
 use App\Modules\Billing\Services\RecurringInvoiceService;
+use App\Modules\Core\Enums\PaymentTermRule;
 use App\Modules\Core\Models\Document;
 use App\Modules\Core\Models\Party;
+use App\Modules\Core\Models\PaymentTerm;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Services\PartyService;
 use App\Modules\Core\Settings\CurrencySettings;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 use Livewire\Livewire;
+use Spatie\Activitylog\Enums\ActivityEvent;
+use Spatie\Activitylog\Models\Activity;
 
 beforeEach(function (): void {
     BillingEmailTemplate::firstOrCreate(
@@ -985,4 +990,235 @@ it('keeps the this-month filter across page loads and can be switched off', func
         ->assertDontSee('Due June Ltd')
         ->set('filterThisMonth', false)
         ->assertSee('Due June Ltd');
+});
+
+// --- Bulk selection and bulk edit ---
+
+function bulkUser(): User
+{
+    return riUserWith(['recurring-invoices-view-any', 'recurring-invoices-update']);
+}
+
+it('bulk edits only the selected templates and moves their schedule anchor', function (): void {
+    $this->actingAs(bulkUser());
+
+    $a = filterTemplate('Bulk A Ltd', '2026-05-10');
+    $b = filterTemplate('Bulk B Ltd', '2026-05-20');
+    $untouched = filterTemplate('Bulk C Ltd', '2026-05-25');
+
+    Livewire::test('pages.recurring-invoices.index')
+        ->set('selectedIds', [$a->id, $b->id])
+        ->call('openBulkEdit')
+        ->assertSet('showBulkEdit', true)
+        ->set('bulkStatus', 'paused')
+        ->set('bulkNextDate', '2026-07-01')
+        ->call('applyBulkEdit')
+        ->assertHasNoErrors()
+        ->assertSet('showBulkEdit', false)
+        ->assertSet('selectedIds', []);
+
+    foreach ([$a, $b] as $template) {
+        $template->refresh();
+
+        expect($template->status)->toBe(RecurringInvoiceStatus::Paused)
+            ->and($template->next_invoice_date->toDateString())->toBe('2026-07-01')
+            ->and($template->next_period_anchor->toDateString())->toBe('2026-07-01')
+            ->and(Activity::forSubject($template)->forEvent(ActivityEvent::Updated)->count())->toBe(1);
+    }
+
+    $untouched->refresh();
+
+    expect($untouched->status)->toBe(RecurringInvoiceStatus::Active)
+        ->and($untouched->next_invoice_date->toDateString())->toBe('2026-05-25');
+});
+
+it('leaves fields set to "no change" alone', function (): void {
+    $this->actingAs(bulkUser());
+
+    $template = filterTemplate('Bulk A Ltd', '2026-05-10');
+    $template->update(['auto_send' => true]);
+
+    Livewire::test('pages.recurring-invoices.index')
+        ->set('selectedIds', [$template->id])
+        ->call('openBulkEdit')
+        ->set('bulkNextDate', '2026-08-15')
+        ->call('applyBulkEdit')
+        ->assertHasNoErrors();
+
+    $template->refresh();
+
+    expect($template->next_invoice_date->toDateString())->toBe('2026-08-15')
+        ->and($template->status)->toBe(RecurringInvoiceStatus::Active)
+        ->and($template->auto_send)->toBeTrue()
+        ->and($template->payment_term_id)->toBeNull();
+});
+
+it('applies to every template matching the active filter across pages, and nothing else', function (): void {
+    $this->actingAs(bulkUser());
+
+    // Clock is frozen at 2026-05-15: five are due this month, two are not.
+    $due = collect(range(1, 5))->map(fn (int $n) => filterTemplate("Due {$n} Ltd", '2026-05-'.str_pad((string) ($n + 10), 2, '0', STR_PAD_LEFT)));
+    $later = filterTemplate('Later Ltd', '2026-06-01');
+    $paused = filterTemplate('Paused Ltd', '2026-05-12', RecurringInvoiceStatus::Paused);
+
+    Livewire::test('pages.recurring-invoices.index')
+        ->set('perPage', 2)
+        ->set('filterThisMonth', true)
+        ->call('markSelectAllFiltered')
+        ->assertSee('All 5 templates selected')
+        ->call('openBulkEdit')
+        ->set('bulkNextDate', '2026-09-01')
+        ->call('applyBulkEdit')
+        ->assertHasNoErrors();
+
+    expect($due->every(fn (RecurringInvoice $t) => $t->fresh()->next_invoice_date->toDateString() === '2026-09-01'))->toBeTrue()
+        ->and($later->fresh()->next_invoice_date->toDateString())->toBe('2026-06-01')
+        ->and($paused->fresh()->next_invoice_date->toDateString())->toBe('2026-05-12');
+});
+
+it('clears the selection when the list is filtered differently', function (): void {
+    $this->actingAs(bulkUser());
+
+    $template = filterTemplate('Bulk A Ltd', '2026-05-10');
+
+    Livewire::test('pages.recurring-invoices.index')
+        ->set('selectedIds', [$template->id])
+        ->set('filterStatus', 'active')
+        ->assertSet('selectedIds', []);
+
+    Livewire::test('pages.recurring-invoices.index')
+        ->call('markSelectAllFiltered')
+        ->set('search', 'Bulk')
+        ->assertSet('selectAllFiltered', false);
+
+    Livewire::test('pages.recurring-invoices.index')
+        ->set('selectedIds', [$template->id])
+        ->set('filterThisMonth', true)
+        ->assertSet('selectedIds', []);
+});
+
+it('selects and deselects a whole page', function (): void {
+    $this->actingAs(bulkUser());
+
+    $a = filterTemplate('Bulk A Ltd', '2026-05-10');
+    $b = filterTemplate('Bulk B Ltd', '2026-05-11');
+
+    Livewire::test('pages.recurring-invoices.index')
+        ->call('toggleSelectPage', [$a->id, $b->id])
+        ->assertSet('selectedIds', [$a->id, $b->id])
+        ->assertSee('2 selected')
+        ->call('toggleSelectPage', [$a->id, $b->id])
+        ->assertSet('selectedIds', []);
+});
+
+it('requires at least one change', function (): void {
+    $this->actingAs(bulkUser());
+
+    $template = filterTemplate('Bulk A Ltd', '2026-05-10');
+
+    Livewire::test('pages.recurring-invoices.index')
+        ->set('selectedIds', [$template->id])
+        ->call('openBulkEdit')
+        ->call('applyBulkEdit')
+        ->assertHasErrors(['bulkEdit'])
+        ->assertSet('showBulkEdit', true);
+
+    expect($template->fresh()->next_invoice_date->toDateString())->toBe('2026-05-10');
+});
+
+it('rejects invalid bulk values', function (): void {
+    $this->actingAs(bulkUser());
+
+    $template = filterTemplate('Bulk A Ltd', '2026-05-10');
+
+    Livewire::test('pages.recurring-invoices.index')
+        ->set('selectedIds', [$template->id])
+        ->call('openBulkEdit')
+        ->set('bulkStatus', 'completed')
+        ->set('bulkNextDate', 'not a date')
+        ->set('bulkPaymentTermId', (string) Str::uuid())
+        ->set('bulkAutoSend', 'maybe')
+        ->call('applyBulkEdit')
+        ->assertHasErrors(['bulkStatus', 'bulkNextDate', 'bulkPaymentTermId', 'bulkAutoSend']);
+
+    expect($template->fresh()->status)->toBe(RecurringInvoiceStatus::Active);
+});
+
+it('sets and clears the payment term in bulk', function (): void {
+    $this->actingAs(bulkUser());
+
+    $term = PaymentTerm::create(['name' => '30 Days', 'rule' => PaymentTermRule::DaysAfterInvoice, 'days' => 30]);
+    $template = filterTemplate('Bulk A Ltd', '2026-05-10');
+
+    Livewire::test('pages.recurring-invoices.index')
+        ->set('selectedIds', [$template->id])
+        ->call('openBulkEdit')
+        ->set('bulkPaymentTermId', $term->id)
+        ->call('applyBulkEdit')
+        ->assertHasNoErrors();
+
+    expect($template->fresh()->payment_term_id)->toBe($term->id);
+
+    Livewire::test('pages.recurring-invoices.index')
+        ->set('selectedIds', [$template->id])
+        ->call('openBulkEdit')
+        ->set('bulkPaymentTermId', 'none')
+        ->call('applyBulkEdit')
+        ->assertHasNoErrors();
+
+    expect($template->fresh()->payment_term_id)->toBeNull();
+});
+
+it('forbids bulk edit without update permission and changes nothing', function (): void {
+    $this->actingAs(riUserWith(['recurring-invoices-view-any']));
+
+    $template = filterTemplate('Bulk A Ltd', '2026-05-10');
+
+    Livewire::test('pages.recurring-invoices.index')
+        ->set('selectedIds', [$template->id])
+        ->call('openBulkEdit')
+        ->assertForbidden();
+
+    // The action is callable straight from the browser, so it must refuse on its own.
+    Livewire::test('pages.recurring-invoices.index')
+        ->set('selectedIds', [$template->id])
+        ->set('bulkStatus', 'paused')
+        ->call('applyBulkEdit')
+        ->assertForbidden();
+
+    expect($template->fresh()->status)->toBe(RecurringInvoiceStatus::Active);
+});
+
+it('ignores tampered ids and only changes templates that exist', function (): void {
+    $this->actingAs(bulkUser());
+
+    $template = filterTemplate('Bulk A Ltd', '2026-05-10');
+
+    Livewire::test('pages.recurring-invoices.index')
+        ->set('selectedIds', [$template->id, 'not-a-uuid', (string) Str::uuid(), "' OR 1=1 --"])
+        ->set('bulkStatus', 'paused')
+        ->call('applyBulkEdit')
+        ->assertHasNoErrors();
+
+    expect($template->fresh()->status)->toBe(RecurringInvoiceStatus::Paused)
+        ->and(RecurringInvoice::count())->toBe(1);
+});
+
+it('shows the bulk bar and a checkbox column only when appropriate', function (): void {
+    $this->actingAs(bulkUser());
+
+    $template = filterTemplate('Bulk A Ltd', '2026-05-10');
+
+    Livewire::test('pages.recurring-invoices.index')
+        ->assertDontSeeHtml('wire:click="openBulkEdit"')
+        ->set('selectedIds', [$template->id])
+        ->assertSeeHtml('wire:click="openBulkEdit"')
+        ->assertSee('1 selected');
+
+    $this->actingAs(riUserWith(['recurring-invoices-view-any']));
+
+    Livewire::test('pages.recurring-invoices.index')
+        ->set('selectedIds', [$template->id])
+        ->assertSee('1 selected')
+        ->assertDontSeeHtml('wire:click="openBulkEdit"');
 });
