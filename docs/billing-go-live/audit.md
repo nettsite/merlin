@@ -115,7 +115,7 @@ Also fixed: `documents:verify-audit-trail` crashed on every run after the first,
 
 ### Tomorrow — go live on the new instance
 
-1. Deploy `main` and create the DB (e.g. `merlin_nettsite`). Production runs on a box that is **not reachable from the internet**, so: set **Settings → General → Email Logo URL** to a public copy of the logo (e.g. on nettsite.co.za), which `{{company_logo}}` then uses; and leave `{{invoice_url}}` (client portal link) out of the invoice email, since clients can't open it. Set `.env`: `APP_ENV=production`, `NETTMAIL_DRIVER`, `NETTMAIL_FROM_ADDRESS`, `NETTMAIL_FROM_NAME`, `NETTMAIL_REPLY_TO_ADDRESS`.
+1. Deploy `main` and create the DB (e.g. `merlin_nettsite`). After every `git pull` run `composer install --no-dev --optimize-autoloader`, `npm ci && npm run build` and `php artisan optimize:clear`: a leftover route cache from an earlier deploy hides new routes and breaks the navigation with "Route [...] not defined". Production runs on a box that is **not reachable from the internet**, so: set **Settings → General → Email Logo URL** to a public copy of the logo (e.g. on nettsite.co.za), which `{{company_logo}}` then uses; and leave `{{invoice_url}}` (client portal link) out of the invoice email, since clients can't open it. Set `.env`: `APP_ENV=production`, `NETTMAIL_DRIVER`, `NETTMAIL_FROM_ADDRESS`, `NETTMAIL_FROM_NAME`, `NETTMAIL_REPLY_TO_ADDRESS`.
 2. Recommended: also set `NETTMAIL_SANDBOX_ADDRESS=william@nettsite.co.za` for a first smoke send on production.
 3. `php artisan migrate --force && php artisan db:seed --force`, then `ninja:import` as above.
    Copy settings, the NettMail invoice email, billing email texts and the logo from the test instance, instead of re-entering them:
