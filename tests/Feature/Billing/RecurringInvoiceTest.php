@@ -912,3 +912,77 @@ it('writes resolved placeholders into generated invoice lines and notes', functi
         ->and($doc->notes)->toBe('Service period November 2026')
         ->and($template->fresh()->lines->first()->description)->toBe('VPS100: SSD 100 Cloud VPS for :MONTH+1');
 });
+
+// --- "Generating this month" filter ---
+
+function filterTemplate(string $name, string $nextDate, RecurringInvoiceStatus $status = RecurringInvoiceStatus::Active): RecurringInvoice
+{
+    $client = app(PartyService::class)->createBusiness([
+        'business_type' => 'company',
+        'legal_name' => $name,
+        'status' => 'active',
+    ], ['client']);
+
+    return RecurringInvoice::create([
+        'client_id' => $client->id,
+        'frequency' => RecurringFrequency::Monthly,
+        'billing_period_day' => 1,
+        'start_date' => '2026-01-01',
+        'next_invoice_date' => $nextDate,
+        'status' => $status,
+        'currency' => 'ZAR',
+    ]);
+}
+
+it('lists only active templates a run this month would generate', function (): void {
+    $this->actingAs(riUserWith(['recurring-invoices-view-any']));
+
+    // Clock is frozen at 2026-05-15.
+    filterTemplate('Due Early May Ltd', '2026-05-03');
+    filterTemplate('Due Month End Ltd', '2026-05-31');
+    filterTemplate('Overdue April Ltd', '2026-04-20');
+    filterTemplate('Due June Ltd', '2026-06-01');
+    filterTemplate('Paused May Ltd', '2026-05-10', RecurringInvoiceStatus::Paused);
+    filterTemplate('Completed May Ltd', '2026-05-10', RecurringInvoiceStatus::Completed);
+
+    Livewire::test('pages.recurring-invoices.index')
+        ->assertSee('Generating this month')
+        ->assertSee('Due June Ltd')
+        ->assertSee('Paused May Ltd')
+        ->set('filterThisMonth', true)
+        ->assertSee('Due Early May Ltd')
+        ->assertSee('Due Month End Ltd')
+        ->assertSee('Overdue April Ltd')
+        ->assertDontSee('Due June Ltd')
+        ->assertDontSee('Paused May Ltd')
+        ->assertDontSee('Completed May Ltd');
+});
+
+it('matches exactly what the generation command would produce this month', function (): void {
+    filterTemplate('Due Month End Ltd', '2026-05-31');
+    filterTemplate('Due June Ltd', '2026-06-01');
+
+    Carbon::setTestNow('2026-05-31 23:30:00');
+
+    expect(RecurringInvoice::generatingThisMonth()->count())->toBe(1);
+
+    Carbon::setTestNow('2026-06-01 00:30:00');
+
+    expect(RecurringInvoice::generatingThisMonth()->count())->toBe(2);
+});
+
+it('keeps the this-month filter across page loads and can be switched off', function (): void {
+    $this->actingAs(riUserWith(['recurring-invoices-view-any']));
+
+    filterTemplate('Due June Ltd', '2026-06-01');
+
+    Livewire::test('pages.recurring-invoices.index')
+        ->set('filterThisMonth', true)
+        ->assertDontSee('Due June Ltd');
+
+    Livewire::test('pages.recurring-invoices.index')
+        ->assertSet('filterThisMonth', true)
+        ->assertDontSee('Due June Ltd')
+        ->set('filterThisMonth', false)
+        ->assertSee('Due June Ltd');
+});

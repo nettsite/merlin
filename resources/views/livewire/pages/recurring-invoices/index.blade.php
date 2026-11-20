@@ -54,6 +54,8 @@ new #[Layout('components.layout.app')] class extends Component
 
     public string $filterStatus = '';
 
+    public bool $filterThisMonth = false;
+
     public string $activeTab = 'details';
 
     public function mount(): void
@@ -63,6 +65,7 @@ new #[Layout('components.layout.app')] class extends Component
         $this->sortDir = session('ri.sortDir', 'desc');
         $this->filterFrequency = session('ri.filterFrequency', '');
         $this->filterStatus = session('ri.filterStatus', '');
+        $this->filterThisMonth = (bool) session('ri.filterThisMonth', false);
         $this->search = session('ri.search', '');
     }
 
@@ -94,6 +97,12 @@ new #[Layout('components.layout.app')] class extends Component
     public function updatedFilterStatus(): void
     {
         session(['ri.filterStatus' => $this->filterStatus]);
+        $this->resetPage();
+    }
+
+    public function updatedFilterThisMonth(): void
+    {
+        session(['ri.filterThisMonth' => $this->filterThisMonth]);
         $this->resetPage();
     }
 
@@ -259,6 +268,7 @@ new #[Layout('components.layout.app')] class extends Component
                 ))
                 ->when($this->filterFrequency, fn ($q) => $q->where('frequency', $this->filterFrequency))
                 ->when($this->filterStatus, fn ($q) => $q->where('status', $this->filterStatus))
+                ->when($this->filterThisMonth, fn ($q) => $q->generatingThisMonth())
                 ->when(
                     $this->sortBy === 'client',
                     fn ($q) => $q
@@ -313,6 +323,16 @@ new #[Layout('components.layout.app')] class extends Component
                     >{{ $label }}</button>
                 @endforeach
             </div>
+            <button
+                type="button"
+                wire:click="$toggle('filterThisMonth')"
+                title="Active templates whose next invoice date is on or before the end of this month (overdue ones included)"
+                @class([
+                    'px-3 py-1.5 text-sm rounded-md font-medium transition-colors',
+                    'bg-white text-ink shadow-sm ring-1 ring-inset ring-line' => $filterThisMonth,
+                    'text-ink-soft hover:text-ink' => ! $filterThisMonth,
+                ])
+            >Generating this month</button>
             <div class="flex-none">
                 <flux:select wire:model.live="filterFrequency" size="sm">
                     <option value="">Frequency</option>

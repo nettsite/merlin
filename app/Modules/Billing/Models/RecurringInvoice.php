@@ -81,6 +81,15 @@ class RecurringInvoice extends Model
         return $query->where('status', RecurringInvoiceStatus::Active->value);
     }
 
+    /**
+     * Active templates a generation run this month would produce: next date up to
+     * the end of the current month, including overdue ones (a run generates those too).
+     */
+    public function scopeGeneratingThisMonth(Builder $query): Builder
+    {
+        return $query->active()->whereDate('next_invoice_date', '<=', now()->endOfMonth()->toDateString());
+    }
+
     public function scopeDue(Builder $query): Builder
     {
         // whereDate compares date-only on every driver; a raw string compare
