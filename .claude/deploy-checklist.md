@@ -1,6 +1,8 @@
 # Merlin — Production Deploy Checklist
 
 This file is read by `/post-deploy-verify`. Add entries whenever a new class of production bug is discovered.
+
+**Deploying merlin.app:** run `./deploy.sh` in `/home/will/NettSite/merlin` (`--dry-run` first to see what is incoming). It refuses to run anywhere the app is not in production, so it cannot be run in the dev working tree by mistake. It is covered by `tests/Feature/DeployScriptTest.php`, which runs the real script in a sandbox with fake `php`/`composer`/`npm`.
 Each entry follows: **Symptom → Root cause → Detection probe → Fix**.
 
 ---
@@ -127,7 +129,7 @@ Each entry follows: **Symptom → Root cause → Detection probe → Fix**.
 - **Symptom:** App works but is slower than expected; or config values read from `.env` at runtime (risk of stale values).
 - **Root cause:** Laravel's config, route, and view caches not generated after deploy.
 - **Probe:** `test -f bootstrap/cache/config.php && echo CONFIG_CACHED || echo NOT_CACHED`
-- **Expected:** `CONFIG_CACHED` in production.
+- **Expected:** `CONFIG_CACHED` in production. **Exception: merlin.app** deliberately runs with config uncached (`NOT_CACHED` is correct there): settings in `.env` such as `NETTMAIL_SANDBOX_ADDRESS` must take effect immediately, and a cached config would silently ignore an edit. `./deploy.sh` clears every cache and rebuilds all but config (`php artisan optimize --except=config`; use the same flag when running `optimize` by hand). If `bootstrap/cache/config.php` exists on merlin.app, an `.env` edit is being ignored: run `php artisan config:clear`. This happened on 2026-11-20 after a manual plain `optimize`.
 - **Fix:** Run after every deploy:
   ```bash
   php artisan config:cache
