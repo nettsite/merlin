@@ -74,6 +74,20 @@ class DocumentService
         $doc->saveQuietly();
     }
 
+    /**
+     * Cancels a sent invoice that carries no value (e.g. the zero-total invoices
+     * imported from InvoiceNinja). Nothing is reversed because nothing was posted;
+     * anything with money on it needs a credit note instead.
+     */
+    public function cancelInvoice(Document $invoice, ?User $by): void
+    {
+        if (! $invoice->canBeCancelled()) {
+            throw InvalidDocumentStateException::cannotCancel($invoice);
+        }
+
+        $this->transition($invoice, 'cancelled', $by, 'Invoice cancelled (zero value).');
+    }
+
     public function recordResend(Document $doc, ?User $by): void
     {
         $this->recordActivity($doc, $by, 'resent', 'Invoice resent to client.');
@@ -763,9 +777,11 @@ class DocumentService
             ],
             'sales_invoice' => [
                 'draft' => ['sent'],
-                'sent' => ['partially_paid', 'paid'],
+                'sent' => ['partially_paid', 'paid', 'cancelled'],
                 'partially_paid' => ['paid'],
                 'paid' => [],
+                // Zero-value invoices only (see Document::canBeCancelled()); terminal.
+                'cancelled' => [],
             ],
             'quote' => [
                 'draft' => ['sent', 'declined', 'expired'],

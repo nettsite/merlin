@@ -7,6 +7,14 @@ use RuntimeException;
 
 class InvalidDocumentStateException extends RuntimeException
 {
+    public static function cannotCancel(Document $doc): self
+    {
+        return new self(sprintf(
+            'Invoice [%s] cannot be cancelled: only a sent invoice with a zero total and no payments or credit notes can be. Use a credit note for anything else.',
+            $doc->document_number,
+        ));
+    }
+
     public static function transition(Document $doc, string $to): self
     {
         return new self(sprintf(

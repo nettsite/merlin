@@ -366,6 +366,21 @@ class Document extends Model implements HasMedia
         return $query->where('document_type', 'purchase_invoice');
     }
 
+    /**
+     * A sent sales invoice that carries no value: nothing posted, nothing paid or
+     * credited. Only these may be cancelled; anything with money on it is reversed
+     * with a credit note.
+     */
+    public function canBeCancelled(): bool
+    {
+        return $this->document_type === 'sales_invoice'
+            && $this->status === 'sent'
+            && abs((float) $this->total) < 0.005
+            && abs((float) $this->amount_paid) < 0.005
+            && abs((float) $this->balance_due) < 0.005
+            && ! $this->childDocuments()->exists();
+    }
+
     public function scopeSalesInvoices(Builder $query): Builder
     {
         return $query->where('document_type', 'sales_invoice');

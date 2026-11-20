@@ -11,7 +11,10 @@ use App\Modules\Core\Models\DocumentLine;
 use App\Modules\Core\Services\DocumentService;
 use App\Modules\Purchasing\Services\ExchangeRateService;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Locked;
 use Livewire\Component;
 use Livewire\WithPagination;
 
@@ -22,7 +25,23 @@ new #[Layout('components.layout.app')] class extends Component
     // List filters
     public string $search = '';
 
+    // One of the tab values, or 'unpaid' / 'zero_total' (zero-value invoices: the clean-up view).
     public string $statusFilter = '';
+
+    // Bulk selection
+    /** @var array<int, string> */
+    public array $selectedIds = [];
+
+    public bool $selectAllFiltered = false;
+
+    public bool $showCancelModal = false;
+
+    // Shown in the cancel confirmation only; eligibility is re-checked on confirm.
+    #[Locked]
+    public int $cancelEligible = 0;
+
+    #[Locked]
+    public int $cancelSkipped = 0;
 
     public string $sortBy = 'issue_date';
 
@@ -106,16 +125,138 @@ new #[Layout('components.layout.app')] class extends Component
         $this->resetPage();
     }
 
+    // Changing what is listed clears the selection, so "all matching" can never
+    // silently mean a different set than the one the user selected.
+
     public function updatedSearch(): void
     {
         session(['si.search' => $this->search]);
         $this->resetPage();
+        $this->clearSelection();
     }
 
     public function updatedStatusFilter(): void
     {
         session(['si.statusFilter' => $this->statusFilter]);
         $this->resetPage();
+        $this->clearSelection();
+    }
+
+    public function updatedSelectedIds(): void
+    {
+        $this->selectAllFiltered = false;
+    }
+
+    // -------------------------------------------------------------------------
+    // Bulk selection and bulk cancel
+    // -------------------------------------------------------------------------
+
+    /**
+     * @param  array<int, string>  $pageIds
+     */
+    public function toggleSelectPage(array $pageIds): void
+    {
+        $allSelected = count($pageIds) > 0
+            && count(array_intersect($this->selectedIds, $pageIds)) === count($pageIds);
+
+        $this->selectedIds = $allSelected
+            ? array_values(array_diff($this->selectedIds, $pageIds))
+            : array_values(array_unique(array_merge($this->selectedIds, $pageIds)));
+
+        $this->selectAllFiltered = false;
+    }
+
+    public function markSelectAllFiltered(): void
+    {
+        $this->selectAllFiltered = true;
+    }
+
+    public function clearSelection(): void
+    {
+        $this->selectedIds = [];
+        $this->selectAllFiltered = false;
+    }
+
+    public function openCancelModal(): void
+    {
+        $this->authorize('update', new Document);
+
+        $documents = $this->targetInvoices();
+
+        if ($documents->isEmpty()) {
+            return;
+        }
+
+        $this->cancelEligible = $documents->filter->canBeCancelled()->count();
+        $this->cancelSkipped = $documents->count() - $this->cancelEligible;
+        $this->showCancelModal = true;
+    }
+
+    public function confirmCancel(): void
+    {
+        $this->authorize('update', new Document);
+
+        $documents = $this->targetInvoices();
+
+        foreach ($documents as $document) {
+            $this->authorize('update', $document);
+        }
+
+        // Re-checked here, not trusted from the modal: only invoices that carry no
+        // value are cancelled, the rest are skipped and reported.
+        $eligible = $documents->filter->canBeCancelled();
+
+        DB::transaction(function () use ($eligible): void {
+            foreach ($eligible as $document) {
+                app(DocumentService::class)->cancelInvoice($document, Auth::user());
+            }
+        });
+
+        $skipped = $documents->count() - $eligible->count();
+
+        session()->flash('success', "Cancelled {$eligible->count()} ".Str::plural('invoice', $eligible->count()).'.'
+            .($skipped > 0 ? " Skipped {$skipped} that are not zero-value sent invoices; use a credit note for those." : ''));
+
+        $this->showCancelModal = false;
+        $this->clearSelection();
+    }
+
+    /**
+     * The selected sales invoices (or every invoice matching the active filters).
+     * Ids come from the browser: only well-formed ones are looked up, and only
+     * sales invoices can ever be returned.
+     *
+     * @return \Illuminate\Database\Eloquent\Collection<int, Document>
+     */
+    private function targetInvoices(): \Illuminate\Database\Eloquent\Collection
+    {
+        $query = $this->selectAllFiltered
+            ? $this->filteredQuery()
+            : Document::salesInvoices()->joinBalance()
+                ->whereIn('documents.id', array_values(array_filter($this->selectedIds, fn ($id) => Str::isUuid($id))));
+
+        return $query->get();
+    }
+
+    /**
+     * The filtered set shown in the table, without relations, sorting or paging.
+     *
+     * @return \Illuminate\Database\Eloquent\Builder<Document>
+     */
+    private function filteredQuery(): \Illuminate\Database\Eloquent\Builder
+    {
+        return Document::salesInvoices()
+            ->joinBalance()
+            ->when($this->search, fn ($q) => $q->where(function ($q): void {
+                $q->where('document_number', 'like', "%{$this->search}%")
+                    ->orWhere('reference', 'like', "%{$this->search}%")
+                    ->orWhereHas('party.business', fn ($b) => $b->where('trading_name', 'like', "%{$this->search}%")
+                        ->orWhere('legal_name', 'like', "%{$this->search}%")
+                    );
+            }))
+            ->when($this->statusFilter === 'unpaid', fn ($q) => $q->whereIn('document_balances.status', ['sent', 'partially_paid']))
+            ->when($this->statusFilter === 'zero_total', fn ($q) => $q->where('documents.total', 0))
+            ->when($this->statusFilter && ! in_array($this->statusFilter, ['unpaid', 'zero_total'], true), fn ($q) => $q->where('document_balances.status', $this->statusFilter));
     }
 
     // -------------------------------------------------------------------------
@@ -527,18 +668,8 @@ new #[Layout('components.layout.app')] class extends Component
             ? "document_balances.{$this->sortBy}"
             : "documents.{$this->sortBy}";
 
-        $rows = Document::salesInvoices()
-            ->joinBalance()
+        $rows = $this->filteredQuery()
             ->with('party.business')
-            ->when($this->search, fn ($q) => $q->where(function ($q): void {
-                $q->where('document_number', 'like', "%{$this->search}%")
-                    ->orWhere('reference', 'like', "%{$this->search}%")
-                    ->orWhereHas('party.business', fn ($b) => $b->where('trading_name', 'like', "%{$this->search}%")
-                        ->orWhere('legal_name', 'like', "%{$this->search}%")
-                    );
-            }))
-            ->when($this->statusFilter === 'unpaid', fn ($q) => $q->whereIn('document_balances.status', ['sent', 'partially_paid']))
-            ->when($this->statusFilter && $this->statusFilter !== 'unpaid', fn ($q) => $q->where('document_balances.status', $this->statusFilter))
             ->when(
                 $this->sortBy === 'client',
                 fn ($q) => $q
@@ -548,6 +679,10 @@ new #[Layout('components.layout.app')] class extends Component
                 fn ($q) => $q->orderBy($sortColumn, $this->sortDir)->orderBy('documents.created_at', 'desc')
             )
             ->paginate(25);
+
+        $pageIds = collect($rows->items())->pluck('id')->all();
+        $allPageSelected = count($pageIds) > 0
+            && count(array_intersect($this->selectedIds, $pageIds)) === count($pageIds);
 
         $detail = null;
         $lines = collect();
@@ -567,6 +702,15 @@ new #[Layout('components.layout.app')] class extends Component
 
         return [
             'rows' => $rows,
+            'pageIds' => $pageIds,
+            'totalFiltered' => $rows->total(),
+            'allPageSelected' => $allPageSelected,
+            'selectedCount' => $this->selectAllFiltered ? $rows->total() : count($this->selectedIds),
+            // Zero-value invoices still sent, i.e. waiting to be cancelled.
+            'zeroTotalCount' => Document::salesInvoices()->joinBalance()
+                ->where('documents.total', 0)
+                ->where('document_balances.status', 'sent')
+                ->count(),
             'statusCounts' => Document::salesInvoices()
                 ->join('document_balances', 'document_balances.document_id', '=', 'documents.id')
                 ->selectRaw('document_balances.status, COUNT(*) as count')
@@ -615,8 +759,9 @@ new #[Layout('components.layout.app')] class extends Component
         @php
             $tabCounts = $statusCounts->toArray();
             $tabCounts['unpaid'] = ($statusCounts['sent'] ?? 0) + ($statusCounts['partially_paid'] ?? 0);
+            $tabCounts['zero_total'] = $zeroTotalCount;
         @endphp
-        @foreach(['' => 'All', 'unpaid' => 'Unpaid', 'draft' => 'Draft', 'sent' => 'Sent', 'partially_paid' => 'Partially Paid', 'paid' => 'Paid'] as $status => $label)
+        @foreach(['' => 'All', 'unpaid' => 'Unpaid', 'draft' => 'Draft', 'sent' => 'Sent', 'partially_paid' => 'Partially Paid', 'paid' => 'Paid', 'cancelled' => 'Cancelled', 'zero_total' => 'Zero total'] as $status => $label)
             <button
                 wire:click="$set('statusFilter', '{{ $status }}')"
                 @class([
@@ -634,11 +779,45 @@ new #[Layout('components.layout.app')] class extends Component
     </div>
 </div>
 
+{{-- Bulk action bar --}}
+@if($selectedCount > 0 || $selectAllFiltered)
+    <div class="flex items-center gap-3 border-b border-line bg-blue-50 px-6 py-2 text-sm">
+        <span class="font-medium text-ink">
+            @if($selectAllFiltered)
+                All {{ $totalFiltered }} {{ \Illuminate\Support\Str::plural('invoice', $totalFiltered) }} selected
+            @else
+                {{ $selectedCount }} selected
+            @endif
+        </span>
+
+        @if(! $selectAllFiltered && $selectedCount < $totalFiltered)
+            <button wire:click="markSelectAllFiltered" class="text-accent-600 hover:underline">
+                Select all {{ $totalFiltered }} matching
+            </button>
+        @endif
+
+        @can('update', new \App\Modules\Core\Models\Document)
+            <flux:button wire:click="openCancelModal" size="sm" variant="ghost" icon="x-circle">Cancel invoices</flux:button>
+        @endcan
+
+        <button wire:click="clearSelection" class="ml-auto text-ink-muted hover:text-ink">Clear</button>
+    </div>
+@endif
+
 {{-- Table --}}
 <div class="overflow-x-auto">
     <table class="w-full text-sm">
         <thead>
             <tr>
+                <th class="w-10 px-4 py-3">
+                    <input
+                        type="checkbox"
+                        wire:click="toggleSelectPage({{ json_encode($pageIds) }})"
+                        @checked($selectAllFiltered || $allPageSelected)
+                        class="rounded border-line"
+                        @if($selectAllFiltered) disabled @endif
+                    />
+                </th>
                 <x-crud.th column="document_number" :sort-by="$sortBy" :sort-dir="$sortDir">Number</x-crud.th>
                 <x-crud.th column="client" :sort-by="$sortBy" :sort-dir="$sortDir">Client</x-crud.th>
                 <x-crud.th column="issue_date" :sort-by="$sortBy" :sort-dir="$sortDir">Issue Date</x-crud.th>
@@ -654,6 +833,19 @@ new #[Layout('components.layout.app')] class extends Component
                     wire:click="openDetail('{{ $invoice->id }}')"
                     class="border-t border-line hover:bg-surface-alt cursor-pointer"
                 >
+                    {{-- The row opens the detail flyout; the checkbox must not. --}}
+                    <td class="px-4 py-3" x-on:click.stop>
+                        @if($selectAllFiltered)
+                            <input type="checkbox" checked disabled class="rounded border-line opacity-60" />
+                        @else
+                            <input
+                                type="checkbox"
+                                wire:model.live="selectedIds"
+                                value="{{ $invoice->id }}"
+                                class="rounded border-line"
+                            />
+                        @endif
+                    </td>
                     <td class="px-4 py-3 font-mono text-xs text-ink">
                         {{ $invoice->document_number ?? '—' }}
                         @if($invoice->reference)
@@ -704,7 +896,7 @@ new #[Layout('components.layout.app')] class extends Component
                 </tr>
             @empty
                 <tr>
-                    <td colspan="7" class="px-4 py-12 text-center">
+                    <td colspan="8" class="px-4 py-12 text-center">
                         <p class="font-medium text-ink">No sales invoices yet.</p>
                         @can('create', \App\Modules\Core\Models\Document::class)
                             <p class="mt-1 text-sm text-ink-muted">Create your first invoice to get started.</p>
@@ -719,6 +911,44 @@ new #[Layout('components.layout.app')] class extends Component
 <div class="px-6 py-4 border-t border-line">
     {{ $rows->links() }}
 </div>
+
+{{-- ===== Cancel invoices ===== --}}
+<flux:modal name="cancel-invoices" wire:model.self="showCancelModal" class="w-[480px]">
+    <div class="p-6 space-y-5">
+        <div>
+            <flux:heading size="lg" class="font-semibold">Cancel invoices</flux:heading>
+            <p class="mt-1 text-sm text-ink-muted">
+                Only sent invoices with a total of zero, and no payments or credit notes, can be cancelled. Nothing is posted or reversed.
+                Anything with money on it needs a credit note.
+            </p>
+        </div>
+
+        <div class="rounded-md border border-line bg-surface-alt px-4 py-3 text-sm">
+            <p>
+                <span class="font-medium text-ink">{{ $cancelEligible }}</span>
+                {{ \Illuminate\Support\Str::plural('invoice', $cancelEligible) }} will be cancelled.
+            </p>
+            @if($cancelSkipped > 0)
+                <p class="mt-1 text-warning">
+                    {{ $cancelSkipped }} selected {{ \Illuminate\Support\Str::plural('invoice', $cancelSkipped) }} can't be cancelled and will be left as they are.
+                </p>
+            @endif
+        </div>
+
+        <div class="flex justify-end gap-3 pt-2">
+            <flux:button variant="ghost" wire:click="$set('showCancelModal', false)">Back</flux:button>
+            <flux:button
+                variant="danger"
+                wire:click="confirmCancel"
+                wire:loading.attr="disabled"
+                wire:target="confirmCancel"
+                :disabled="$cancelEligible === 0"
+            >
+                Cancel {{ $cancelEligible }} {{ \Illuminate\Support\Str::plural('invoice', $cancelEligible) }}
+            </flux:button>
+        </div>
+    </div>
+</flux:modal>
 
 {{-- ===== Create Modal ===== --}}
 <flux:modal name="create-modal" wire:model.self="showCreateModal" class="w-[480px]">
