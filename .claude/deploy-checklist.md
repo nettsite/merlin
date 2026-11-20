@@ -141,8 +141,8 @@ Each entry follows: **Symptom → Root cause → Detection probe → Fix**.
 - **Symptom:** No restore point for the production database; the only backup cron on the box is for the old InvoiceNinja database.
 - **Root cause:** Backups are a cron entry on the host, not part of the deploy. `php artisan database:backup` (added 2026-11-20) writes `data-backups/<database>.sql.gz`, rotated to `.sql.bak.gz` and `.sql.bbk.gz`; nothing runs it unless cron does.
 - **Probe:** `crontab -l | grep database:backup` and `ls -l --time-style=long-iso data-backups/` in the app root.
-- **Expected:** One cron line; three files (`.sql.gz`, `.sql.bak.gz`, `.sql.bbk.gz`), the newest modified within the last 26 hours, mode `0600`, folder `0700`.
-- **Fix:** `30 1 * * * cd <app root> && /usr/bin/php artisan database:backup >> storage/logs/backup.log 2>&1`. The dump covers the database only; back up `storage/app` and `.env` separately.
+- **Expected:** One cron line (daily at 12:00); three files (`.sql.gz`, `.sql.bak.gz`, `.sql.bbk.gz`), the newest modified within the last 26 hours, mode `0600`, folder `0700`.
+- **Fix:** `0 12 * * * cd <app root> && /usr/bin/php artisan database:backup >> storage/logs/backup.log 2>&1` (noon: the box sleeps overnight, and the iDrive job runs at 16:00, after it). The dump covers the database only; back up `storage/app` and `.env` separately.
 
 ### Stale Route/View Cache After `git pull`
 - **Symptom:** Right after a `git pull` deploy, pages that use the navigation (e.g. the dashboard) return a server error: `Route [payment-notifications.index] not defined`. The route is in `routes/web.php`.

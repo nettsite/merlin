@@ -132,9 +132,9 @@ Also fixed: `documents:verify-audit-trail` crashed on every run after the first,
 4. `billing:generate-recurring`, review the drafts.
 5. Go live: clear `NETTMAIL_SANDBOX_ADDRESS` (blank = real delivery in production), run `php artisan config:clear` (or `config:cache`), then Send.
 6. Run `/post-deploy-verify`.
-7. Nightly database backup (cron entry on the production box, runs before the iDrive job):
+7. Daily database backup (cron entry on the production box). It runs at noon because the box sleeps overnight, which is before the 16:00 iDrive job:
    ```bash
-   30 1 * * * cd /home/will/NettSite/merlin && /usr/bin/php artisan database:backup >> storage/logs/backup.log 2>&1
+   0 12 * * * cd /home/will/NettSite/merlin && /usr/bin/php artisan database:backup >> storage/logs/backup.log 2>&1
    ```
    `database:backup` writes three fixed files to `data-backups/` in the app root, rotating on each successful run: `merlin_nettsite.sql.gz` (newest) → `merlin_nettsite.sql.bak.gz` → `merlin_nettsite.sql.bbk.gz`. A failed dump leaves all three untouched. The dump holds the database only: uploaded files (logo, purchase-invoice source documents in `storage/app`) and `.env` need their own backup.
    Restore (try it once into a scratch database before you ever need it):
