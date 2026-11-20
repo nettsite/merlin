@@ -31,7 +31,10 @@
 
             <livewire:incident-dashboard-panel />
 
-            <livewire:unpaid-invoices-panel />
+            <div class="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
+                <livewire:unpaid-invoices-panel />
+                <livewire:revenue-panel />
+            </div>
 
         </div>
     </div>
