@@ -31,11 +31,7 @@
 
             <livewire:incident-dashboard-panel />
 
-            <div class="bg-surface-alt overflow-hidden rounded-xl border border-line">
-                <div class="p-6 text-ink">
-                    {{ __("You're logged in!") }}
-                </div>
-            </div>
+            <livewire:unpaid-invoices-panel />
 
         </div>
     </div>

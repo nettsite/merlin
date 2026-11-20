@@ -108,7 +108,15 @@ new #[Layout('components.layout.app')] class extends Component
         $this->createForm['issue_date'] = now()->toDateString();
         $this->sortBy = session('si.sortBy', 'issue_date');
         $this->sortDir = session('si.sortDir', 'desc');
-        $this->statusFilter = session('si.statusFilter', '');
+        // A link (e.g. the dashboard's "View all") can open a specific tab with ?status=;
+        // only known tab names are honoured and the choice is remembered like a click.
+        $requested = request()->query('status');
+
+        $this->statusFilter = is_string($requested) && in_array($requested, ['unpaid', 'draft', 'sent', 'partially_paid', 'paid', 'cancelled', 'zero_total'], true)
+            ? $requested
+            : session('si.statusFilter', '');
+
+        session(['si.statusFilter' => $this->statusFilter]);
         $this->search = session('si.search', '');
     }
 
