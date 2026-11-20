@@ -128,9 +128,19 @@ Also fixed: `documents:verify-audit-trail` crashed on every run after the first,
    rm ~/merlin-settings.json   # contains banking details
    ```
    The dry run should end "0 skipped". Account, payment-term and template references are matched by code/name, so run the import **after** seeding.
+   Afterwards check Settings → Billing → Email → **Invoice Email** is set: a setting left blank on the source is exported as blank and overwrites what the seeder selected (this happened on the first production import, 2026-11-20).
 4. `billing:generate-recurring`, review the drafts.
 5. Go live: clear `NETTMAIL_SANDBOX_ADDRESS` (blank = real delivery in production), run `php artisan config:clear` (or `config:cache`), then Send.
 6. Run `/post-deploy-verify`.
+7. Nightly database backup (cron entry on the production box, runs before the iDrive job):
+   ```bash
+   30 1 * * * cd /home/will/NettSite/merlin && /usr/bin/php artisan database:backup >> storage/logs/backup.log 2>&1
+   ```
+   `database:backup` writes three fixed files to `data-backups/` in the app root, rotating on each successful run: `merlin_nettsite.sql.gz` (newest) → `merlin_nettsite.sql.bak.gz` → `merlin_nettsite.sql.bbk.gz`. A failed dump leaves all three untouched. The dump holds the database only: uploaded files (logo, purchase-invoice source documents in `storage/app`) and `.env` need their own backup.
+   Restore (try it once into a scratch database before you ever need it):
+   ```bash
+   gunzip -c data-backups/merlin_nettsite.sql.gz | mariadb merlin_restore_test
+   ```
 
 ## OK / verified
 

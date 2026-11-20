@@ -134,6 +134,22 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Database backups (php artisan database:backup)
+    |--------------------------------------------------------------------------
+    |
+    | The dump is written to `path` (outside public/, git-ignored) as
+    | <database>.sql.gz; each run first rotates the previous one to
+    | <database>.sql.bak.gz and that to <database>.sql.bbk.gz, so exactly
+    | three fixed filenames exist at any time.
+    |
+    */
+
+    'backup' => [
+        'path' => base_path('data-backups'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Redis Databases
     |--------------------------------------------------------------------------
     |
