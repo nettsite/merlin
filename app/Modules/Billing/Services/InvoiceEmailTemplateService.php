@@ -55,6 +55,70 @@ class InvoiceEmailTemplateService
     }
 
     /**
+     * Render the payment receipt email for a payment Document.
+     *
+     * @return array{subject: string, html: string}
+     */
+    public function renderReceipt(Document $payment, string $recipientFirstName = ''): array
+    {
+        $values = $this->receiptMergeTagValues($payment, $recipientFirstName);
+
+        $emailTemplate = BillingEmailTemplate::forReceipt();
+
+        if ($emailTemplate === null) {
+            throw new RuntimeException('No receipt email template configured. Run the BillingEmailTemplateSeeder.');
+        }
+
+        $subject = $this->substitute($emailTemplate->subject, $values);
+        $body = $this->substitute($emailTemplate->body, $this->htmlValues($values));
+
+        return ['subject' => $subject, 'html' => $this->wrapInBaseTemplate($body, $this->htmlValues($values))];
+    }
+
+    /**
+     * Available shortcodes for the payment receipt email template.
+     *
+     * @return array<string, string>
+     */
+    public static function availableReceiptShortcodes(): array
+    {
+        return [
+            '{{amount}}' => 'Amount paid (currency + amount)',
+            '{{date}}' => 'Date the payment was recorded (e.g. 23 Nov 2026)',
+            '{{reference}}' => 'Payment reference (blank if not set)',
+            '{{invoices}}' => 'Invoice number(s) the payment was applied to',
+            '{{client_name}}' => 'Client display name',
+            '{{first_name}}' => 'First name of the contact receiving the email',
+            '{{company_name}}' => 'Your company name',
+            '{{company_logo}}' => 'Your logo (from Settings → General) as an image',
+            '{{company_logo_url}}' => 'Web address of your logo, for an image block',
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function receiptMergeTagValues(Document $payment, string $recipientFirstName): array
+    {
+        $invoiceNumbers = $payment->parentDocuments()
+            ->wherePivot('relationship_type', 'payment_for')
+            ->pluck('document_number')
+            ->filter()
+            ->implode(', ');
+
+        return [
+            'client_name' => $payment->party?->displayName ?? '',
+            'first_name' => $recipientFirstName,
+            'amount' => $payment->currency.' '.number_format((float) $payment->total, 2),
+            'date' => $payment->issue_date ? $payment->issue_date->format('d M Y') : '',
+            'reference' => $payment->reference ?? '',
+            'invoices' => $invoiceNumbers,
+            'company_name' => $this->companySettings->name ?: (string) config('app.name'),
+            'company_logo_url' => $this->companyLogoUrl(),
+        ];
+    }
+
+    /**
      * Available shortcodes for use in email template subject and body fields.
      *
      * @return array<string, string>

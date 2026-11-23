@@ -259,6 +259,7 @@ class Document extends Model implements HasMedia
     {
         $this->addMediaCollection('source_document')->singleFile();
         $this->addMediaCollection('invoice_pdf')->singleFile();
+        $this->addMediaCollection('payment_receipt')->singleFile();
         $this->addMediaCollection('attachments');
     }
 

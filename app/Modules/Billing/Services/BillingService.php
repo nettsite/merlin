@@ -2,6 +2,7 @@
 
 namespace App\Modules\Billing\Services;
 
+use App\Mail\PaymentReceiptMail;
 use App\Mail\SalesInvoiceMail;
 use App\Modules\Billing\Settings\BillingSettings;
 use App\Modules\Core\Models\Document;
@@ -15,8 +16,10 @@ use App\Modules\Core\Settings\CurrencySettings;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use RuntimeException;
+use Throwable;
 
 class BillingService
 {
@@ -144,7 +147,7 @@ class BillingService
 
         // Transactional so a rejected payment (e.g. overpayment guard in
         // DocumentService) doesn't leave an orphaned payment document behind.
-        return DB::transaction(function () use ($invoice, $amount, $date, $reference, $bankAccountId) {
+        $payment = DB::transaction(function () use ($invoice, $amount, $date, $reference, $bankAccountId) {
             $payment = Document::create([
                 'document_type' => 'payment',
                 'direction' => 'inbound',
@@ -172,6 +175,69 @@ class BillingService
 
             return $payment;
         });
+
+        // Outside the transaction: a receipt-sending failure must not roll back an
+        // already-committed payment.
+        $this->sendReceipt($payment);
+
+        return $payment;
+    }
+
+    /**
+     * Generate a PDF receipt for the payment and store it in the payment_receipt media collection.
+     */
+    public function generateReceiptPdf(Document $payment): void
+    {
+        $payment->load('party.business', 'party.addresses');
+        $invoices = $payment->parentDocuments()->wherePivot('relationship_type', 'payment_for')->get();
+
+        $pdf = Pdf::loadView('pdf.payment-receipt', [
+            'payment' => $payment,
+            'invoices' => $invoices,
+        ]);
+
+        $payment->clearMediaCollection('payment_receipt');
+
+        $payment->addMediaFromString($pdf->output())
+            ->usingFileName('receipt-'.($payment->document_number ?? $payment->id).'.pdf')
+            ->usingName('Receipt '.($payment->document_number ?? $payment->id))
+            ->toMediaCollection('payment_receipt');
+    }
+
+    /**
+     * Email the payment receipt to the client's invoice contacts. Logged and
+     * swallowed on failure — a receipt that fails to send must not undo an
+     * already-recorded payment.
+     */
+    public function sendReceipt(Document $payment): void
+    {
+        try {
+            $recipientEmails = $this->resolveRecipients($payment);
+
+            if ($recipientEmails === []) {
+                return;
+            }
+
+            $this->generateReceiptPdf($payment);
+            $payment->refresh();
+
+            $templates = app(InvoiceEmailTemplateService::class);
+
+            foreach ($recipientEmails as $recipient) {
+                $rendered = $templates->renderReceipt($payment, $recipient['name'] !== '' ? explode(' ', $recipient['name'])[0] : '');
+
+                Mail::mailer('nettmail')->to($recipient['email'])->send(
+                    new PaymentReceiptMail($payment, $rendered['subject'], $rendered['html']),
+                );
+            }
+
+            $payment->activities()->create([
+                'activity_type' => 'receipt_sent',
+                'description' => 'Payment receipt emailed to '.implode(', ', array_column($recipientEmails, 'email')).'.',
+            ]);
+        } catch (Throwable $e) {
+            Log::error('Failed to send payment receipt.', ['payment_id' => $payment->id, 'exception' => $e]);
+        }
     }
 
     /**

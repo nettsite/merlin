@@ -32,7 +32,7 @@ trait HasDocumentNumber
         $prefix = config("documents.types.{$type}.prefix", 'DOC');
 
         if (config("documents.types.{$type}.number_format") === 'sequential') {
-            return static::nextSequentialNumber($prefix);
+            return static::nextSequentialNumber($prefix, $type);
         }
 
         $year = now()->year;
@@ -58,12 +58,16 @@ trait HasDocumentNumber
     }
 
     /**
-     * Prefix + plain integer (R6537). Max is computed numerically in PHP: a
-     * string max() ranks R999 above R6536.
+     * Prefix + plain integer (R6537), or plain digits alone when the type's
+     * prefix is empty. Max is computed numerically in PHP: a string max()
+     * ranks R999 above R6536. Scoped by document_type as well as the prefix
+     * LIKE pattern, so an empty prefix doesn't force a scan of every row in
+     * the table across every document type.
      */
-    private static function nextSequentialNumber(string $prefix): string
+    private static function nextSequentialNumber(string $prefix, string $type): string
     {
         $last = static::withTrashed()
+            ->where('document_type', $type)
             ->where('document_number', 'like', "{$prefix}%")
             ->pluck('document_number')
             ->map(fn (string $number): ?int => preg_match('/^'.preg_quote($prefix, '/').'(\d+)$/', $number, $matches) === 1

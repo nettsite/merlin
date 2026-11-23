@@ -45,4 +45,9 @@ class BillingEmailTemplate extends Model
     {
         return static::where('type', 'invoice')->first();
     }
+
+    public static function forReceipt(): ?self
+    {
+        return static::where('type', 'receipt')->first();
+    }
 }

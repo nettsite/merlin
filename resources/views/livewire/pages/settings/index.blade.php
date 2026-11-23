@@ -485,6 +485,8 @@ new #[Layout('components.layout.app')] class extends Component
                         <p class="text-xs text-ink-soft mt-0.5">
                             @if($tmpl->type === 'invoice')
                                 New invoice
+                            @elseif($tmpl->type === 'receipt')
+                                Payment receipt
                             @elseif($tmpl->offset_days < 0)
                                 {{ abs($tmpl->offset_days) }}d before due
                             @else
@@ -634,7 +636,7 @@ new #[Layout('components.layout.app')] class extends Component
                         <div class="rounded-md border border-line bg-surface-alt p-4 text-sm">
                             <p class="text-xs font-semibold text-ink-muted uppercase tracking-wide mb-2">Available variables</p>
                             <div class="flex flex-wrap gap-2">
-                                @foreach (InvoiceEmailTemplateService::availableShortcodes() as $tag => $desc)
+                                @foreach (($tplType === 'receipt' ? InvoiceEmailTemplateService::availableReceiptShortcodes() : InvoiceEmailTemplateService::availableShortcodes()) as $tag => $desc)
                                     <button
                                         type="button"
                                         title="{{ $desc }}"

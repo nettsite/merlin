@@ -26,6 +26,7 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
     Route::livewire('clients/{id}', 'pages.clients.show')->name('clients.show');
     Route::livewire('payment-terms', 'pages.payment-terms.index')->name('payment-terms.index');
     Route::livewire('sales-invoices', 'pages.sales-invoices.index')->name('sales-invoices.index');
+    Route::livewire('payments', 'pages.payments.index')->name('payments.index');
     Route::livewire('quotes', 'pages.quotes.index')->name('quotes.index');
     Route::livewire('credit-notes', 'pages.credit-notes.index')->name('credit-notes.index');
     Route::livewire('recurring-invoices', 'pages.recurring-invoices.index')->name('recurring-invoices.index');

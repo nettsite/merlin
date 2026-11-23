@@ -99,7 +99,10 @@ return [
         'payment' => [
             'label' => 'Payment',
             'direction' => 'inbound',
-            'prefix' => 'PAY',
+            // Plain digits, no prefix/year: existing PAY-2026-NNNNN numbers
+            // are left as they are; only new payments get this simpler form.
+            'prefix' => '',
+            'number_format' => 'sequential',
             'default_status' => 'draft',
             'requires_due_date' => false,
         ],

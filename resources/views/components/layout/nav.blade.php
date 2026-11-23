@@ -59,6 +59,13 @@
         >Sales Invoices</flux:sidebar.item>
 
         <flux:sidebar.item
+            icon="credit-card"
+            href="{{ route('payments.index') }}"
+            :current="request()->routeIs('payments.*')"
+            wire:navigate
+        >Payments</flux:sidebar.item>
+
+        <flux:sidebar.item
             icon="document-check"
             href="{{ route('quotes.index') }}"
             :current="request()->routeIs('quotes.*')"

@@ -43,6 +43,14 @@ class BillingEmailTemplateSeeder extends Seeder
                 'enabled' => true,
             ],
             [
+                'type' => 'receipt',
+                'name' => 'Payment Receipt',
+                'subject' => 'Payment received — {{invoices}}',
+                'body' => '<p>Hi {{client_name}},</p><p>Thank you, we\'ve received your payment of {{amount}} on {{date}}.</p><ul><li>Reference: {{reference}}</li><li>For invoice(s): {{invoices}}</li></ul><p>Your receipt is attached to this email.</p><p>Thank you for your business.</p>',
+                'offset_days' => null,
+                'enabled' => true,
+            ],
+            [
                 'type' => 'reminder',
                 'name' => 'Final Notice',
                 'subject' => 'FINAL NOTICE: Invoice {{invoice_number}} — immediate payment required',
