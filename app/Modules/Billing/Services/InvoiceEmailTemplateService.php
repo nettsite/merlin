@@ -15,6 +15,8 @@ class InvoiceEmailTemplateService
 {
     private const DEFAULT_INVOICE_SUBJECT = 'Invoice {{invoice_number}} from {{company_name}}';
 
+    private const DEFAULT_RECEIPT_SUBJECT = 'Payment received — {{invoices}}';
+
     public function __construct(
         private readonly BillingSettings $billingSettings,
         private readonly CompanySettings $companySettings,
@@ -55,13 +57,25 @@ class InvoiceEmailTemplateService
     }
 
     /**
-     * Render the payment receipt email for a payment Document.
+     * Render the payment receipt email for a payment Document. Uses the NettMail
+     * template chosen as the payment email (the whole email, edited in NettMail)
+     * when one is set, the same way invoices do; otherwise falls back to the
+     * "Payment Receipt" BillingEmailTemplate wrapped in the base layout.
      *
      * @return array{subject: string, html: string}
      */
     public function renderReceipt(Document $payment, string $recipientFirstName = ''): array
     {
         $values = $this->receiptMergeTagValues($payment, $recipientFirstName);
+
+        if (($paymentEmail = $this->paymentEmailTemplate()) !== null) {
+            $renderer = new MergeTagRenderer;
+
+            return [
+                'subject' => $renderer->render($paymentEmail->subject ?: self::DEFAULT_RECEIPT_SUBJECT, $values),
+                'html' => $renderer->render($paymentEmail->html ?? '', $this->htmlValues($values)),
+            ];
+        }
 
         $emailTemplate = BillingEmailTemplate::forReceipt();
 
@@ -145,6 +159,13 @@ class InvoiceEmailTemplateService
     private function invoiceEmailTemplate(): ?Template
     {
         $templateId = $this->billingSettings->invoice_email_template_id;
+
+        return $templateId === null ? null : Template::find($templateId);
+    }
+
+    private function paymentEmailTemplate(): ?Template
+    {
+        $templateId = $this->billingSettings->payment_email_template_id;
 
         return $templateId === null ? null : Template::find($templateId);
     }

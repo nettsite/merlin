@@ -27,6 +27,9 @@ class BillingSettings extends Settings
     /** NettMail template used as the complete invoice email (subject + body). Null = Settings text in the base layout. */
     public ?string $invoice_email_template_id = null;
 
+    /** NettMail template used as the complete payment receipt email (subject + body). Null = Email Templates tab text. */
+    public ?string $payment_email_template_id = null;
+
     /** Printed under "Invoice Terms:" when an invoice has no terms of its own. */
     public string $default_invoice_terms = '';
 

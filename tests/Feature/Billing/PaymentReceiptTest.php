@@ -4,12 +4,15 @@ use App\Mail\PaymentReceiptMail;
 use App\Modules\Accounting\Models\Account;
 use App\Modules\Billing\Models\BillingEmailTemplate;
 use App\Modules\Billing\Services\BillingService;
+use App\Modules\Billing\Settings\BillingSettings;
 use App\Modules\Core\Models\Document;
 use App\Modules\Core\Models\Party;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Services\DocumentService;
 use App\Modules\Core\Services\PartyService;
 use Illuminate\Support\Facades\Mail;
+use Nettsite\NettMail\Core\Domain\Templates\TemplateType;
+use NettSite\NettMail\Models\Template;
 
 beforeEach(function (): void {
     BillingEmailTemplate::firstOrCreate(
@@ -165,6 +168,33 @@ it('does not reuse a sales invoice number when both share the sequential numberi
 
     expect($paymentOne->document_number)->not->toBe($paymentTwo->document_number)
         ->and($invoiceOne->document_number)->not->toBe($paymentOne->document_number);
+});
+
+it('uses the NettMail payment email over the Templates tab text when one is configured', function (): void {
+    Mail::fake();
+
+    $template = Template::create([
+        'name' => 'Payment Email',
+        'type' => TemplateType::Transactional,
+        'subject' => 'Received {{amount}}',
+        'html' => '<p>Dear {{first_name}}, thanks.</p>',
+    ]);
+    $settings = app(BillingSettings::class);
+    $settings->payment_email_template_id = $template->id;
+    $settings->save();
+
+    $client = receiptClient();
+    receiptRecipient($client, 'billing@client.com', 'Robin');
+    $invoice = receiptSentInvoice($client, 500.00);
+
+    app(BillingService::class)->recordPayment($invoice, [
+        'amount' => 500.00,
+        'date' => now()->toDateString(),
+    ], null);
+
+    Mail::assertSent(PaymentReceiptMail::class, fn (PaymentReceiptMail $mail): bool => $mail->hasTo('billing@client.com')
+        && $mail->emailHtml === '<p>Dear Robin, thanks.</p>'
+    );
 });
 
 it('does not roll back the payment when sending the receipt fails', function (): void {

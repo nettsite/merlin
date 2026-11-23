@@ -93,6 +93,8 @@ new #[Layout('components.layout.app')] class extends Component
 
     public ?string $invoiceEmailTemplateId = null;
 
+    public ?string $paymentEmailTemplateId = null;
+
     public string $defaultInvoiceTerms = '';
 
     public string $defaultInvoiceFooter = '';
@@ -156,6 +158,7 @@ new #[Layout('components.layout.app')] class extends Component
         $this->billingPeriodDay = $billing->billing_period_day;
         $this->baseEmailTemplateId = $billing->base_email_template_id;
         $this->invoiceEmailTemplateId = $billing->invoice_email_template_id;
+        $this->paymentEmailTemplateId = $billing->payment_email_template_id;
         $this->defaultInvoiceTerms = $billing->default_invoice_terms;
         $this->defaultInvoiceFooter = $billing->default_invoice_footer;
 
@@ -183,6 +186,7 @@ new #[Layout('components.layout.app')] class extends Component
     {
         return BillingEmailTemplate::query()
             ->when($this->invoiceEmailTemplateId, fn ($query) => $query->where('type', '!=', 'invoice'))
+            ->when($this->paymentEmailTemplateId, fn ($query) => $query->where('type', '!=', 'receipt'))
             ->orderByRaw("type = 'invoice' DESC")
             ->orderBy('offset_days');
     }
@@ -338,6 +342,7 @@ new #[Layout('components.layout.app')] class extends Component
             'billingPeriodDay' => 'required|integer|min:1|max:28',
             'baseEmailTemplateId' => 'nullable|uuid|exists:nettmail_templates,id',
             'invoiceEmailTemplateId' => 'nullable|uuid|exists:nettmail_templates,id',
+            'paymentEmailTemplateId' => 'nullable|uuid|exists:nettmail_templates,id',
             'defaultInvoiceTerms' => 'nullable|string|max:2000',
             'defaultInvoiceFooter' => 'nullable|string|max:2000',
         ]);
@@ -350,6 +355,7 @@ new #[Layout('components.layout.app')] class extends Component
         $settings->billing_period_day = $this->billingPeriodDay;
         $settings->base_email_template_id = $this->baseEmailTemplateId ?: null;
         $settings->invoice_email_template_id = $this->invoiceEmailTemplateId ?: null;
+        $settings->payment_email_template_id = $this->paymentEmailTemplateId ?: null;
         $settings->default_invoice_terms = $this->defaultInvoiceTerms;
         $settings->default_invoice_footer = $this->defaultInvoiceFooter;
         $settings->save();
@@ -1012,6 +1018,18 @@ new #[Layout('components.layout.app')] class extends Component
                             </flux:select>
                             <flux:description>The complete invoice email: subject and body, with merge tags such as <code class="text-xs bg-surface-alt px-1 rounded">@{{first_name}}</code>, <code class="text-xs bg-surface-alt px-1 rounded">@{{invoice_number}}</code> and <code class="text-xs bg-surface-alt px-1 rounded">@{{amount_due}}</code>.</flux:description>
                             <flux:error name="invoiceEmailTemplateId" />
+                        </flux:field>
+
+                        <flux:field>
+                            <flux:label>Payment Email</flux:label>
+                            <flux:select wire:model="paymentEmailTemplateId" class="max-w-sm">
+                                <flux:select.option value="">— Use the Email Templates tab text —</flux:select.option>
+                                @foreach ($emailTemplates as $template)
+                                    <flux:select.option value="{{ $template->id }}">{{ $template->name }}</flux:select.option>
+                                @endforeach
+                            </flux:select>
+                            <flux:description>The complete payment receipt email: subject and body, with merge tags such as <code class="text-xs bg-surface-alt px-1 rounded">@{{first_name}}</code>, <code class="text-xs bg-surface-alt px-1 rounded">@{{amount}}</code> and <code class="text-xs bg-surface-alt px-1 rounded">@{{invoices}}</code>.</flux:description>
+                            <flux:error name="paymentEmailTemplateId" />
                         </flux:field>
 
                         <flux:field>
