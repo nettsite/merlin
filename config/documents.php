@@ -1,5 +1,7 @@
 <?php
 
+use App\Modules\Billing\Settings\BillingSettings;
+
 return [
 
     /*
@@ -103,6 +105,8 @@ return [
             // are left as they are; only new payments get this simpler form.
             'prefix' => '',
             'number_format' => 'sequential',
+            // User-configurable floor: Settings -> Billing -> "Next Receipt Number".
+            'next_number_setting' => [BillingSettings::class, 'next_receipt_number'],
             'default_status' => 'draft',
             'requires_due_date' => false,
         ],

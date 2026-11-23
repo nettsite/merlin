@@ -5,6 +5,7 @@ use App\Modules\Accounting\Models\Account;
 use App\Modules\Billing\Models\BillingEmailTemplate;
 use App\Modules\Billing\Services\BillingService;
 use App\Modules\Core\Models\Document;
+use App\Modules\Core\Models\Party;
 use App\Modules\Core\Models\User;
 use App\Modules\Core\Services\DocumentService;
 use App\Modules\Core\Services\PartyService;
@@ -112,5 +113,95 @@ it('refuses to resend a receipt without the send permission', function (): void 
 
     Livewire::test('pages.payments.index')
         ->call('sendReceipt', $payment->id)
+        ->assertForbidden();
+});
+
+/** @return array{0: Party, 1: Document, 2: Document} */
+function ppClientWithTwoInvoices(): array
+{
+    BillingEmailTemplate::firstOrCreate(
+        ['type' => 'receipt', 'name' => 'Payment Receipt'],
+        ['subject' => 'Payment received', 'body' => '<p>Thanks {{client_name}}.</p>', 'enabled' => true],
+    );
+
+    $client = app(PartyService::class)->createBusiness([
+        'business_type' => 'company',
+        'legal_name' => 'Multi Invoice Client',
+        'trading_name' => 'Multi Invoice Client',
+        'status' => 'active',
+    ], ['client']);
+
+    $incomeAccount = Account::factory()->create();
+
+    $makeInvoice = function (float $amount) use ($client, $incomeAccount): Document {
+        $invoice = app(BillingService::class)->createDraft($client, ['issue_date' => now()->toDateString()]);
+        $invoice->lines()->create([
+            'line_number' => 1,
+            'type' => 'service',
+            'description' => 'Consulting',
+            'account_id' => $incomeAccount->id,
+            'quantity' => 1,
+            'unit_price' => $amount,
+            'discount_percent' => 0,
+            'discount_amount' => 0,
+            'tax_rate' => 0,
+        ]);
+        $invoice->recalculateTotals();
+        app(DocumentService::class)->markAsSent($invoice, User::factory()->create());
+
+        return $invoice->fresh();
+    };
+
+    return [$client, $makeInvoice(300.00), $makeInvoice(200.00)];
+}
+
+it('shows a client\'s open invoices once chosen in the new payment modal', function (): void {
+    [$client, $invoiceOne, $invoiceTwo] = ppClientWithTwoInvoices();
+
+    $this->actingAs(paymentsPageUser(['can-record-payments']));
+
+    Livewire::test('pages.payments.index')
+        ->call('openNewPaymentModal')
+        ->set('newPaymentClientId', $client->id)
+        ->assertSee($invoiceOne->document_number)
+        ->assertSee($invoiceTwo->document_number);
+});
+
+it('records one payment across both selected invoices', function (): void {
+    Mail::fake();
+    [$client, $invoiceOne, $invoiceTwo] = ppClientWithTwoInvoices();
+
+    $this->actingAs(paymentsPageUser(['can-record-payments']));
+
+    Livewire::test('pages.payments.index')
+        ->call('openNewPaymentModal')
+        ->set('newPaymentClientId', $client->id)
+        ->set("newPaymentAllocations.{$invoiceOne->id}.selected", true)
+        ->set("newPaymentAllocations.{$invoiceTwo->id}.selected", true)
+        ->call('submitNewPayment')
+        ->assertSet('showNewPaymentModal', false);
+
+    expect($invoiceOne->fresh()->status)->toBe('paid')
+        ->and($invoiceTwo->fresh()->status)->toBe('paid');
+});
+
+it('requires at least one invoice selected before recording a payment', function (): void {
+    [$client] = ppClientWithTwoInvoices();
+
+    $this->actingAs(paymentsPageUser(['can-record-payments']));
+
+    Livewire::test('pages.payments.index')
+        ->call('openNewPaymentModal')
+        ->set('newPaymentClientId', $client->id)
+        ->call('submitNewPayment')
+        ->assertSet('showNewPaymentModal', true)
+        ->assertSet('newPaymentError', 'Select at least one invoice.');
+});
+
+it('refuses to open the new payment modal without the record-payments permission', function (): void {
+    $this->actingAs(paymentsPageUser());
+
+    Livewire::test('pages.payments.index')
+        ->call('openNewPaymentModal')
         ->assertForbidden();
 });

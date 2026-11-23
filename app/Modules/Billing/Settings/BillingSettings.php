@@ -30,6 +30,9 @@ class BillingSettings extends Settings
     /** NettMail template used as the complete payment receipt email (subject + body). Null = Email Templates tab text. */
     public ?string $payment_email_template_id = null;
 
+    /** Floor for the next payment/receipt number. Null = continue counting from the highest existing number. Auto-advances after each payment. */
+    public ?int $next_receipt_number = null;
+
     /** Printed under "Invoice Terms:" when an invoice has no terms of its own. */
     public string $default_invoice_terms = '';
 

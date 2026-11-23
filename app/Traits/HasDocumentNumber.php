@@ -24,6 +24,8 @@ trait HasDocumentNumber
                 $document->document_number = $number;
                 $attempts++;
             } while ($attempts < 5 && static::withTrashed()->where('document_number', $number)->exists());
+
+            static::advanceConfiguredNextNumber($document->document_type, $number);
         });
     }
 
@@ -63,6 +65,11 @@ trait HasDocumentNumber
      * ranks R999 above R6536. Scoped by document_type as well as the prefix
      * LIKE pattern, so an empty prefix doesn't force a scan of every row in
      * the table across every document type.
+     *
+     * A type can optionally name a settings class + property (config
+     * `next_number_setting`) holding a user-configurable floor — e.g. so a
+     * business can jump payment numbering forward. The higher of the two
+     * wins, so the configured floor can never produce a number already used.
      */
     private static function nextSequentialNumber(string $prefix, string $type): string
     {
@@ -76,6 +83,45 @@ trait HasDocumentNumber
             ->filter()
             ->max();
 
-        return $prefix.(($last ?? 0) + 1);
+        $natural = ($last ?? 0) + 1;
+        $configured = static::configuredNextNumber($type);
+
+        return $prefix.max($natural, $configured ?? 0);
+    }
+
+    private static function configuredNextNumber(string $type): ?int
+    {
+        $setting = config("documents.types.{$type}.next_number_setting");
+
+        if ($setting === null) {
+            return null;
+        }
+
+        [$settingsClass, $property] = $setting;
+        $value = app($settingsClass)->{$property};
+
+        return $value !== null ? (int) $value : null;
+    }
+
+    /**
+     * After a number is actually assigned, advance the configured setting
+     * (if any) past it, so it always reflects the true next number without
+     * the user having to touch it again.
+     */
+    private static function advanceConfiguredNextNumber(string $type, string $number): void
+    {
+        $setting = config("documents.types.{$type}.next_number_setting");
+
+        if ($setting === null) {
+            return;
+        }
+
+        [$settingsClass, $property] = $setting;
+        $prefix = config("documents.types.{$type}.prefix", '');
+        $numericPart = (int) substr($number, strlen($prefix));
+
+        $settings = app($settingsClass);
+        $settings->{$property} = $numericPart + 1;
+        $settings->save();
     }
 }

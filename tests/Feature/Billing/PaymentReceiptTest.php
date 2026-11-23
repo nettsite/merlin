@@ -197,6 +197,117 @@ it('uses the NettMail payment email over the Templates tab text when one is conf
     );
 });
 
+it('applies one payment across several invoices for the same client', function (): void {
+    Mail::fake();
+
+    $client = receiptClient();
+    receiptRecipient($client);
+    $invoiceOne = receiptSentInvoice($client, 300.00);
+    $invoiceTwo = receiptSentInvoice($client, 200.00);
+
+    $payment = app(BillingService::class)->recordPaymentForInvoices([
+        ['invoice' => $invoiceOne, 'amount' => 300.00],
+        ['invoice' => $invoiceTwo, 'amount' => 200.00],
+    ], ['date' => now()->toDateString()]);
+
+    expect((float) $payment->total)->toBe(500.00)
+        ->and($invoiceOne->fresh()->status)->toBe('paid')
+        ->and($invoiceTwo->fresh()->status)->toBe('paid')
+        ->and($payment->parentDocuments()->wherePivot('relationship_type', 'payment_for')->count())->toBe(2);
+});
+
+it('sends one combined receipt listing every invoice in a multi-invoice payment', function (): void {
+    Mail::fake();
+
+    $client = receiptClient();
+    receiptRecipient($client);
+    $invoiceOne = receiptSentInvoice($client, 300.00);
+    $invoiceTwo = receiptSentInvoice($client, 200.00);
+
+    app(BillingService::class)->recordPaymentForInvoices([
+        ['invoice' => $invoiceOne, 'amount' => 300.00],
+        ['invoice' => $invoiceTwo, 'amount' => 200.00],
+    ], ['date' => now()->toDateString()]);
+
+    Mail::assertSent(PaymentReceiptMail::class, 1);
+    Mail::assertSent(PaymentReceiptMail::class, fn (PaymentReceiptMail $mail): bool => str_contains($mail->emailHtml, $invoiceOne->document_number)
+        && str_contains($mail->emailHtml, $invoiceTwo->document_number)
+    );
+});
+
+it('rejects a multi-invoice payment spanning more than one client', function (): void {
+    $invoiceOne = receiptSentInvoice();
+    $invoiceTwo = receiptSentInvoice();
+
+    expect(fn () => app(BillingService::class)->recordPaymentForInvoices([
+        ['invoice' => $invoiceOne, 'amount' => 500.00],
+        ['invoice' => $invoiceTwo, 'amount' => 500.00],
+    ], ['date' => now()->toDateString()]))->toThrow(RuntimeException::class);
+});
+
+it('jumps to the configured next receipt number instead of the natural one', function (): void {
+    Mail::fake();
+
+    $settings = app(BillingSettings::class);
+    $settings->next_receipt_number = 5000;
+    $settings->save();
+
+    $client = receiptClient();
+    receiptRecipient($client);
+    $invoice = receiptSentInvoice($client);
+
+    $payment = app(BillingService::class)->recordPayment($invoice, [
+        'amount' => 500.00,
+        'date' => now()->toDateString(),
+    ], null);
+
+    expect($payment->document_number)->toBe('5000');
+});
+
+it('advances the configured next receipt number after each payment', function (): void {
+    Mail::fake();
+
+    $settings = app(BillingSettings::class);
+    $settings->next_receipt_number = 5000;
+    $settings->save();
+
+    $client = receiptClient();
+    receiptRecipient($client);
+    $invoice = receiptSentInvoice($client);
+
+    app(BillingService::class)->recordPayment($invoice, [
+        'amount' => 500.00,
+        'date' => now()->toDateString(),
+    ], null);
+
+    expect(app(BillingSettings::class)->next_receipt_number)->toBe(5001);
+});
+
+it('ignores a configured next receipt number lower than numbers already issued', function (): void {
+    Mail::fake();
+
+    $client = receiptClient();
+    receiptRecipient($client);
+
+    $invoiceOne = receiptSentInvoice($client);
+    $paymentOne = app(BillingService::class)->recordPayment($invoiceOne, [
+        'amount' => 500.00,
+        'date' => now()->toDateString(),
+    ], null);
+
+    $settings = app(BillingSettings::class);
+    $settings->next_receipt_number = 1;
+    $settings->save();
+
+    $invoiceTwo = receiptSentInvoice($client);
+    $paymentTwo = app(BillingService::class)->recordPayment($invoiceTwo, [
+        'amount' => 500.00,
+        'date' => now()->toDateString(),
+    ], null);
+
+    expect((int) $paymentTwo->document_number)->toBeGreaterThan((int) $paymentOne->document_number);
+});
+
 it('does not roll back the payment when sending the receipt fails', function (): void {
     BillingEmailTemplate::where('type', 'receipt')->delete();
 

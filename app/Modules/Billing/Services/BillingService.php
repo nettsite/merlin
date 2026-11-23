@@ -129,49 +129,80 @@ class BillingService
     /**
      * Record a payment against a sales invoice.
      *
-     * Creates a payment Document, links it to the invoice via DocumentRelationship,
-     * then delegates amount/balance updates to DocumentService::recordPayment().
-     *
      * @param  array{amount: float, date: string, reference?: string|null, contra_account_id?: string|null}  $data
      */
     public function recordPayment(Document $invoice, array $data, ?User $by): Document
     {
-        if (! in_array($invoice->status, ['sent', 'partially_paid'])) {
-            throw new RuntimeException("Cannot record payment against a {$invoice->status} invoice.");
+        return $this->recordPaymentForInvoices(
+            [['invoice' => $invoice, 'amount' => (float) $data['amount']]],
+            $data,
+        );
+    }
+
+    /**
+     * Record a single payment that covers one or more sales invoices for the
+     * same client — one EFT settling several invoices at once. Creates one
+     * payment Document, linked to every invoice via DocumentRelationship,
+     * then delegates each invoice's amount/balance update to
+     * DocumentService::recordPayment().
+     *
+     * @param  array<int, array{invoice: Document, amount: float}>  $allocations
+     * @param  array{date: string, reference?: string|null, contra_account_id?: string|null}  $data
+     */
+    public function recordPaymentForInvoices(array $allocations, array $data): Document
+    {
+        if ($allocations === []) {
+            throw new RuntimeException('A payment must cover at least one invoice.');
         }
 
-        $amount = (float) $data['amount'];
+        $invoices = array_map(fn (array $a): Document => $a['invoice'], $allocations);
+        $firstInvoice = $invoices[0];
+
+        if (collect($invoices)->pluck('party_id')->unique()->count() > 1) {
+            throw new RuntimeException('All invoices in a single payment must belong to the same client.');
+        }
+
         $date = Carbon::parse($data['date']);
         $reference = $data['reference'] ?? null;
         $bankAccountId = $data['contra_account_id'] ?? $this->billingSettings->default_contra_account_id;
+        $total = array_sum(array_map(fn (array $a): float => (float) $a['amount'], $allocations));
 
         // Transactional so a rejected payment (e.g. overpayment guard in
         // DocumentService) doesn't leave an orphaned payment document behind.
-        $payment = DB::transaction(function () use ($invoice, $amount, $date, $reference, $bankAccountId) {
+        $payment = DB::transaction(function () use ($allocations, $firstInvoice, $total, $date, $reference, $bankAccountId) {
             $payment = Document::create([
                 'document_type' => 'payment',
                 'direction' => 'inbound',
                 'status' => 'draft',
-                'party_id' => $invoice->party_id,
+                'party_id' => $firstInvoice->party_id,
                 'issue_date' => $date->toDateString(),
-                'currency' => $invoice->currency,
-                'exchange_rate' => $invoice->exchange_rate ?? 1.0,
-                'subtotal' => $amount,
+                'currency' => $firstInvoice->currency,
+                'exchange_rate' => $firstInvoice->exchange_rate ?? 1.0,
+                'subtotal' => $total,
                 'tax_total' => 0,
-                'total' => $amount,
-                'receivable_account_id' => $invoice->receivable_account_id,
+                'total' => $total,
+                'receivable_account_id' => $firstInvoice->receivable_account_id,
                 'contra_account_id' => $bankAccountId,
                 'source' => 'manual',
                 'reference' => $reference,
             ]);
 
-            DocumentRelationship::create([
-                'parent_document_id' => $invoice->id,
-                'child_document_id' => $payment->id,
-                'relationship_type' => 'payment_for',
-            ]);
+            foreach ($allocations as $allocation) {
+                $invoice = $allocation['invoice'];
+                $amount = (float) $allocation['amount'];
 
-            app(DocumentService::class)->recordPayment($invoice, $amount, $date, $reference);
+                if (! in_array($invoice->status, ['sent', 'partially_paid'])) {
+                    throw new RuntimeException("Cannot record payment against a {$invoice->status} invoice ({$invoice->document_number}).");
+                }
+
+                DocumentRelationship::create([
+                    'parent_document_id' => $invoice->id,
+                    'child_document_id' => $payment->id,
+                    'relationship_type' => 'payment_for',
+                ]);
+
+                app(DocumentService::class)->recordPayment($invoice, $amount, $date, $reference);
+            }
 
             return $payment;
         });
