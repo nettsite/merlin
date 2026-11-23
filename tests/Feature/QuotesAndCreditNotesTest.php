@@ -437,6 +437,7 @@ it('keeps March revenue in March when the invoice is credited in July', function
     app(DocumentService::class)->issueCreditNote($creditNote->fresh(), $user);
     app(DocumentService::class)->applyCreditNote($creditNote->fresh(), $invoice->fresh(), $user);
 
+    $user->givePermissionTo('financial-reports-view');
     $this->actingAs($user);
 
     // March: the invoice's revenue is there, exactly as filed.

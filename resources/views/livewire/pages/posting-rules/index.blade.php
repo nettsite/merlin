@@ -76,6 +76,7 @@ new #[Layout('components.layout.app')] class extends Component
 
     protected function store(): void
     {
+        $this->authorize('create', PostingRule::class);
         $this->validate();
         PostingRule::create([
             'name' => $this->name,

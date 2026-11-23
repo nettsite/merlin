@@ -14,7 +14,9 @@ uses(RefreshDatabase::class);
 
 beforeEach(function (): void {
     $this->seed(ChartOfAccountsSeeder::class);
-    $this->actingAs(User::factory()->create());
+    $user = User::factory()->create();
+    $user->givePermissionTo('financial-reports-view');
+    $this->actingAs($user);
 
     $this->income = Account::whereHas('group.type', fn ($q) => $q->where('code', '4'))
         ->where('allow_direct_posting', true)

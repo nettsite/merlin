@@ -9,7 +9,9 @@ use Livewire\Livewire;
 uses(RefreshDatabase::class);
 
 beforeEach(function (): void {
-    $this->actingAs(User::factory()->create());
+    $user = User::factory()->create();
+    $user->givePermissionTo('financial-reports-view');
+    $this->actingAs($user);
 
     $this->account = Account::factory()->create([
         'code' => '5210',

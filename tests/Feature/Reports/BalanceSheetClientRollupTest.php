@@ -77,7 +77,9 @@ it('rolls up client receivable sub-accounts into a single control-account line o
     bsrSentInvoice(bsrClient('Rollup Client A'), 1000.00);
     bsrSentInvoice(bsrClient('Rollup Client B'), 500.00);
 
-    $this->actingAs(User::factory()->create());
+    $user = User::factory()->create();
+    $user->givePermissionTo('financial-reports-view');
+    $this->actingAs($user);
 
     $response = Livewire::test('pages.reports.balance-sheet')->assertOk();
 

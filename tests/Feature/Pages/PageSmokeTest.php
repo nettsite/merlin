@@ -111,15 +111,27 @@ it('users page denies user without permission', function (): void {
 // --- reports/* ---
 
 it('expenses-by-account report renders', function (): void {
-    $this->actingAs(User::factory()->create());
+    $this->actingAs(permittedUser('financial-reports-view'));
 
     Livewire::test('pages.reports.expenses-by-account')->assertOk();
 });
 
 it('expenses-by-supplier report renders', function (): void {
-    $this->actingAs(User::factory()->create());
+    $this->actingAs(permittedUser('financial-reports-view'));
 
     Livewire::test('pages.reports.expenses-by-supplier')->assertOk();
+});
+
+it('expenses-by-account report denies user without permission', function (): void {
+    $this->actingAs(User::factory()->create());
+
+    Livewire::test('pages.reports.expenses-by-account')->assertForbidden();
+});
+
+it('expenses-by-supplier report denies user without permission', function (): void {
+    $this->actingAs(User::factory()->create());
+
+    Livewire::test('pages.reports.expenses-by-supplier')->assertForbidden();
 });
 
 it('llm-performance report renders for permitted user', function (): void {

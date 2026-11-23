@@ -8,6 +8,11 @@ use Livewire\Component;
 
 new #[Layout('components.layout.app')] class extends Component
 {
+    public function mount(): void
+    {
+        $this->authorize('financial-reports-view');
+    }
+
     public function with(): array
     {
         $fyService = app(FinancialYearService::class);

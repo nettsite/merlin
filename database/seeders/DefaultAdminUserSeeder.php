@@ -9,13 +9,15 @@ class DefaultAdminUserSeeder extends Seeder
 {
     public function run(): void
     {
-        $user = User::firstOrCreate(
-            ['email' => 'admin@example.com'],
-            [
-                'name' => 'Administrator',
-                'password' => 'changeme',
-            ]
-        );
+        if (User::where('email', 'admin@example.com')->exists()) {
+            return;
+        }
+
+        $user = User::create([
+            'name' => 'Administrator',
+            'email' => 'admin@example.com',
+            'password' => 'changeme',
+        ]);
 
         $user->assignRole('Administrator');
     }

@@ -1,6 +1,7 @@
 <?php
 
 use App\Modules\Core\Models\Role;
+use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Locked;
 use Livewire\Attributes\Validate;
@@ -62,6 +63,11 @@ new #[Layout('components.layout.app')] class extends Component
         $this->validate();
 
         $permissions = array_keys(array_filter($this->selectedPermissions));
+
+        /** @var \App\Modules\Core\Models\User $user */
+        $user = Auth::user();
+        $ungranted = array_filter($permissions, fn (string $permission): bool => ! $user->can($permission));
+        abort_if($ungranted !== [], 403, 'You cannot grant a permission you do not hold yourself: '.implode(', ', $ungranted));
 
         if ($this->editingId) {
             $role = Role::findOrFail($this->editingId);

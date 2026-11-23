@@ -13,6 +13,7 @@ new #[Layout('components.layout.app')] class extends Component
 
     public function mount(): void
     {
+        $this->authorize('financial-reports-view');
         $fyService = app(\App\Modules\Accounting\Services\FinancialYearService::class);
         [$fyStart] = $fyService->yearBounds($fyService->currentYearLabel());
         $this->dateFrom = $fyStart->format('Y-m-d');

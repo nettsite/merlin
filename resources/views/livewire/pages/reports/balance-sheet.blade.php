@@ -13,6 +13,7 @@ new #[Layout('components.layout.app')] class extends Component
 
     public function mount(): void
     {
+        $this->authorize('financial-reports-view');
         $this->asAt = now()->format('Y-m-d');
     }
 
