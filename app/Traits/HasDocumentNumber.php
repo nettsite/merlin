@@ -23,7 +23,10 @@ trait HasDocumentNumber
                 $number = static::nextDocumentNumber($document->document_type);
                 $document->document_number = $number;
                 $attempts++;
-            } while ($attempts < 5 && static::withTrashed()->where('document_number', $number)->exists());
+            } while ($attempts < 5 && static::withTrashed()
+                ->where('document_type', $document->document_type)
+                ->where('document_number', $number)
+                ->exists());
 
             static::advanceConfiguredNextNumber($document->document_type, $number);
         });
@@ -62,24 +65,43 @@ trait HasDocumentNumber
     /**
      * Prefix + plain integer (R6537), or plain digits alone when the type's
      * prefix is empty. Max is computed numerically in PHP: a string max()
-     * ranks R999 above R6536. Scoped by document_type as well as the prefix
-     * LIKE pattern, so an empty prefix doesn't force a scan of every row in
-     * the table across every document type.
+     * ranks R999 above R6536. Scoped by document_type, so an empty prefix
+     * doesn't force a scan of every row in the table across every document
+     * type.
      *
-     * A type can optionally name a settings class + property (config
+     * A type can optionally name a previous prefix it used to use (config
+     * `legacy_prefix`) — e.g. when dropping a prefix going forward but
+     * continuing the same count rather than restarting at 1. Existing rows
+     * under either prefix count towards the running maximum; new numbers
+     * always use the current prefix.
+     *
+     * A type can also optionally name a settings class + property (config
      * `next_number_setting`) holding a user-configurable floor — e.g. so a
-     * business can jump payment numbering forward. The higher of the two
-     * wins, so the configured floor can never produce a number already used.
+     * business can jump numbering forward. The higher of the two wins, so
+     * the configured floor can never produce a number already used.
      */
     private static function nextSequentialNumber(string $prefix, string $type): string
     {
+        $legacyPrefix = config("documents.types.{$type}.legacy_prefix");
+        $prefixes = array_unique(array_filter([$prefix, $legacyPrefix], fn (?string $p): bool => $p !== null));
+
         $last = static::withTrashed()
             ->where('document_type', $type)
-            ->where('document_number', 'like', "{$prefix}%")
+            ->where(function ($query) use ($prefixes): void {
+                foreach ($prefixes as $p) {
+                    $query->orWhere('document_number', 'like', "{$p}%");
+                }
+            })
             ->pluck('document_number')
-            ->map(fn (string $number): ?int => preg_match('/^'.preg_quote($prefix, '/').'(\d+)$/', $number, $matches) === 1
-                ? (int) $matches[1]
-                : null)
+            ->map(function (string $number) use ($prefixes): ?int {
+                foreach ($prefixes as $p) {
+                    if (preg_match('/^'.preg_quote($p, '/').'(\d+)$/', $number, $matches) === 1) {
+                        return (int) $matches[1];
+                    }
+                }
+
+                return null;
+            })
             ->filter()
             ->max();
 

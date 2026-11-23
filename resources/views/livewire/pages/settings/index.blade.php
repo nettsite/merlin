@@ -97,6 +97,8 @@ new #[Layout('components.layout.app')] class extends Component
 
     public ?int $nextReceiptNumber = null;
 
+    public ?int $nextInvoiceNumber = null;
+
     public string $defaultInvoiceTerms = '';
 
     public string $defaultInvoiceFooter = '';
@@ -162,6 +164,7 @@ new #[Layout('components.layout.app')] class extends Component
         $this->invoiceEmailTemplateId = $billing->invoice_email_template_id;
         $this->paymentEmailTemplateId = $billing->payment_email_template_id;
         $this->nextReceiptNumber = $billing->next_receipt_number;
+        $this->nextInvoiceNumber = $billing->next_invoice_number;
         $this->defaultInvoiceTerms = $billing->default_invoice_terms;
         $this->defaultInvoiceFooter = $billing->default_invoice_footer;
 
@@ -347,6 +350,7 @@ new #[Layout('components.layout.app')] class extends Component
             'invoiceEmailTemplateId' => 'nullable|uuid|exists:nettmail_templates,id',
             'paymentEmailTemplateId' => 'nullable|uuid|exists:nettmail_templates,id',
             'nextReceiptNumber' => 'nullable|integer|min:1',
+            'nextInvoiceNumber' => 'nullable|integer|min:1',
             'defaultInvoiceTerms' => 'nullable|string|max:2000',
             'defaultInvoiceFooter' => 'nullable|string|max:2000',
         ]);
@@ -361,6 +365,7 @@ new #[Layout('components.layout.app')] class extends Component
         $settings->invoice_email_template_id = $this->invoiceEmailTemplateId ?: null;
         $settings->payment_email_template_id = $this->paymentEmailTemplateId ?: null;
         $settings->next_receipt_number = $this->nextReceiptNumber ?: null;
+        $settings->next_invoice_number = $this->nextInvoiceNumber ?: null;
         $settings->default_invoice_terms = $this->defaultInvoiceTerms;
         $settings->default_invoice_footer = $this->defaultInvoiceFooter;
         $settings->save();
@@ -984,13 +989,20 @@ new #[Layout('components.layout.app')] class extends Component
                     </div>
                 </div>
 
-                {{-- Payments --}}
+                {{-- Numbering --}}
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-8 py-8">
                     <div>
-                        <h3 class="text-sm font-semibold text-ink">Payments</h3>
-                        <p class="mt-1 text-sm text-ink-muted">Controls how payments are numbered.</p>
+                        <h3 class="text-sm font-semibold text-ink">Numbering</h3>
+                        <p class="mt-1 text-sm text-ink-muted">Controls how invoices and payments are numbered.</p>
                     </div>
                     <div class="col-span-2 space-y-5">
+                        <flux:field>
+                            <flux:label>Next Invoice Number</flux:label>
+                            <flux:input wire:model="nextInvoiceNumber" type="number" min="1" class="max-w-xs" placeholder="Automatic" />
+                            <flux:description>The number the next sales invoice will get. Leave blank to keep counting automatically from the highest existing number. Advances on its own after each invoice, so you only need to set this to jump the sequence forward.</flux:description>
+                            <flux:error name="nextInvoiceNumber" />
+                        </flux:field>
+
                         <flux:field>
                             <flux:label>Next Receipt Number</flux:label>
                             <flux:input wire:model="nextReceiptNumber" type="number" min="1" class="max-w-xs" placeholder="Automatic" />

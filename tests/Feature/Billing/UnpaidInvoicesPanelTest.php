@@ -24,6 +24,11 @@ function widgetUser(array $permissions = ['documents-view-any', 'documents-view'
 }
 
 /** A sales invoice for a new client, sent unless told otherwise. */
+/**
+ * Given a distinctive high document_number — plain small numbers (1, 2, 3, ...)
+ * collide with incidental digits elsewhere on the rendered page (tab badge counts,
+ * wire:id hashes), making assertSee/assertDontSee on them unreliable.
+ */
 function widgetInvoice(string $client, float $amount, ?string $due = null, bool $send = true): Document
 {
     $party = app(PartyService::class)->createBusiness([
@@ -34,6 +39,7 @@ function widgetInvoice(string $client, float $amount, ?string $due = null, bool 
     ], ['client']);
 
     $doc = app(BillingService::class)->createDraft($party, ['issue_date' => '2026-11-01']);
+    $doc->update(['document_number' => (string) random_int(100000, 999999)]);
 
     if ($due !== null) {
         $doc->update(['due_date' => $due]);

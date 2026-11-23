@@ -37,13 +37,21 @@ function siClient(): Party
     ], ['client']);
 }
 
+/**
+ * Given a distinctive high document_number — plain small numbers (1, 2, 3, ...)
+ * collide with incidental digits elsewhere on the rendered page (tab badge counts,
+ * wire:id hashes), making assertSee/assertDontSee on them unreliable.
+ */
 function siDraft(?Party $client = null): Document
 {
     $client ??= siClient();
 
-    return app(BillingService::class)->createDraft($client, [
+    $doc = app(BillingService::class)->createDraft($client, [
         'issue_date' => now()->toDateString(),
     ]);
+    $doc->update(['document_number' => (string) random_int(100000, 999999)]);
+
+    return $doc;
 }
 
 // --- Access ---

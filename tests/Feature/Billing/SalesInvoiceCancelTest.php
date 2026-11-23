@@ -21,10 +21,16 @@ function cancelClient()
     ], ['client']);
 }
 
-/** A sent invoice with a single line of the given value, like the imported R6509 when the value is zero. */
+/**
+ * A sent invoice with a single line of the given value, like the imported R6509 when
+ * the value is zero. Given a distinctive high document_number — plain small numbers
+ * (1, 2, 3, ...) collide with incidental digits elsewhere on the rendered page (tab
+ * badge counts, wire:id hashes), making assertSee/assertDontSee on them unreliable.
+ */
 function sentInvoice(float $amount = 0.0): Document
 {
     $doc = app(BillingService::class)->createDraft(cancelClient(), ['issue_date' => now()->toDateString()]);
+    $doc->update(['document_number' => (string) random_int(100000, 999999)]);
 
     $doc->lines()->create([
         'line_number' => 1,

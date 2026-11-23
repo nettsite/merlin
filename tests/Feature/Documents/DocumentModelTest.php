@@ -1,5 +1,6 @@
 <?php
 
+use App\Modules\Billing\Settings\BillingSettings;
 use App\Modules\Core\Models\Document;
 use App\Modules\Core\Models\DocumentLine;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -36,10 +37,10 @@ it('sequences independently per document type', function (): void {
     $sales = Document::factory()->salesInvoice()->create();
 
     expect($invoice->document_number)->toBe("PINV-{$year}-00001")
-        ->and($sales->document_number)->toBe('R1');
+        ->and($sales->document_number)->toBe('1');
 });
 
-it('continues the InvoiceNinja R-series numerically for sales invoices', function (): void {
+it('continues the InvoiceNinja R-series numerically, as a plain number, for sales invoices', function (): void {
     Document::factory()->salesInvoice()->withNumber('R999')->create();
     Document::factory()->salesInvoice()->withNumber('R6536')->create();
     Document::factory()->salesInvoice()->withNumber('5302')->create();
@@ -47,7 +48,39 @@ it('continues the InvoiceNinja R-series numerically for sales invoices', functio
 
     $next = Document::factory()->salesInvoice()->create();
 
-    expect($next->document_number)->toBe('R6537');
+    expect($next->document_number)->toBe('6537');
+});
+
+it('jumps to the configured next invoice number instead of the natural one', function (): void {
+    $settings = app(BillingSettings::class);
+    $settings->next_invoice_number = 9000;
+    $settings->save();
+
+    $invoice = Document::factory()->salesInvoice()->create();
+
+    expect($invoice->document_number)->toBe('9000');
+});
+
+it('advances the configured next invoice number after each invoice', function (): void {
+    $settings = app(BillingSettings::class);
+    $settings->next_invoice_number = 9000;
+    $settings->save();
+
+    Document::factory()->salesInvoice()->create();
+
+    expect(app(BillingSettings::class)->next_invoice_number)->toBe(9001);
+});
+
+it('ignores a configured next invoice number lower than numbers already issued', function (): void {
+    Document::factory()->salesInvoice()->withNumber('6536')->create();
+
+    $settings = app(BillingSettings::class);
+    $settings->next_invoice_number = 1;
+    $settings->save();
+
+    $next = Document::factory()->salesInvoice()->create();
+
+    expect($next->document_number)->toBe('6537');
 });
 
 // --- Line total calculations ---

@@ -149,7 +149,7 @@ it('numbers a new payment with plain digits, no prefix', function (): void {
     expect($payment->document_number)->toMatch('/^\d+$/');
 });
 
-it('does not reuse a sales invoice number when both share the sequential numbering', function (): void {
+it('gives each payment its own number even though invoices number independently', function (): void {
     Mail::fake();
 
     $client = receiptClient();
@@ -166,8 +166,10 @@ it('does not reuse a sales invoice number when both share the sequential numberi
         'date' => now()->toDateString(),
     ], null);
 
-    expect($paymentOne->document_number)->not->toBe($paymentTwo->document_number)
-        ->and($invoiceOne->document_number)->not->toBe($paymentOne->document_number);
+    // Payments and invoices number independently (each type has its own
+    // sequence), so a payment legitimately can share a number with an
+    // invoice — uniqueness is only guaranteed within the same document type.
+    expect($paymentOne->document_number)->not->toBe($paymentTwo->document_number);
 });
 
 it('uses the NettMail payment email over the Templates tab text when one is configured', function (): void {

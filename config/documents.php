@@ -71,9 +71,13 @@ return [
         'sales_invoice' => [
             'label' => 'Sales Invoice',
             'direction' => 'outbound',
-            // Continues InvoiceNinja's R-series (R6536 → R6537): no year, no padding.
-            'prefix' => 'R',
+            // Plain digits, no prefix: continues the same count the R-series
+            // (R6536, R6537, ...) was already on, just without the letter.
+            'prefix' => '',
+            'legacy_prefix' => 'R',
             'number_format' => 'sequential',
+            // User-configurable floor: Settings -> Billing -> "Next Invoice Number".
+            'next_number_setting' => [BillingSettings::class, 'next_invoice_number'],
             'default_status' => 'draft',
             'requires_due_date' => true,
         ],

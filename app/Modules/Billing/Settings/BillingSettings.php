@@ -33,6 +33,9 @@ class BillingSettings extends Settings
     /** Floor for the next payment/receipt number. Null = continue counting from the highest existing number. Auto-advances after each payment. */
     public ?int $next_receipt_number = null;
 
+    /** Floor for the next sales invoice number. Null = continue counting from the highest existing number. Auto-advances after each invoice. */
+    public ?int $next_invoice_number = null;
+
     /** Printed under "Invoice Terms:" when an invoice has no terms of its own. */
     public string $default_invoice_terms = '';
 
