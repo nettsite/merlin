@@ -63,6 +63,7 @@ new #[Layout('components.layout.app')] class extends Component
 
     protected function store(): void
     {
+        $this->authorize('create', Account::class);
         $this->validate();
 
         try {
@@ -84,6 +85,7 @@ new #[Layout('components.layout.app')] class extends Component
     {
         $this->validate();
         $account = Account::findOrFail($this->editingId);
+        $this->authorize('update', $account);
 
         try {
             $account->update([

@@ -49,6 +49,7 @@ new #[Layout('components.layout.app')] class extends Component
 
     protected function store(): void
     {
+        $this->authorize('create', BankTemplate::class);
         $this->validate();
         BankTemplate::create([
             'name' => $this->name,

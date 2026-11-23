@@ -167,6 +167,8 @@ class BillingService
         $bankAccountId = $data['contra_account_id'] ?? $this->billingSettings->default_contra_account_id;
         $total = array_sum(array_map(fn (array $a): float => (float) $a['amount'], $allocations));
 
+        app(DocumentService::class)->assertValidContraAccount($bankAccountId);
+
         // Transactional so a rejected payment (e.g. overpayment guard in
         // DocumentService) doesn't leave an orphaned payment document behind.
         $payment = DB::transaction(function () use ($allocations, $firstInvoice, $total, $date, $reference, $bankAccountId) {
@@ -190,6 +192,10 @@ class BillingService
             foreach ($allocations as $allocation) {
                 $invoice = $allocation['invoice'];
                 $amount = (float) $allocation['amount'];
+
+                if ($invoice->document_type !== 'sales_invoice') {
+                    throw new RuntimeException("Cannot record a sales payment against a {$invoice->document_type} ({$invoice->document_number}).");
+                }
 
                 if (! in_array($invoice->status, ['sent', 'partially_paid'])) {
                     throw new RuntimeException("Cannot record payment against a {$invoice->status} invoice ({$invoice->document_number}).");

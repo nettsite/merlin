@@ -410,6 +410,12 @@ new #[Layout('components.layout.app')] class extends Component
         $doc = Document::findOrFail($this->reprocessId);
         $this->authorize('update', $doc);
 
+        if ($doc->status === 'reconciled') {
+            $this->addError('reprocess', 'Cannot reprocess a reconciled statement.');
+
+            return;
+        }
+
         /** @var \App\Modules\Core\Models\User $user */
         $user = Auth::user();
 

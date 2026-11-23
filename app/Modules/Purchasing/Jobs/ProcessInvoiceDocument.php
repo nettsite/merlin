@@ -28,6 +28,17 @@ class ProcessInvoiceDocument implements ShouldQueue
             return;
         }
 
+        // A retry can land after a prior attempt already posted the invoice
+        // (e.g. a timeout fired after the DB commit). Relation delete() on a
+        // soft-deleting model is a bulk UPDATE that bypasses DocumentLine's
+        // per-row guardAgainstPostedMutation(), so re-running this job on an
+        // issued document would otherwise silently wipe its posted lines.
+        if ($this->document->is_issued) {
+            $this->fail(new \RuntimeException('Refusing to reprocess an already-issued invoice.'));
+
+            return;
+        }
+
         // process() appends lines and never clears them. With $tries > 1 a
         // retry after a partial failure would duplicate every extracted line,
         // so drop any lines left behind by a previous attempt first.

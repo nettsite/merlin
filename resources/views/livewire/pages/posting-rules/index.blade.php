@@ -91,7 +91,9 @@ new #[Layout('components.layout.app')] class extends Component
     protected function update(): void
     {
         $this->validate();
-        PostingRule::findOrFail($this->editingId)->update([
+        $rule = PostingRule::findOrFail($this->editingId);
+        $this->authorize('update', $rule);
+        $rule->update([
             'name' => $this->name,
             'description' => $this->description ?: null,
             'party_id' => $this->partyId ?: null,

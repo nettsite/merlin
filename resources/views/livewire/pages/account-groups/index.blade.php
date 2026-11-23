@@ -54,6 +54,7 @@ new #[Layout('components.layout.app')] class extends Component
 
     protected function store(): void
     {
+        $this->authorize('create', AccountGroup::class);
         $this->validate();
         AccountGroup::create([
             'account_type_id' => $this->accountTypeId,
@@ -68,6 +69,7 @@ new #[Layout('components.layout.app')] class extends Component
     {
         $this->validate();
         $group = AccountGroup::findOrFail($this->editingId);
+        $this->authorize('update', $group);
         $group->update([
             'account_type_id' => $this->accountTypeId,
             'code' => $this->code,

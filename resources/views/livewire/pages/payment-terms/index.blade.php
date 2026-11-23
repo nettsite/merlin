@@ -58,7 +58,9 @@ new #[Layout('components.layout.app')] class extends Component
     protected function update(): void
     {
         $this->validateTermForm();
-        PaymentTerm::findOrFail($this->editingId)->update($this->termData());
+        $term = PaymentTerm::findOrFail($this->editingId);
+        $this->authorize('update', $term);
+        $term->update($this->termData());
     }
 
     private function validateTermForm(): void

@@ -290,6 +290,20 @@ class DocumentService
      *
      * @return array<int, string>
      */
+    /**
+     * A payment's contra account is the bank/cash side of the entry. The
+     * form only validates `exists:accounts,id`, which accepts any account
+     * in the chart — including the AR/AP control account itself, which
+     * would let a recorded payment double-post against receivables/payables
+     * instead of a real bank account.
+     */
+    public function assertValidContraAccount(?string $accountId): void
+    {
+        if ($accountId !== null && in_array($accountId, $this->controlAccountIds(), true)) {
+            throw new \InvalidArgumentException('A payment cannot use an AR/AP control account as its contra account.');
+        }
+    }
+
     public function controlAccountIds(): array
     {
         $ids = [];
@@ -398,8 +412,22 @@ class DocumentService
      */
     public function matchReconciliation(DocumentLine $statementLine, Document $document, User $by): BankReconciliationMatch
     {
-        if (! in_array($statementLine->document->document_type, ['bank_statement', 'credit_card_statement'], true)) {
+        $statement = $statementLine->document;
+
+        if (! in_array($statement->document_type, ['bank_statement', 'credit_card_statement'], true)) {
             throw new \InvalidArgumentException('matchReconciliation only accepts lines on a bank or credit card statement.');
+        }
+
+        // The target must be a real payment-shaped entry on the same bank
+        // account, not an arbitrary document — the UI's own candidate query
+        // (suggestedMatchFor) already shapes it this way, but matchReconciliation
+        // is the actual boundary and must not trust a client-supplied id blindly.
+        if (in_array($document->document_type, ['bank_statement', 'credit_card_statement'], true)) {
+            throw new \InvalidArgumentException('Cannot reconcile a statement line against another statement.');
+        }
+
+        if ($document->contra_account_id !== $statement->contra_account_id) {
+            throw new \InvalidArgumentException('Reconciliation target must be on the same bank account as the statement.');
         }
 
         return BankReconciliationMatch::updateOrCreate(
@@ -494,6 +522,13 @@ class DocumentService
         }
 
         DB::transaction(function () use ($doc, $amount, $date, $reference, $finaliseRate) {
+            // Lock and reload: two concurrent payments against the same
+            // document (double-submit, or a manual entry racing the
+            // payment-evidence auto-recorder) would otherwise both compute
+            // amount_paid/balance_due off the balance each loaded before
+            // either wrote, and the second write silently clobbers the
+            // first (lost update).
+            $doc->setRawAttributes(Document::lockForUpdate()->findOrFail($doc->id)->getAttributes());
 
             if ($finaliseRate && $doc->is_foreign_currency && (float) $doc->foreign_total > 0) {
                 $actualRate = round($amount / (float) $doc->foreign_total, 6);
@@ -589,8 +624,12 @@ class DocumentService
         $amount = (float) $data['amount'];
         $date = Carbon::parse($data['date']);
         $reference = $data['reference'] ?? null;
+        $contraAccountId = $data['contra_account_id'] ?? null;
+        $finaliseRate = (bool) ($data['finalise_rate'] ?? false);
 
-        return DB::transaction(function () use ($invoice, $amount, $date, $reference, $data) {
+        $this->assertValidContraAccount($contraAccountId);
+
+        return DB::transaction(function () use ($invoice, $amount, $date, $reference, $contraAccountId, $finaliseRate) {
             $payment = Document::create([
                 'document_type' => 'payment',
                 'direction' => 'outbound',
@@ -603,7 +642,7 @@ class DocumentService
                 'tax_total' => 0,
                 'total' => $amount,
                 'payable_account_id' => $invoice->payable_account_id,
-                'contra_account_id' => $data['contra_account_id'] ?? null,
+                'contra_account_id' => $contraAccountId,
                 'source' => 'manual',
                 'reference' => $reference,
             ]);
@@ -614,7 +653,7 @@ class DocumentService
                 'relationship_type' => 'payment_for',
             ]);
 
-            $this->recordPayment($invoice, $amount, $date, $reference, (bool) ($data['finalise_rate'] ?? false));
+            $this->recordPayment($invoice, $amount, $date, $reference, $finaliseRate);
 
             return $payment;
         });
@@ -723,13 +762,20 @@ class DocumentService
 
     protected function transition(Document $doc, string $to, ?User $by, string $description): void
     {
-        $allowed = $this->getAllowedTransitions()[$doc->document_type][$doc->status] ?? [];
-
-        if (! in_array($to, $allowed)) {
-            throw InvalidDocumentStateException::transition($doc, $to);
-        }
-
         DB::transaction(function () use ($doc, $to, $by, $description) {
+            // Lock and reload before validating: two concurrent transitions
+            // on the same document (a double-click, or a manual action
+            // racing autonomous posting) would otherwise both validate
+            // against the stale status each loaded before either wrote,
+            // letting the document regress or skip a status.
+            $doc->setRawAttributes(Document::lockForUpdate()->findOrFail($doc->id)->getAttributes());
+
+            $allowed = $this->getAllowedTransitions()[$doc->document_type][$doc->status] ?? [];
+
+            if (! in_array($to, $allowed)) {
+                throw InvalidDocumentStateException::transition($doc, $to);
+            }
+
             $from = $doc->status;
 
             $doc->status = $to;

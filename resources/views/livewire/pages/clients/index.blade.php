@@ -205,6 +205,7 @@ new #[Layout('components.layout.app')] class extends Component
     {
         $this->validate();
         $party = Party::with(['business', 'relationships'])->findOrFail($this->editingId);
+        $this->authorize('update', $party);
         $party->business?->update([
             'legal_name'   => $this->legalName,
             'trading_name' => $this->tradingName ?: $this->legalName,

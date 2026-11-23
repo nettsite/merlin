@@ -62,6 +62,14 @@ class PostingRuleService
             return false;
         }
 
+        // A supplier auto-created from unverified extracted invoice data (see
+        // SupplierResolver::createPendingSupplier()) stays 'pending' until a
+        // human confirms it — autonomous posting must not create real GL
+        // entries against a party nobody has verified yet.
+        if ($document->party?->status !== 'active') {
+            return false;
+        }
+
         $unallocatedLines = $document->lines()->whereNull('account_id')->exists();
 
         if ($unallocatedLines) {

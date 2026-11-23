@@ -28,15 +28,18 @@ class AccountResolver
         $llmConfidence = null;
         $suggestedAccount = null;
 
-        // 1. History match: same supplier + exact description in a posted document line.
-        // Only accounts still directly postable are eligible — a historical line
-        // may have posted to an account that's since gained sub-accounts.
+        // 1. History match: same supplier + same document type + exact
+        // description in a posted document line. Only accounts still active
+        // and directly postable are eligible — a historical line may have
+        // posted to an account that's since gained sub-accounts or been
+        // deactivated.
         if ($partyId !== null) {
             $accountId = DocumentLine::query()
                 ->whereHas('document', fn ($q) => $q->where('party_id', $partyId)
+                    ->where('document_type', 'purchase_invoice')
                     ->joinBalance()
                     ->whereIn('document_balances.status', Document::POSTED_STATUSES))
-                ->whereHas('account', fn ($q) => $q->postable())
+                ->whereHas('account', fn ($q) => $q->active()->postable())
                 ->where('description', $description)
                 ->whereNotNull('account_id')
                 ->orderByDesc('created_at')
@@ -44,7 +47,8 @@ class AccountResolver
         }
 
         // 2. LLM suggestion — always stored for display regardless of whether
-        // history matched. Only used to auto-assign account_id when postable.
+        // history matched. Only used to auto-assign account_id when active
+        // and postable.
         if ($extracted->suggestedAccountCode !== null) {
             $suggestedAccount = Account::where('code', $extracted->suggestedAccountCode)->first();
 
@@ -54,8 +58,10 @@ class AccountResolver
             }
         }
 
+        $suggestionIsUsable = $suggestedAccount?->is_active && $suggestedAccount?->allow_direct_posting;
+
         return [
-            'account_id' => $accountId ?? ($suggestedAccount?->allow_direct_posting ? $llmSuggestionId : null),
+            'account_id' => $accountId ?? ($suggestionIsUsable ? $llmSuggestionId : null),
             'llm_account_suggestion' => $llmSuggestionId,
             'llm_confidence' => $llmConfidence,
         ];
