@@ -154,8 +154,7 @@ it('records a payment through the purchase invoices page', function (): void {
     $invoice = postedPurchaseInvoice();
 
     Livewire::test('pages.purchase-invoices.index')
-        ->set('detailId', $invoice->id)
-        ->set('showDetail', true)
+        ->call('openDetail', $invoice->id)
         ->call('openPaymentModal')
         ->set('paymentForm.amount', '1000.00')
         ->set('paymentForm.date', now()->toDateString())

@@ -62,6 +62,7 @@ new #[Layout('components.layout.app')] class extends Component
     // Detail flyout
     public bool $showDetail = false;
 
+    #[Locked]
     public ?string $detailId = null;
 
     // Header editing

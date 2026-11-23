@@ -39,8 +39,7 @@ it('confirms a suggested payment match from the invoice detail flyout', function
     ]);
 
     Livewire::test('pages.purchase-invoices.index')
-        ->set('detailId', $invoice->id)
-        ->set('showDetail', true)
+        ->call('openDetail', $invoice->id)
         ->assertSee('Possible payment match')
         ->call('confirmSuggestedMatch', $notification->id);
 
@@ -68,8 +67,7 @@ it('dismisses a suggested payment match without merging', function (): void {
     ]);
 
     Livewire::test('pages.purchase-invoices.index')
-        ->set('detailId', $invoice->id)
-        ->set('showDetail', true)
+        ->call('openDetail', $invoice->id)
         ->call('dismissSuggestedMatch', $notification->id);
 
     $notification->refresh();

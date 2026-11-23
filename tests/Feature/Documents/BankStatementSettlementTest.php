@@ -87,7 +87,7 @@ it('creates a payment and matches it when the operator confirms against an invoi
     ]);
 
     $user = User::factory()->create();
-    $user->givePermissionTo(['documents-view-any', 'documents-view', 'documents-update']);
+    $user->givePermissionTo(['documents-view-any', 'documents-view', 'documents-update', 'can-record-payments']);
     $this->actingAs($user);
 
     Livewire::test('pages.bank-statements.index')

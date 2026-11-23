@@ -11,6 +11,7 @@ use App\Modules\Purchasing\Services\ExchangeRateService;
 use App\Modules\Purchasing\Services\PaymentNotificationMatcher;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Locked;
 use Livewire\Attributes\On;
 use Livewire\Component;
 use Livewire\WithFileUploads;
@@ -42,6 +43,7 @@ new #[Layout('components.layout.app')] class extends Component
     // Detail flyout
     public bool $showDetail = false;
 
+    #[Locked]
     public ?string $detailId = null;
 
     // Inline line editing

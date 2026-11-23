@@ -314,6 +314,7 @@ new #[Layout('components.layout.app')] class extends Component
 
     protected function store(): void
     {
+        $this->authorize('create', RecurringInvoice::class);
         $this->validate();
 
         app(RecurringInvoiceService::class)->createTemplate([

@@ -9,6 +9,7 @@ use App\Modules\Core\Services\DocumentService;
 use App\Modules\Purchasing\Services\ExchangeRateService;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Locked;
 use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -33,6 +34,7 @@ new #[Layout('components.layout.app')] class extends Component
 
     public bool $showDetail = false;
 
+    #[Locked]
     public ?string $detailId = null;
 
     public bool $editingHeader = false;

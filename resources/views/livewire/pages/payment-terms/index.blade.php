@@ -50,6 +50,7 @@ new #[Layout('components.layout.app')] class extends Component
 
     protected function store(): void
     {
+        $this->authorize('create', PaymentTerm::class);
         $this->validateTermForm();
         PaymentTerm::create($this->termData());
     }

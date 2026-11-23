@@ -229,7 +229,7 @@ it('editLine populates editingLine from the existing record', function (): void 
     ]);
 
     Livewire::test('pages.purchase-invoices.index')
-        ->set('detailId', $doc->id)
+        ->call('openDetail', $doc->id)
         ->call('editLine', $line->id)
         ->assertSet('editingLineId', $line->id)
         ->assertSet('editingLine.description', 'Cloud hosting')
@@ -249,7 +249,7 @@ it('saveLine persists changes when user has update permission', function (): voi
     ]);
 
     Livewire::test('pages.purchase-invoices.index')
-        ->set('detailId', $doc->id)
+        ->call('openDetail', $doc->id)
         ->call('editLine', $line->id)
         ->set('editingLine.description', 'New desc')
         ->set('editingLine.account_id', $account->id)
@@ -275,7 +275,7 @@ it('saveLine rejects negative quantity', function (): void {
     $line = DocumentLine::factory()->for($doc)->create();
 
     Livewire::test('pages.purchase-invoices.index')
-        ->set('detailId', $doc->id)
+        ->call('openDetail', $doc->id)
         ->call('editLine', $line->id)
         ->set('editingLine.quantity', '-5')
         ->set('editingLine.unit_price', '100')
@@ -290,7 +290,7 @@ it('cancelLine clears editing state without saving', function (): void {
     $line = DocumentLine::factory()->for($doc)->create(['description' => 'Original']);
 
     Livewire::test('pages.purchase-invoices.index')
-        ->set('detailId', $doc->id)
+        ->call('openDetail', $doc->id)
         ->call('editLine', $line->id)
         ->set('editingLine.description', 'Changed but not saved')
         ->call('cancelLine')
@@ -308,7 +308,7 @@ it('markReviewed advances status when user has can-review-invoices', function ()
     $doc = Document::factory()->purchaseInvoice()->create(['status' => 'received']);
 
     Livewire::test('pages.purchase-invoices.index')
-        ->set('detailId', $doc->id)
+        ->call('openDetail', $doc->id)
         ->call('markReviewed')
         ->assertHasNoErrors();
 
@@ -321,7 +321,7 @@ it('markReviewed is forbidden without can-review-invoices', function (): void {
     $doc = Document::factory()->purchaseInvoice()->create(['status' => 'received']);
 
     Livewire::test('pages.purchase-invoices.index')
-        ->set('detailId', $doc->id)
+        ->call('openDetail', $doc->id)
         ->call('markReviewed')
         ->assertForbidden();
 
@@ -334,7 +334,7 @@ it('approve transitions to approved with can-authorise-invoices', function (): v
     $doc = Document::factory()->purchaseInvoice()->create(['status' => 'reviewed']);
 
     Livewire::test('pages.purchase-invoices.index')
-        ->set('detailId', $doc->id)
+        ->call('openDetail', $doc->id)
         ->call('approve')
         ->assertHasNoErrors();
 
@@ -347,7 +347,7 @@ it('post transitions to posted with can-post-invoices', function (): void {
     $doc = Document::factory()->purchaseInvoice()->create(['status' => 'approved']);
 
     Livewire::test('pages.purchase-invoices.index')
-        ->set('detailId', $doc->id)
+        ->call('openDetail', $doc->id)
         ->call('post')
         ->assertHasNoErrors();
 
@@ -360,7 +360,7 @@ it('confirmDispute requires a reason', function (): void {
     $doc = Document::factory()->purchaseInvoice()->create(['status' => 'received']);
 
     Livewire::test('pages.purchase-invoices.index')
-        ->set('detailId', $doc->id)
+        ->call('openDetail', $doc->id)
         ->call('confirmDispute')
         ->assertHasErrors(['actionReason']);
 });
@@ -371,7 +371,7 @@ it('confirmDispute moves doc to disputed when reason supplied', function (): voi
     $doc = Document::factory()->purchaseInvoice()->create(['status' => 'received']);
 
     Livewire::test('pages.purchase-invoices.index')
-        ->set('detailId', $doc->id)
+        ->call('openDetail', $doc->id)
         ->set('actionReason', 'Amount looks wrong')
         ->call('confirmDispute')
         ->assertHasNoErrors();
@@ -390,7 +390,7 @@ it('confirmReprocess dispatches the job and resets status', function (): void {
     DocumentLine::factory()->for($doc)->count(2)->create();
 
     Livewire::test('pages.purchase-invoices.index')
-        ->set('detailId', $doc->id)
+        ->call('openDetail', $doc->id)
         ->call('confirmReprocess')
         ->assertHasNoErrors();
 
@@ -405,7 +405,7 @@ it('openReprocessConfirm is forbidden without permission', function (): void {
     $doc = Document::factory()->purchaseInvoice()->create(['status' => 'received']);
 
     Livewire::test('pages.purchase-invoices.index')
-        ->set('detailId', $doc->id)
+        ->call('openDetail', $doc->id)
         ->call('openReprocessConfirm')
         ->assertForbidden();
 });

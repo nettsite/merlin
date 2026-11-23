@@ -165,6 +165,7 @@ new #[Layout('components.layout.app')] class extends Component
 
     protected function store(): void
     {
+        $this->authorize('create', Party::class);
         $this->validate();
 
         $party = app(PartyService::class)->createBusiness([

@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Cache;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
 use Livewire\Attributes\Layout;
+use Livewire\Attributes\Locked;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 use Livewire\WithPagination;
@@ -43,6 +44,7 @@ new #[Layout('components.layout.app')] class extends Component
     // Detail flyout
     public bool $showDetail = false;
 
+    #[Locked]
     public ?string $detailId = null;
 
     // Reprocess modal
@@ -275,6 +277,7 @@ new #[Layout('components.layout.app')] class extends Component
         $line = DocumentLine::findOrFail($lineId);
         $statement = $line->document;
         $this->authorize('update', $statement);
+        $this->authorize('can-record-payments');
 
         $this->validate(['createInvoiceId' => 'required|uuid|exists:documents,id']);
 
@@ -407,7 +410,13 @@ new #[Layout('components.layout.app')] class extends Component
         $doc = Document::findOrFail($this->reprocessId);
         $this->authorize('update', $doc);
 
-        $hint = trim($this->reprocessHint) ?: null;
+        /** @var \App\Modules\Core\Models\User $user */
+        $user = Auth::user();
+
+        // A reprocess hint feeds the LLM and can end up persisted into the shared
+        // BankTemplate.layout_hints used for every future statement from this bank —
+        // don't let a user who can only reprocess their own documents influence it.
+        $hint = $user->can('bank-templates-update') ? (trim($this->reprocessHint) ?: null) : null;
 
         // Match rows point at line IDs, and DocumentLine soft-deletes — the
         // FK's cascadeOnDelete() only fires on a real DELETE, so old matches
