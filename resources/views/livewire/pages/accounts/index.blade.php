@@ -159,7 +159,9 @@ new #[Layout('components.layout.app')] class extends Component
             @forelse($rows as $account)
                 <tr class="border-t border-line hover:bg-surface-alt group">
                     <td class="px-4 py-3 font-mono text-ink">{{ $account->code }}</td>
-                    <td class="px-4 py-3 font-medium text-ink">{{ $account->name }}</td>
+                    <td class="px-4 py-3 font-medium text-ink">
+                        <a href="{{ route('accounts.show', $account->id) }}" wire:navigate class="hover:underline">{{ $account->name }}</a>
+                    </td>
                     <td class="px-4 py-3 text-ink-soft">{{ $account->group?->name ?? '—' }}</td>
                     <td class="px-4 py-3 text-ink-soft">
                         {{ $account->allow_direct_posting ? 'Yes' : 'No' }}

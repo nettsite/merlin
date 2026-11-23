@@ -52,6 +52,28 @@ new #[Layout('components.layout.app')] class extends Component
     }
 
     /**
+     * This account plus every descendant (children, grandchildren, ...), so a
+     * control account's transaction list rolls up postings made to its
+     * sub-accounts instead of showing empty because it never takes direct
+     * postings itself.
+     *
+     * @return array<int, string>
+     */
+    private function accountIdsForQuery(): array
+    {
+        $ids = [$this->accountId];
+        $frontier = [$this->accountId];
+
+        while ($frontier !== []) {
+            $children = Account::whereIn('parent_id', $frontier)->pluck('id')->all();
+            $ids = [...$ids, ...$children];
+            $frontier = $children;
+        }
+
+        return $ids;
+    }
+
+    /**
      * Builds the transaction register for the current account directly from
      * the postings view — one query in place of the old 6-way UNION across
      * raw document headers/lines. Pass $filterByContra = false to compute
@@ -89,10 +111,11 @@ new #[Layout('components.layout.app')] class extends Component
             ->leftJoin('document_balances', 'document_balances.document_id', '=', 'documents.id')
             ->leftJoin('businesses', 'businesses.id', '=', 'documents.party_id')
             ->leftJoin('persons', 'persons.id', '=', 'documents.party_id')
+            ->leftJoin('accounts as posting_accounts', 'posting_accounts.id', '=', 'postings.account_id')
             ->leftJoin('accounts as contra_accounts', function ($join) use ($contraSubquery) {
                 $join->on('contra_accounts.id', '=', DB::raw("({$contraSubquery})"));
             })
-            ->where('postings.account_id', $this->accountId)
+            ->whereIn('postings.account_id', $this->accountIdsForQuery())
             ->when($this->dateFrom, fn ($q) => $q->whereDate('postings.entry_date', '>=', $this->dateFrom))
             ->when($this->dateTo, fn ($q) => $q->whereDate('postings.entry_date', '<=', $this->dateTo))
             ->when($filterByContra && $this->contraAccountId, fn ($q) => $q->whereRaw("({$contraSubquery}) = ?", [$this->contraAccountId]))
@@ -106,6 +129,9 @@ new #[Layout('components.layout.app')] class extends Component
                 {$partyName} as party_name,
                 postings.description as description,
                 (case when postings.debit > 0 then postings.debit else postings.credit end) as amount,
+                posting_accounts.id as posting_account_id,
+                posting_accounts.code as posting_account_code,
+                posting_accounts.name as posting_account_name,
                 contra_accounts.id as contra_account_id,
                 contra_accounts.name as contra_account_name
             ");
@@ -114,6 +140,7 @@ new #[Layout('components.layout.app')] class extends Component
     public function with(): array
     {
         $account = Account::with('group.type')->findOrFail($this->accountId);
+        $hasChildren = Account::where('parent_id', $this->accountId)->exists();
 
         // Only ever offer contra accounts actually present in the current (date-filtered)
         // dataset — never the full chart of accounts. Computed without the contra filter
@@ -137,7 +164,7 @@ new #[Layout('components.layout.app')] class extends Component
             ->orderBy($sortColumn, $this->sortDir)
             ->paginate(25);
 
-        return compact('account', 'lines', 'contraAccounts');
+        return compact('account', 'lines', 'contraAccounts', 'hasChildren');
     }
 }; ?>
 
@@ -229,6 +256,9 @@ new #[Layout('components.layout.app')] class extends Component
                                 <flux:icon.{{ $sortDir === 'asc' ? 'chevron-up' : 'chevron-down' }} class="inline size-3" />
                             @endif
                         </th>
+                        @if($hasChildren)
+                            <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-ink-muted">Account</th>
+                        @endif
                         <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-ink-muted">Party</th>
                         <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-ink-muted">Description</th>
                         <th wire:click="sort('contra_account')" class="cursor-pointer px-4 py-3 text-left text-xs font-medium uppercase tracking-wide text-ink-muted hover:text-ink">
@@ -257,6 +287,17 @@ new #[Layout('components.layout.app')] class extends Component
                             <td class="px-4 py-3 text-ink-soft">
                                 {{ ucwords(str_replace('_', ' ', $line->document_type ?? '')) }}
                             </td>
+                            @if($hasChildren)
+                                <td class="px-4 py-3 text-ink-soft">
+                                    @if($line->posting_account_id !== $accountId)
+                                        <a href="{{ route('accounts.show', $line->posting_account_id) }}" wire:navigate class="hover:underline">
+                                            {{ $line->posting_account_code }} — {{ $line->posting_account_name }}
+                                        </a>
+                                    @else
+                                        {{ $line->posting_account_code }} — {{ $line->posting_account_name }}
+                                    @endif
+                                </td>
+                            @endif
                             <td class="px-4 py-3 text-ink-soft">
                                 {{ $line->party_name ?? '—' }}
                             </td>
@@ -272,7 +313,7 @@ new #[Layout('components.layout.app')] class extends Component
                         </tr>
                     @empty
                         <tr>
-                            <td colspan="7" class="px-4 py-12 text-center text-sm text-ink-muted">
+                            <td colspan="{{ $hasChildren ? 8 : 7 }}" class="px-4 py-12 text-center text-sm text-ink-muted">
                                 No transactions found for this account.
                             </td>
                         </tr>

@@ -140,6 +140,50 @@ it('shows the contra account for a purchase invoice line and filters/sorts by it
         ->assertSet('sortBy', 'contra_account');
 });
 
+it('rolls up a child account\'s postings into the parent control account\'s ledger', function (): void {
+    $parent = Account::factory()->create(['code' => '1100', 'name' => 'Accounts Receivable', 'allow_direct_posting' => false]);
+    $child = Account::factory()->create(['code' => '1100-01', 'name' => 'AR — Test Client', 'parent_id' => $parent->id]);
+    $incomeAccount = Account::factory()->create();
+
+    $client = app(PartyService::class)->createBusiness([
+        'business_type' => 'company',
+        'legal_name' => 'Rollup Client',
+        'trading_name' => 'Rollup Client',
+        'status' => 'active',
+    ], ['client']);
+
+    $invoice = app(BillingService::class)->createDraft($client, ['issue_date' => now()->toDateString()]);
+    $invoice->update(['receivable_account_id' => $child->id]);
+    $invoice->lines()->create([
+        'line_number' => 1,
+        'type' => 'service',
+        'description' => 'Consulting',
+        'account_id' => $incomeAccount->id,
+        'quantity' => 1,
+        'unit_price' => 420.00,
+        'discount_percent' => 0,
+        'discount_amount' => 0,
+        'tax_rate' => 0,
+    ]);
+    $invoice->recalculateTotals();
+    app(DocumentService::class)->markAsSent($invoice, User::factory()->create());
+
+    $this->actingAs(atvUser());
+
+    // The control account never takes direct postings itself, but its
+    // ledger still shows what posted to its sub-account.
+    Livewire::test('pages.accounts.show', ['id' => $parent->id])
+        ->assertOk()
+        ->assertSee($invoice->fresh()->document_number)
+        ->assertSee('420.00')
+        ->assertSee('1100-01');
+
+    // The sub-account's own ledger still shows the same posting directly.
+    Livewire::test('pages.accounts.show', ['id' => $child->id])
+        ->assertOk()
+        ->assertSee($invoice->fresh()->document_number);
+});
+
 it('excludes transactions outside the selected date range', function (): void {
     $expenseAccount = Account::factory()->create();
 
