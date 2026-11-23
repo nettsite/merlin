@@ -231,7 +231,7 @@ new #[Layout('components.layout.app')] class extends Component
             'editingLine.description' => 'nullable|string|max:1000',
             'editingLine.account_id' => 'nullable|exists:accounts,id',
             'editingLine.quantity' => 'required|numeric|min:0',
-            'editingLine.unit_price' => 'required|numeric',
+            'editingLine.unit_price' => 'required|numeric|min:0',
             'editingLine.tax_rate' => 'nullable|numeric|min:0|max:100',
         ]);
 
@@ -281,7 +281,7 @@ new #[Layout('components.layout.app')] class extends Component
             'newLine.description' => 'nullable|string|max:1000',
             'newLine.account_id' => 'nullable|exists:accounts,id',
             'newLine.quantity' => 'required|numeric|min:0',
-            'newLine.unit_price' => 'required|numeric',
+            'newLine.unit_price' => 'required|numeric|min:0',
             'newLine.tax_rate' => 'nullable|numeric|min:0|max:100',
         ]);
 

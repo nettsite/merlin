@@ -43,8 +43,9 @@ class SupplierPayableAccountService
             // A real per-supplier sub-account always has a parent (the control
             // account itself does not). A relationship still pointing straight
             // at the control account (manually set, or pre-dating this feature)
-            // is not yet migrated.
-            if ($existing !== null && $existing->parent_id !== null) {
+            // is not yet migrated. A deactivated account must not keep
+            // receiving new postings — fall through and create a fresh one.
+            if ($existing !== null && $existing->parent_id !== null && $existing->is_active) {
                 return $existing;
             }
         }

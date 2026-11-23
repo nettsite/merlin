@@ -177,7 +177,12 @@ new #[Layout('components.layout.app')] class extends Component
 
                 if ($zip->open($file->getRealPath()) === true) {
                     // Reject Zip Slip: entry names with ../ or absolute paths
-                    // would escape the target directory on extractTo().
+                    // would escape the target directory on extractTo(). Also
+                    // reject a decompression bomb — extractTo() would write
+                    // the full uncompressed size to disk before the
+                    // post-extraction 50-file cap below ever runs.
+                    $totalUncompressed = 0;
+
                     for ($i = 0; $i < $zip->numFiles; $i++) {
                         $entryName = $zip->getNameIndex($i);
                         if ($entryName !== false && (str_contains($entryName, '..') || str_starts_with($entryName, '/'))) {
@@ -185,6 +190,15 @@ new #[Layout('components.layout.app')] class extends Component
                             $this->addError('uploadFiles', 'ZIP contains unsafe file paths and was rejected.');
                             return;
                         }
+
+                        $totalUncompressed += $zip->statIndex($i)['size'] ?? 0;
+                    }
+
+                    if ($zip->numFiles > 500 || $totalUncompressed > 500 * 1024 * 1024) {
+                        $zip->close();
+                        $this->addError('uploadFiles', 'ZIP contains too many files or is too large when decompressed, and was rejected.');
+
+                        return;
                     }
 
                     $dir = sys_get_temp_dir().'/merlin-zip-'.uniqid();
@@ -408,6 +422,16 @@ new #[Layout('components.layout.app')] class extends Component
 
         $line = DocumentLine::findOrFail($this->editingLineId);
         $this->authorize('update', $line->document);
+
+        // 'rejected' is terminal (see getAllowedTransitions) and isn't
+        // covered by DocumentLine's posted-document immutability guard —
+        // without this, a rejected invoice's lines stay editable forever,
+        // letting the record of what was actually rejected be rewritten.
+        if ($line->document->status === 'rejected') {
+            $this->addError('editingLine.description', 'Cannot edit a line on a rejected invoice.');
+
+            return;
+        }
 
         $line->update([
             'description' => $this->editingLine['description'] ?: null,
