@@ -73,7 +73,7 @@ new #[Layout('components.layout.app')] class extends Component
                     <td class="px-4 py-3 font-medium text-ink">
                         {{ $person->full_name }}
                         @if($person->contactAssignments->firstWhere('is_primary', true))
-                            <span class="ml-1.5 text-xs px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 font-medium">Primary</span>
+                            <span class="ml-1.5 text-xs px-1.5 py-0.5 rounded-sm bg-blue-50 text-blue-600 font-medium">Primary</span>
                         @endif
                     </td>
                     <td class="px-4 py-3 text-ink-soft">

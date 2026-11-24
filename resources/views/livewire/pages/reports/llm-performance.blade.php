@@ -130,7 +130,7 @@ new #[Layout('components.layout.app')] class extends Component
     <h2 class="text-sm font-semibold text-ink mb-4">Recent Errors</h2>
     <div class="space-y-3">
         @foreach($recentErrors as $log)
-            <div class="rounded border border-red-100 bg-red-50 p-3">
+            <div class="rounded-sm border border-red-100 bg-red-50 p-3">
                 <div class="flex items-center justify-between mb-1">
                     <span class="font-mono text-xs text-ink-muted">{{ $log->model }}</span>
                     <span class="text-xs text-ink-muted">{{ $log->created_at->diffForHumans() }}</span>

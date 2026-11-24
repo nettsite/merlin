@@ -418,7 +418,7 @@ new #[Layout('components.layout.app')] class extends Component
 
 <div>
 @if(session('success'))
-    <div class="mx-6 mt-4 px-4 py-3 rounded bg-green-50 border border-green-200 text-sm text-success">
+    <div class="mx-6 mt-4 px-4 py-3 rounded-sm bg-green-50 border border-green-200 text-sm text-success">
         {{ session('success') }}
     </div>
 @endif
@@ -499,7 +499,7 @@ new #[Layout('components.layout.app')] class extends Component
                                 default => 'bg-surface-alt text-ink-muted',
                             };
                         @endphp
-                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium {{ $badgeClass }}">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium {{ $badgeClass }}">
                             {{ ucfirst($quote->status) }}
                         </span>
                     </td>
@@ -586,7 +586,7 @@ new #[Layout('components.layout.app')] class extends Component
                                 default => 'bg-surface-alt text-ink-muted',
                             };
                         @endphp
-                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium {{ $badgeClass }}">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium {{ $badgeClass }}">
                             {{ ucfirst($detail->status) }}
                         </span>
                     </div>
@@ -721,18 +721,18 @@ new #[Layout('components.layout.app')] class extends Component
                             @foreach($lines as $line)
                                 @if($editingLineId === $line->id)
                                     <tr class="border-t border-line">
-                                        <td class="py-2 pr-2"><input type="text" wire:model="editingLine.description" class="w-full border border-line rounded px-2 py-1 text-xs" /></td>
+                                        <td class="py-2 pr-2"><input type="text" wire:model="editingLine.description" class="w-full border border-line rounded-sm px-2 py-1 text-xs" /></td>
                                         <td class="py-2 px-2">
-                                            <select wire:model="editingLine.account_id" class="w-full border border-line rounded px-2 py-1 text-xs">
+                                            <select wire:model="editingLine.account_id" class="w-full border border-line rounded-sm px-2 py-1 text-xs">
                                                 <option value="">—</option>
                                                 @foreach($accounts as $account)
                                                     <option value="{{ $account->id }}">{{ $account->code }} {{ $account->name }}</option>
                                                 @endforeach
                                             </select>
                                         </td>
-                                        <td class="py-2 px-2"><input type="number" wire:model="editingLine.quantity" step="0.0001" class="w-20 border border-line rounded px-2 py-1 text-xs text-right" /></td>
-                                        <td class="py-2 px-2"><input type="number" wire:model="editingLine.unit_price" step="0.0001" class="w-24 border border-line rounded px-2 py-1 text-xs text-right" /></td>
-                                        <td class="py-2 px-2"><input type="number" wire:model="editingLine.tax_rate" step="0.01" min="0" max="100" class="w-16 border border-line rounded px-2 py-1 text-xs text-right" /></td>
+                                        <td class="py-2 px-2"><input type="number" wire:model="editingLine.quantity" step="0.0001" class="w-20 border border-line rounded-sm px-2 py-1 text-xs text-right" /></td>
+                                        <td class="py-2 px-2"><input type="number" wire:model="editingLine.unit_price" step="0.0001" class="w-24 border border-line rounded-sm px-2 py-1 text-xs text-right" /></td>
+                                        <td class="py-2 px-2"><input type="number" wire:model="editingLine.tax_rate" step="0.01" min="0" max="100" class="w-16 border border-line rounded-sm px-2 py-1 text-xs text-right" /></td>
                                         <td class="py-2 pl-2 text-right font-medium text-ink tabular-nums whitespace-nowrap">{{ number_format((float) $line->line_total + (float) $line->tax_amount, 2) }}</td>
                                         @if($detail->status === 'draft')
                                             <td class="py-2">
@@ -765,18 +765,18 @@ new #[Layout('components.layout.app')] class extends Component
 
                             @if($showAddLine)
                                 <tr class="border-t border-line bg-surface-alt">
-                                    <td class="py-2 pr-2"><input type="text" wire:model="newLine.description" placeholder="Description" class="w-full border border-line rounded px-2 py-1 text-xs" autofocus /></td>
+                                    <td class="py-2 pr-2"><input type="text" wire:model="newLine.description" placeholder="Description" class="w-full border border-line rounded-sm px-2 py-1 text-xs" autofocus /></td>
                                     <td class="py-2 px-2">
-                                        <select wire:model="newLine.account_id" class="w-full border border-line rounded px-2 py-1 text-xs">
+                                        <select wire:model="newLine.account_id" class="w-full border border-line rounded-sm px-2 py-1 text-xs">
                                             <option value="">—</option>
                                             @foreach($accounts as $account)
                                                 <option value="{{ $account->id }}">{{ $account->code }} {{ $account->name }}</option>
                                             @endforeach
                                         </select>
                                     </td>
-                                    <td class="py-2 px-2"><input type="number" wire:model="newLine.quantity" step="0.0001" class="w-20 border border-line rounded px-2 py-1 text-xs text-right" /></td>
-                                    <td class="py-2 px-2"><input type="number" wire:model="newLine.unit_price" step="0.0001" placeholder="0.00" class="w-24 border border-line rounded px-2 py-1 text-xs text-right" /></td>
-                                    <td class="py-2 px-2"><input type="number" wire:model="newLine.tax_rate" step="0.01" min="0" max="100" class="w-16 border border-line rounded px-2 py-1 text-xs text-right" /></td>
+                                    <td class="py-2 px-2"><input type="number" wire:model="newLine.quantity" step="0.0001" class="w-20 border border-line rounded-sm px-2 py-1 text-xs text-right" /></td>
+                                    <td class="py-2 px-2"><input type="number" wire:model="newLine.unit_price" step="0.0001" placeholder="0.00" class="w-24 border border-line rounded-sm px-2 py-1 text-xs text-right" /></td>
+                                    <td class="py-2 px-2"><input type="number" wire:model="newLine.tax_rate" step="0.01" min="0" max="100" class="w-16 border border-line rounded-sm px-2 py-1 text-xs text-right" /></td>
                                     <td class="py-2 pl-2 text-right text-ink-muted text-xs whitespace-nowrap">—</td>
                                     <td class="py-2">
                                         <div class="flex gap-1">

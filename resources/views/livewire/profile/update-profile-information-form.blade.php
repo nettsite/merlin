@@ -90,7 +90,7 @@ new class extends Component
                     <p class="text-sm mt-2 text-ink">
                         {{ __('Your email address is unverified.') }}
 
-                        <button wire:click.prevent="sendVerification" class="underline text-sm text-ink-soft hover:text-ink rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent">
+                        <button wire:click.prevent="sendVerification" class="underline text-sm text-ink-soft hover:text-ink rounded-md focus:outline-hidden focus:ring-2 focus:ring-offset-2 focus:ring-accent">
                             {{ __('Click here to re-send the verification email.') }}
                         </button>
                     </p>

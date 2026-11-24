@@ -105,7 +105,7 @@ new #[Layout('components.layout.app')] class extends Component
 <div class="max-w-3xl mx-auto px-6 py-6 space-y-6">
 
     {{-- Column headers --}}
-    <div class="flex text-xs font-semibold uppercase tracking-widest text-ink-muted mb-[-1rem]">
+    <div class="flex text-xs font-semibold uppercase tracking-widest text-ink-muted -mb-4">
         <div class="flex-1"></div>
         <div class="w-36 text-right pr-4">{{ $monthLabel }}</div>
         <div class="w-36 text-right pr-4">Year to Date</div>

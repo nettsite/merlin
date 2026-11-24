@@ -14,7 +14,7 @@
     };
 @endphp
 @if($label)
-    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium {{ $classes }}">{{ $label }}</span>
+    <span class="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium {{ $classes }}">{{ $label }}</span>
 @else
     <span class="text-ink-muted text-xs">—</span>
 @endif

@@ -140,7 +140,7 @@ new #[Layout('components.layout.app')] class extends Component
                     <td class="px-4 py-3 text-ink-soft">{{ $group->type?->name ?? '—' }}</td>
                     <td class="px-4 py-3">
                         <span @class([
-                            'inline-flex items-center px-2 py-0.5 rounded text-xs font-medium',
+                            'inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium',
                             'bg-green-50 text-success' => $group->is_active,
                             'bg-surface-alt text-ink-muted' => !$group->is_active,
                         ])>

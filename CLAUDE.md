@@ -11,7 +11,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Laravel business management app for small businesses. Core feature: LLM-assisted supplier invoice processing (PDFs/DOCX/XLSX/CSV → GL transactions). Previous Filament-based version at `~/Projects/merlin` is **read-only spec** — do not copy Filament files from it.
 
-**Stack:** Laravel 13, Livewire 4, Flux UI (livewire/flux), Alpine.js, Tailwind CSS 3, Pest + PHPUnit 12, Laravel Breeze (Livewire stack) for auth. No Volt — all components are Livewire 4 native single-file classes. LLM calls go through `laravel/ai` (`Laravel\Ai`), not raw HTTP.
+**Stack:** Laravel 13, Livewire 4, Flux UI (livewire/flux), Alpine.js, Tailwind CSS 4 (CSS-first config in `resources/css/app.css`, no `tailwind.config.js`), Pest + PHPUnit 12, Laravel Breeze (Livewire stack) for auth. No Volt — all components are Livewire 4 native single-file classes. LLM calls go through `laravel/ai` (`Laravel\Ai`), not raw HTTP.
 
 ## Commands
 

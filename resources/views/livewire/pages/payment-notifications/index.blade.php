@@ -159,7 +159,7 @@ new #[Layout('components.layout.app')] class extends Component
                                     target="_blank"
                                     rel="noopener"
                                     title="View original document"
-                                    class="inline-flex items-center justify-center rounded p-1 text-ink-muted hover:text-ink hover:bg-surface-alt transition-colors"
+                                    class="inline-flex items-center justify-center rounded-sm p-1 text-ink-muted hover:text-ink hover:bg-surface-alt transition-colors"
                                 >
                                     <flux:icon.document-text class="size-4" />
                                 </a>

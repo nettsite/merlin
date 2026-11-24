@@ -120,14 +120,14 @@ new #[Layout('components.layout.app')] class extends Component
                     <td class="px-4 py-3 text-ink-soft">{{ $template->bank_name }}</td>
                     <td class="px-4 py-3">
                         @if($template->layout_hints)
-                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-50 text-green-700">Generated</span>
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-green-50 text-green-700">Generated</span>
                         @else
-                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-surface-alt text-ink-muted">None yet</span>
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-surface-alt text-ink-muted">None yet</span>
                         @endif
                     </td>
                     <td class="px-4 py-3">
                         <span @class([
-                            'inline-flex items-center px-2 py-0.5 rounded text-xs font-medium',
+                            'inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium',
                             'bg-green-50 text-success' => $template->is_active,
                             'bg-surface-alt text-ink-muted' => !$template->is_active,
                         ])>{{ $template->is_active ? 'Active' : 'Inactive' }}</span>

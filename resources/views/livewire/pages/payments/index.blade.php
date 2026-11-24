@@ -212,12 +212,12 @@ new #[Layout('components.layout.app')] class extends Component
 
 <div>
 @if(session('success'))
-    <div class="mx-6 mt-4 px-4 py-3 rounded bg-green-50 border border-green-200 text-sm text-success">
+    <div class="mx-6 mt-4 px-4 py-3 rounded-sm bg-green-50 border border-green-200 text-sm text-success">
         {{ session('success') }}
     </div>
 @endif
 @if(session('error'))
-    <div class="mx-6 mt-4 px-4 py-3 rounded bg-red-50 border border-red-200 text-sm text-danger">
+    <div class="mx-6 mt-4 px-4 py-3 rounded-sm bg-red-50 border border-red-200 text-sm text-danger">
         {{ session('error') }}
     </div>
 @endif
@@ -285,7 +285,7 @@ new #[Layout('components.layout.app')] class extends Component
         </div>
 
         @if($newPaymentError)
-            <div class="px-4 py-3 rounded bg-red-50 border border-red-200 text-sm text-danger">
+            <div class="px-4 py-3 rounded-sm bg-red-50 border border-red-200 text-sm text-danger">
                 {{ $newPaymentError }}
             </div>
         @endif

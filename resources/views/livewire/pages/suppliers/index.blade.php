@@ -233,7 +233,7 @@ new #[Layout('components.layout.app')] class extends Component
                         wire:click="$set('filterStatus', '{{ $value }}')"
                         @class([
                             'px-3 py-1.5 text-sm rounded-md font-medium transition-colors',
-                            'bg-white text-ink shadow-sm ring-1 ring-inset ring-line' => $filterStatus === $value,
+                            'bg-white text-ink shadow-xs ring-1 ring-inset ring-line' => $filterStatus === $value,
                             'text-ink-soft hover:text-ink' => $filterStatus !== $value,
                         ])
                     >{{ $label }}</button>
@@ -248,7 +248,7 @@ new #[Layout('components.layout.app')] class extends Component
                             wire:click="$set('dateRange', '{{ $value }}')"
                             @class([
                                 'px-3 py-1.5 text-sm rounded-md font-medium transition-colors',
-                                'bg-white text-ink shadow-sm ring-1 ring-inset ring-line' => $dateRange === $value,
+                                'bg-white text-ink shadow-xs ring-1 ring-inset ring-line' => $dateRange === $value,
                                 'text-ink-soft hover:text-ink' => $dateRange !== $value,
                             ])
                         >{{ $label }}</button>
@@ -297,7 +297,7 @@ new #[Layout('components.layout.app')] class extends Component
                         type="checkbox"
                         wire:click="toggleSelectPage({{ json_encode($pageIds) }})"
                         @checked($selectAllFiltered || $allPageSelected)
-                        class="rounded border-line"
+                        class="rounded-sm border-line"
                         @if($selectAllFiltered) disabled @endif
                     />
                 </th>
@@ -315,13 +315,13 @@ new #[Layout('components.layout.app')] class extends Component
                 <tr class="border-t border-line hover:bg-surface-alt group">
                     <td class="px-4 py-3">
                         @if($selectAllFiltered)
-                            <input type="checkbox" checked disabled class="rounded border-line opacity-60" />
+                            <input type="checkbox" checked disabled class="rounded-sm border-line opacity-60" />
                         @else
                             <input
                                 type="checkbox"
                                 wire:model.live="selectedIds"
                                 value="{{ $party->id }}"
-                                class="rounded border-line"
+                                class="rounded-sm border-line"
                             />
                         @endif
                     </td>
@@ -338,7 +338,7 @@ new #[Layout('components.layout.app')] class extends Component
                     </td>
                     <td class="px-4 py-3">
                         <span @class([
-                            'inline-flex items-center px-2 py-0.5 rounded text-xs font-medium',
+                            'inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium',
                             'bg-green-50 text-success' => $party->status === 'active',
                             'bg-yellow-50 text-warning' => $party->status === 'pending',
                             'bg-surface-alt text-ink-muted' => $party->status === 'inactive',

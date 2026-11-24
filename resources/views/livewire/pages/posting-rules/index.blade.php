@@ -201,10 +201,10 @@ new #[Layout('components.layout.app')] class extends Component
                     <td class="px-4 py-3">
                         <div class="flex gap-1 flex-wrap">
                             @if($rule->actions['auto_approve'] ?? false)
-                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-50 text-blue-700">Auto-approve</span>
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-blue-50 text-blue-700">Auto-approve</span>
                             @endif
                             @if($rule->actions['auto_post'] ?? false)
-                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-50 text-purple-700">Auto-post</span>
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-purple-50 text-purple-700">Auto-post</span>
                             @endif
                         </div>
                     </td>
@@ -216,7 +216,7 @@ new #[Layout('components.layout.app')] class extends Component
                     </td>
                     <td class="px-4 py-3">
                         <span @class([
-                            'inline-flex items-center px-2 py-0.5 rounded text-xs font-medium',
+                            'inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium',
                             'bg-green-50 text-success' => $rule->is_active,
                             'bg-surface-alt text-ink-muted' => !$rule->is_active,
                         ])>

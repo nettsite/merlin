@@ -96,9 +96,9 @@ new #[Layout('components.layout.app')] class extends Component
                         </td>
                         <td class="px-4 py-3">
                             @if($log->error)
-                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-50 text-danger">Error</span>
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-red-50 text-danger">Error</span>
                             @else
-                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-50 text-success">OK</span>
+                                <span class="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-green-50 text-success">OK</span>
                             @endif
                         </td>
                     </tr>
@@ -116,17 +116,17 @@ new #[Layout('components.layout.app')] class extends Component
                                 @if($selectedLog?->error)
                                     <div class="mb-3">
                                         <p class="text-xs font-medium text-danger mb-1">Error</p>
-                                        <pre class="text-xs text-ink bg-white border border-line rounded p-3 overflow-x-auto">{{ $selectedLog->error }}</pre>
+                                        <pre class="text-xs text-ink bg-white border border-line rounded-sm p-3 overflow-x-auto">{{ $selectedLog->error }}</pre>
                                     </div>
                                 @endif
                                 <div class="grid grid-cols-2 gap-4">
                                     <div>
                                         <p class="text-xs font-medium text-ink-muted mb-1">Request Payload</p>
-                                        <pre class="text-xs text-ink bg-white border border-line rounded p-3 overflow-x-auto max-h-48">{{ json_encode($selectedLog?->request_payload, JSON_PRETTY_PRINT) }}</pre>
+                                        <pre class="text-xs text-ink bg-white border border-line rounded-sm p-3 overflow-x-auto max-h-48">{{ json_encode($selectedLog?->request_payload, JSON_PRETTY_PRINT) }}</pre>
                                     </div>
                                     <div>
                                         <p class="text-xs font-medium text-ink-muted mb-1">Response Payload</p>
-                                        <pre class="text-xs text-ink bg-white border border-line rounded p-3 overflow-x-auto max-h-48">{{ $responseDisplay }}</pre>
+                                        <pre class="text-xs text-ink bg-white border border-line rounded-sm p-3 overflow-x-auto max-h-48">{{ $responseDisplay }}</pre>
                                     </div>
                                 </div>
                             </td>

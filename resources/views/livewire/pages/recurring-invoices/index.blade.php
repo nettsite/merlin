@@ -467,7 +467,7 @@ new #[Layout('components.layout.app')] class extends Component
 
 {{-- Flash --}}
 @if(session('success'))
-    <div class="mx-6 mt-4 px-4 py-3 rounded bg-green-50 border border-green-200 text-sm text-success">
+    <div class="mx-6 mt-4 px-4 py-3 rounded-sm bg-green-50 border border-green-200 text-sm text-success">
         {{ session('success') }}
     </div>
 @endif
@@ -489,7 +489,7 @@ new #[Layout('components.layout.app')] class extends Component
                         wire:click="$set('filterStatus', '{{ $value }}')"
                         @class([
                             'px-3 py-1.5 text-sm rounded-md font-medium transition-colors',
-                            'bg-white text-ink shadow-sm ring-1 ring-inset ring-line' => $filterStatus === $value,
+                            'bg-white text-ink shadow-xs ring-1 ring-inset ring-line' => $filterStatus === $value,
                             'text-ink-soft hover:text-ink' => $filterStatus !== $value,
                         ])
                     >{{ $label }}</button>
@@ -501,7 +501,7 @@ new #[Layout('components.layout.app')] class extends Component
                 title="Active templates whose next invoice date is on or before the end of this month (overdue ones included)"
                 @class([
                     'px-3 py-1.5 text-sm rounded-md font-medium transition-colors',
-                    'bg-white text-ink shadow-sm ring-1 ring-inset ring-line' => $filterThisMonth,
+                    'bg-white text-ink shadow-xs ring-1 ring-inset ring-line' => $filterThisMonth,
                     'text-ink-soft hover:text-ink' => ! $filterThisMonth,
                 ])
             >Generating this month</button>
@@ -549,7 +549,7 @@ new #[Layout('components.layout.app')] class extends Component
                         type="checkbox"
                         wire:click="toggleSelectPage({{ json_encode($pageIds) }})"
                         @checked($selectAllFiltered || $allPageSelected)
-                        class="rounded border-line"
+                        class="rounded-sm border-line"
                         @if($selectAllFiltered) disabled @endif
                     />
                 </th>
@@ -571,13 +571,13 @@ new #[Layout('components.layout.app')] class extends Component
                 <tr class="group border-t border-line hover:bg-surface-alt transition-colors">
                     <td class="px-4 py-3">
                         @if($selectAllFiltered)
-                            <input type="checkbox" checked disabled class="rounded border-line opacity-60" />
+                            <input type="checkbox" checked disabled class="rounded-sm border-line opacity-60" />
                         @else
                             <input
                                 type="checkbox"
                                 wire:model.live="selectedIds"
                                 value="{{ $template->id }}"
-                                class="rounded border-line"
+                                class="rounded-sm border-line"
                             />
                         @endif
                     </td>
@@ -595,7 +595,7 @@ new #[Layout('components.layout.app')] class extends Component
                     </td>
                     <td class="px-4 py-3">
                         <span @class([
-                            'inline-flex items-center px-2 py-0.5 rounded text-xs font-medium',
+                            'inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium',
                             'bg-green-50 text-success' => $template->status === \App\Modules\Billing\Enums\RecurringInvoiceStatus::Active,
                             'bg-yellow-50 text-warning' => $template->status === \App\Modules\Billing\Enums\RecurringInvoiceStatus::Paused,
                             'bg-surface-alt text-ink-muted' => $template->status === \App\Modules\Billing\Enums\RecurringInvoiceStatus::Completed,
@@ -820,7 +820,7 @@ new #[Layout('components.layout.app')] class extends Component
                     </div>
 
                     @if(count($formLines) > 0)
-                    <div class="border border-line rounded overflow-hidden">
+                    <div class="border border-line rounded-sm overflow-hidden">
                         <table class="w-full text-xs">
                             <thead>
                                 <tr class="bg-surface-alt border-b border-line">
@@ -840,13 +840,13 @@ new #[Layout('components.layout.app')] class extends Component
                                             type="text"
                                             wire:model="formLines.{{ $i }}.description"
                                             placeholder="Description"
-                                            class="w-full border border-line rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                                            class="w-full border border-line rounded-sm px-2 py-1 text-xs focus:outline-hidden focus:ring-1 focus:ring-primary"
                                         />
                                     </td>
                                     <td class="px-2 py-1.5">
                                         <select
                                             wire:model="formLines.{{ $i }}.account_id"
-                                            class="w-full border border-line rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                                            class="w-full border border-line rounded-sm px-2 py-1 text-xs focus:outline-hidden focus:ring-1 focus:ring-primary"
                                         >
                                             <option value="">—</option>
                                             @foreach($accounts as $account)
@@ -860,7 +860,7 @@ new #[Layout('components.layout.app')] class extends Component
                                             wire:model="formLines.{{ $i }}.quantity"
                                             step="0.0001"
                                             min="0"
-                                            class="w-full border border-line rounded px-2 py-1 text-xs text-right focus:outline-none focus:ring-1 focus:ring-primary"
+                                            class="w-full border border-line rounded-sm px-2 py-1 text-xs text-right focus:outline-hidden focus:ring-1 focus:ring-primary"
                                         />
                                     </td>
                                     <td class="px-2 py-1.5">
@@ -870,7 +870,7 @@ new #[Layout('components.layout.app')] class extends Component
                                             step="0.01"
                                             min="0"
                                             placeholder="0.00"
-                                            class="w-full border border-line rounded px-2 py-1 text-xs text-right focus:outline-none focus:ring-1 focus:ring-primary"
+                                            class="w-full border border-line rounded-sm px-2 py-1 text-xs text-right focus:outline-hidden focus:ring-1 focus:ring-primary"
                                         />
                                     </td>
                                     <td class="px-2 py-1.5">
@@ -881,7 +881,7 @@ new #[Layout('components.layout.app')] class extends Component
                                             min="0"
                                             max="100"
                                             placeholder="15"
-                                            class="w-full border border-line rounded px-2 py-1 text-xs text-right focus:outline-none focus:ring-1 focus:ring-primary"
+                                            class="w-full border border-line rounded-sm px-2 py-1 text-xs text-right focus:outline-hidden focus:ring-1 focus:ring-primary"
                                         />
                                     </td>
                                     <td class="px-2 py-1.5 text-center">
@@ -899,7 +899,7 @@ new #[Layout('components.layout.app')] class extends Component
                         </table>
                     </div>
                     @else
-                    <div class="text-center py-4 text-xs text-ink-muted border border-dashed border-line rounded">
+                    <div class="text-center py-4 text-xs text-ink-muted border border-dashed border-line rounded-sm">
                         No lines added. Click "Add Line" to add invoice lines.
                     </div>
                     @endif
@@ -914,7 +914,7 @@ new #[Layout('components.layout.app')] class extends Component
                 @if($historyInvoices->isEmpty())
                     <p class="text-sm text-ink-muted text-center py-8">No invoices generated from this template yet.</p>
                 @else
-                <div class="border border-line rounded overflow-hidden">
+                <div class="border border-line rounded-sm overflow-hidden">
                     <table class="w-full text-sm">
                         <thead>
                             <tr class="bg-surface-alt border-b border-line">
@@ -938,7 +938,7 @@ new #[Layout('components.layout.app')] class extends Component
                                 </td>
                                 <td class="px-4 py-3">
                                     <span @class([
-                                        'inline-flex items-center px-2 py-0.5 rounded text-xs font-medium',
+                                        'inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium',
                                         'bg-surface-alt text-ink-muted' => $invoice->status === 'draft',
                                         'bg-blue-50 text-blue-700' => $invoice->status === 'sent',
                                         'bg-purple-50 text-purple-700' => $invoice->is_fully_credited,

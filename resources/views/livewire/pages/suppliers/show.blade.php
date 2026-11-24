@@ -147,7 +147,7 @@ new #[Layout('components.layout.app')] class extends Component
                     {{ $party->business?->display_name ?? '—' }}
                 </h1>
                 <span @class([
-                    'inline-flex items-center px-2 py-0.5 rounded text-xs font-medium',
+                    'inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium',
                     'bg-green-50 text-success' => $party->status === 'active',
                     'bg-yellow-50 text-warning' => $party->status === 'pending',
                     'bg-surface-alt text-ink-muted' => $party->status === 'inactive',
@@ -233,7 +233,7 @@ new #[Layout('components.layout.app')] class extends Component
         @if($clientRel !== null)
             <div class="mt-3 flex items-center justify-between">
                 <div class="flex items-center gap-3">
-                    <span class="inline-flex items-center rounded px-2 py-0.5 text-xs font-medium bg-blue-50 text-blue-600">Client</span>
+                    <span class="inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium bg-blue-50 text-blue-600">Client</span>
                     <span class="text-sm text-ink-soft">
                         {{ $paymentTerms->firstWhere('id', $clientRel->payment_term_id)?->name ?? 'Default payment terms' }}
                     </span>

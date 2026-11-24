@@ -426,7 +426,7 @@ new #[Layout('components.layout.app')] class extends Component
                             wire:click="$set('dateRange', '{{ $value }}')"
                             @class([
                                 'px-3 py-1.5 text-sm rounded-md font-medium transition-colors',
-                                'bg-white text-ink shadow-sm ring-1 ring-inset ring-line' => $dateRange === $value,
+                                'bg-white text-ink shadow-xs ring-1 ring-inset ring-line' => $dateRange === $value,
                                 'text-ink-soft hover:text-ink' => $dateRange !== $value,
                             ])
                         >{{ $label }}</button>
@@ -469,7 +469,7 @@ new #[Layout('components.layout.app')] class extends Component
                     </td>
                     <td class="px-4 py-3">
                         <span @class([
-                            'inline-flex items-center px-2 py-0.5 rounded text-xs font-medium',
+                            'inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium',
                             'bg-green-50 text-success' => $party->status === 'active',
                             'bg-yellow-50 text-warning' => $party->status === 'pending',
                             'bg-surface-alt text-ink-muted' => $party->status === 'inactive',
@@ -661,7 +661,7 @@ new #[Layout('components.layout.app')] class extends Component
                 <flux:error name="contactPhone" />
             </flux:field>
             <label class="flex items-center gap-2 text-sm text-ink cursor-pointer">
-                <input type="checkbox" wire:model="contactReceivesInvoices" class="rounded border-line text-primary">
+                <input type="checkbox" wire:model="contactReceivesInvoices" class="rounded-sm border-line text-primary">
                 Receives invoices
             </label>
         </div>
@@ -687,10 +687,10 @@ new #[Layout('components.layout.app')] class extends Component
                 <div class="flex items-center gap-2">
                     <span class="text-sm font-medium text-ink">{{ $contact['full_name'] }}</span>
                     @if($contact['is_primary'])
-                        <span class="text-xs px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 font-medium">Primary</span>
+                        <span class="text-xs px-1.5 py-0.5 rounded-sm bg-blue-50 text-blue-600 font-medium">Primary</span>
                     @endif
                     @if($contact['receives_invoices'])
-                        <span class="text-xs px-1.5 py-0.5 rounded bg-surface-alt text-ink-muted">Invoices</span>
+                        <span class="text-xs px-1.5 py-0.5 rounded-sm bg-surface-alt text-ink-muted">Invoices</span>
                     @endif
                 </div>
                 @if($contact['email'])
@@ -738,7 +738,7 @@ new #[Layout('components.layout.app')] class extends Component
                 <flux:error name="newContactPhone" />
             </flux:field>
             <label class="flex items-center gap-2 text-sm text-ink cursor-pointer">
-                <input type="checkbox" wire:model="newContactReceivesInvoices" class="rounded border-line text-primary">
+                <input type="checkbox" wire:model="newContactReceivesInvoices" class="rounded-sm border-line text-primary">
                 Receives invoices
             </label>
             <div class="flex items-center gap-2 pt-1">

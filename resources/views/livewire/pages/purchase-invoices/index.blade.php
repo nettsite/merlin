@@ -738,12 +738,12 @@ new #[Layout('components.layout.app')] class extends Component
 <div>
 {{-- Flash messages --}}
 @if(session('success'))
-    <div class="mx-6 mt-4 px-4 py-3 rounded bg-green-50 border border-green-200 text-sm text-success">
+    <div class="mx-6 mt-4 px-4 py-3 rounded-sm bg-green-50 border border-green-200 text-sm text-success">
         {{ session('success') }}
     </div>
 @endif
 @if(session('warning'))
-    <div class="mx-6 mt-4 px-4 py-3 rounded bg-yellow-50 border border-yellow-200 text-sm text-warning">
+    <div class="mx-6 mt-4 px-4 py-3 rounded-sm bg-yellow-50 border border-yellow-200 text-sm text-warning">
         {{ session('warning') }}
     </div>
 @endif
@@ -845,7 +845,7 @@ new #[Layout('components.layout.app')] class extends Component
                         x-data
                         :checked="{{ $rows->pluck('id')->toJson() }}.length > 0 && {{ $rows->pluck('id')->toJson() }}.every(id => $wire.selectedIds.includes(id))"
                         @change="$wire.set('selectedIds', $event.target.checked ? {{ $rows->pluck('id')->toJson() }} : [])"
-                        class="rounded border-line"
+                        class="rounded-sm border-line"
                     />
                 </th>
                 <th class="px-4 py-3 text-left text-xs font-medium text-ink-muted uppercase tracking-wide">Number</th>
@@ -873,7 +873,7 @@ new #[Layout('components.layout.app')] class extends Component
                             type="checkbox"
                             wire:model.live="selectedIds"
                             value="{{ $invoice->id }}"
-                            class="rounded border-line"
+                            class="rounded-sm border-line"
                         />
                     </td>
                     <td class="px-4 py-3 font-mono text-xs text-ink">
@@ -913,7 +913,7 @@ new #[Layout('components.layout.app')] class extends Component
                     <td class="px-4 py-3">
                         @include('livewire.pages.purchase-invoices._status-badge', ['status' => $invoice->status])
                         @if($invoice->metadata['extraction_failed'] ?? false)
-                            <span class="ml-1 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-50 text-danger" title="Automatic extraction failed — open the invoice and use Reprocess to retry.">
+                            <span class="ml-1 inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium bg-red-50 text-danger" title="Automatic extraction failed — open the invoice and use Reprocess to retry.">
                                 Extraction failed
                             </span>
                         @endif
@@ -937,7 +937,7 @@ new #[Layout('components.layout.app')] class extends Component
                                     target="_blank"
                                     rel="noopener"
                                     title="View original invoice"
-                                    class="inline-flex items-center justify-center rounded p-1 text-ink-muted hover:text-ink hover:bg-surface-alt transition-colors"
+                                    class="inline-flex items-center justify-center rounded-sm p-1 text-ink-muted hover:text-ink hover:bg-surface-alt transition-colors"
                                 >
                                     <flux:icon.document-text class="size-4" />
                                 </a>
@@ -971,7 +971,7 @@ new #[Layout('components.layout.app')] class extends Component
             <flux:heading size="lg" class="font-semibold">Upload Complete</flux:heading>
         </div>
         <div class="p-6">
-            <div class="px-4 py-3 rounded bg-green-50 border border-green-200 text-sm text-success">
+            <div class="px-4 py-3 rounded-sm bg-green-50 border border-green-200 text-sm text-success">
                 {{ $uploadedCount }} file{{ $uploadedCount !== 1 ? 's' : '' }} queued for processing.
             </div>
         </div>
@@ -1012,7 +1012,7 @@ new #[Layout('components.layout.app')] class extends Component
 
                     <div class="flex items-center justify-center gap-3 flex-wrap">
                         <label class="cursor-pointer">
-                            <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded border border-line bg-white text-xs font-medium text-ink hover:bg-surface-alt transition-colors">
+                            <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm border border-line bg-white text-xs font-medium text-ink hover:bg-surface-alt transition-colors">
                                 <flux:icon.document-text class="size-3.5" />
                                 Browse files
                             </span>
@@ -1026,7 +1026,7 @@ new #[Layout('components.layout.app')] class extends Component
                             />
                         </label>
                         <label class="cursor-pointer">
-                            <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded border border-line bg-white text-xs font-medium text-ink hover:bg-surface-alt transition-colors">
+                            <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm border border-line bg-white text-xs font-medium text-ink hover:bg-surface-alt transition-colors">
                                 <flux:icon.folder-open class="size-3.5" />
                                 Browse folder
                             </span>
@@ -1082,7 +1082,7 @@ new #[Layout('components.layout.app')] class extends Component
         {{-- Header --}}
         <div class="p-6 border-b border-line">
             @if($detail->metadata['extraction_failed'] ?? false)
-                <div class="mb-4 px-4 py-3 rounded bg-red-50 border border-red-200 text-sm text-danger">
+                <div class="mb-4 px-4 py-3 rounded-sm bg-red-50 border border-red-200 text-sm text-danger">
                     Automatic extraction failed — the invoice has no extracted data.
                     @can('can-reprocess-invoices')
                         Use <strong>Reprocess</strong> below to retry.
@@ -1091,7 +1091,7 @@ new #[Layout('components.layout.app')] class extends Component
             @endif
 
             @if($suggestedPaymentNotification)
-                <div class="mb-4 px-4 py-3 rounded bg-amber-50 border border-amber-200 text-sm">
+                <div class="mb-4 px-4 py-3 rounded-sm bg-amber-50 border border-amber-200 text-sm">
                     <span class="text-ink">
                         Possible payment match ({{ number_format(((float) ($suggestedPaymentNotification->metadata['match_confidence'] ?? 0)) * 100, 0) }}%):
                         {{ $suggestedPaymentNotification->metadata['payee_name'] ?? 'payment notification' }}
@@ -1226,7 +1226,7 @@ new #[Layout('components.layout.app')] class extends Component
                         <span>· {{ $detail->exchange_rate_date->format('d M Y') }}</span>
                     @endif
                     @if($detail->exchange_rate_provisional)
-                        <span class="px-1.5 py-0.5 rounded bg-yellow-100 text-yellow-700 font-medium">provisional</span>
+                        <span class="px-1.5 py-0.5 rounded-sm bg-yellow-100 text-yellow-700 font-medium">provisional</span>
                     @endif
                 </div>
             @endif
@@ -1269,10 +1269,10 @@ new #[Layout('components.layout.app')] class extends Component
                                 @if($editingLineId === $line->id)
                                     <tr class="border-t border-line">
                                         <td class="py-2 pr-2">
-                                            <input type="text" wire:model="editingLine.description" class="w-full border border-line rounded px-2 py-1 text-xs" />
+                                            <input type="text" wire:model="editingLine.description" class="w-full border border-line rounded-sm px-2 py-1 text-xs" />
                                         </td>
                                         <td class="py-2 px-2">
-                                            <select wire:model="editingLine.account_id" class="w-full border border-line rounded px-2 py-1 text-xs">
+                                            <select wire:model="editingLine.account_id" class="w-full border border-line rounded-sm px-2 py-1 text-xs">
                                                 <option value="">—</option>
                                                 @foreach($accounts as $account)
                                                     <option value="{{ $account->id }}">{{ $account->code }} {{ $account->name }}</option>
@@ -1280,13 +1280,13 @@ new #[Layout('components.layout.app')] class extends Component
                                             </select>
                                         </td>
                                         <td class="py-2 px-2">
-                                            <input type="number" wire:model="editingLine.quantity" step="0.0001" class="w-20 border border-line rounded px-2 py-1 text-xs text-right" />
+                                            <input type="number" wire:model="editingLine.quantity" step="0.0001" class="w-20 border border-line rounded-sm px-2 py-1 text-xs text-right" />
                                         </td>
                                         <td class="py-2 px-2">
-                                            <input type="number" wire:model="editingLine.unit_price" step="0.0001" class="w-24 border border-line rounded px-2 py-1 text-xs text-right" />
+                                            <input type="number" wire:model="editingLine.unit_price" step="0.0001" class="w-24 border border-line rounded-sm px-2 py-1 text-xs text-right" />
                                         </td>
                                         <td class="py-2 px-2">
-                                            <input type="number" wire:model="editingLine.tax_rate" step="0.01" min="0" max="100" class="w-16 border border-line rounded px-2 py-1 text-xs text-right" />
+                                            <input type="number" wire:model="editingLine.tax_rate" step="0.01" min="0" max="100" class="w-16 border border-line rounded-sm px-2 py-1 text-xs text-right" />
                                         </td>
                                         <td class="py-2 pl-2 text-right font-medium text-ink tabular-nums whitespace-nowrap">
                                             {{ number_format((float) $line->line_total + (float) $line->tax_amount, 2) }}

@@ -1,6 +1,189 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import 'tailwindcss';
+
+@plugin '@tailwindcss/forms';
+
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../vendor/livewire/flux/stubs/**/*.blade.php';
+@source '../../storage/framework/views/*.php';
+
+@theme {
+  --font-sans:
+    Inter, ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji',
+    'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+
+  --color-ink: #1a1a1a;
+  --color-ink-soft: #4d4d4d;
+  --color-ink-muted: #8a8580;
+
+  --color-accent: #c8772e;
+  --color-accent-on: #ffffff;
+  --color-accent-ink: #9a4f12;
+  --color-accent-soft: #fcefdf;
+  --color-accent-border: #f2d9b7;
+
+  --color-surface: #ffffff;
+  --color-surface-alt: #faf8f4;
+
+  --color-line: #eae6df;
+  --color-success: #3b7a4e;
+  --color-warning: #b45309;
+  --color-danger: #b91c1c;
+  --color-info: #1e40af;
+}
+
+/*
+  The default border color has changed to `currentcolor` in Tailwind CSS v4,
+  so we've added these compatibility styles to make sure everything still
+  looks the same as it did with Tailwind CSS v3.
+
+  If we ever want to remove these styles, we need to add an explicit border
+  color utility to any element that depends on these defaults.
+*/
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentcolor);
+  }
+}
+
+@utility confidence-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+@utility confidence-pill--high {
+  color: var(--accent-ink);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-border);
+}
+
+@utility confidence-pill--med {
+  color: var(--warning);
+  background: #fef3c7;
+  border: 1px solid #fde68a;
+}
+
+@utility confidence-pill--low {
+  color: var(--danger);
+  background: #fee2e2;
+  border: 1px solid #fecaca;
+}
+
+@utility chat-response {
+  /* Assistant chat bubble prose */
+  font-size: 0.875rem;
+  line-height: 1.6;
+  & h1 {
+    font-weight: 600;
+    margin-top: 1rem;
+    margin-bottom: 0.375rem;
+    line-height: 1.3;
+  }
+  & h2 {
+    font-weight: 600;
+    margin-top: 1rem;
+    margin-bottom: 0.375rem;
+    line-height: 1.3;
+  }
+  & h3 {
+    font-weight: 600;
+    margin-top: 1rem;
+    margin-bottom: 0.375rem;
+    line-height: 1.3;
+  }
+  & h4 {
+    font-weight: 600;
+    margin-top: 1rem;
+    margin-bottom: 0.375rem;
+    line-height: 1.3;
+  }
+  & h5 {
+    font-weight: 600;
+    margin-top: 1rem;
+    margin-bottom: 0.375rem;
+    line-height: 1.3;
+  }
+  & h1 {
+    font-size: 1rem;
+  }
+  & h2 {
+    font-size: 0.9375rem;
+  }
+  & h3 {
+    font-size: 0.875rem;
+  }
+  & h4 {
+    font-size: 0.875rem;
+  }
+  & p {
+    margin-bottom: 0.625rem;
+  }
+  & p:last-child {
+    margin-bottom: 0;
+  }
+  & ul {
+    padding-left: 1.25rem;
+    margin-bottom: 0.625rem;
+  }
+  & ol {
+    padding-left: 1.25rem;
+    margin-bottom: 0.625rem;
+  }
+  & ul {
+    list-style-type: disc;
+  }
+  & ol {
+    list-style-type: decimal;
+  }
+  & li {
+    margin-bottom: 0.25rem;
+  }
+  & code {
+    font-family: ui-monospace, monospace;
+    font-size: 0.8125rem;
+    background: rgba(0, 0, 0, 0.07);
+    border-radius: 4px;
+    padding: 0.1em 0.35em;
+  }
+  & pre {
+    font-family: ui-monospace, monospace;
+    font-size: 0.8125rem;
+    background: rgba(0, 0, 0, 0.07);
+    border-radius: 6px;
+    padding: 0.75rem 1rem;
+    margin-bottom: 0.625rem;
+    overflow-x: auto;
+    white-space: pre;
+  }
+  & pre code {
+    background: none;
+    padding: 0;
+  }
+  & strong {
+    font-weight: 600;
+  }
+  & em {
+    font-style: italic;
+  }
+  & hr {
+    border: none;
+    border-top: 1px solid rgba(0, 0, 0, 0.1);
+    margin: 0.75rem 0;
+  }
+  & > *:first-child {
+    margin-top: 0;
+  }
+}
 
 @layer base {
     :root {
@@ -27,81 +210,4 @@
         --shadow-card:  0 1px 0 rgba(0,0,0,0.02), 0 18px 40px -16px rgba(26,26,26,0.14);
         --shadow-modal: 0 20px 60px -10px rgba(0,0,0,0.25);
     }
-}
-
-@layer components {
-    .confidence-pill {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        font-size: 11px;
-        font-weight: 600;
-        padding: 4px 10px;
-        border-radius: 999px;
-        font-variant-numeric: tabular-nums;
-        white-space: nowrap;
-    }
-    .confidence-pill--high {
-        color: var(--accent-ink);
-        background: var(--accent-soft);
-        border: 1px solid var(--accent-border);
-    }
-    .confidence-pill--med {
-        color: var(--warning);
-        background: #FEF3C7;
-        border: 1px solid #FDE68A;
-    }
-    .confidence-pill--low {
-        color: var(--danger);
-        background: #FEE2E2;
-        border: 1px solid #FECACA;
-    }
-
-    /* Assistant chat bubble prose */
-    .chat-response { font-size: 0.875rem; line-height: 1.6; }
-    .chat-response h1, .chat-response h2, .chat-response h3,
-    .chat-response h4, .chat-response h5 {
-        font-weight: 600;
-        margin-top: 1rem;
-        margin-bottom: 0.375rem;
-        line-height: 1.3;
-    }
-    .chat-response h1 { font-size: 1rem; }
-    .chat-response h2 { font-size: 0.9375rem; }
-    .chat-response h3, .chat-response h4 { font-size: 0.875rem; }
-    .chat-response p { margin-bottom: 0.625rem; }
-    .chat-response p:last-child { margin-bottom: 0; }
-    .chat-response ul, .chat-response ol {
-        padding-left: 1.25rem;
-        margin-bottom: 0.625rem;
-    }
-    .chat-response ul { list-style-type: disc; }
-    .chat-response ol { list-style-type: decimal; }
-    .chat-response li { margin-bottom: 0.25rem; }
-    .chat-response code {
-        font-family: ui-monospace, monospace;
-        font-size: 0.8125rem;
-        background: rgba(0,0,0,0.07);
-        border-radius: 4px;
-        padding: 0.1em 0.35em;
-    }
-    .chat-response pre {
-        font-family: ui-monospace, monospace;
-        font-size: 0.8125rem;
-        background: rgba(0,0,0,0.07);
-        border-radius: 6px;
-        padding: 0.75rem 1rem;
-        margin-bottom: 0.625rem;
-        overflow-x: auto;
-        white-space: pre;
-    }
-    .chat-response pre code { background: none; padding: 0; }
-    .chat-response strong { font-weight: 600; }
-    .chat-response em { font-style: italic; }
-    .chat-response hr {
-        border: none;
-        border-top: 1px solid rgba(0,0,0,0.1);
-        margin: 0.75rem 0;
-    }
-    .chat-response > *:first-child { margin-top: 0; }
 }

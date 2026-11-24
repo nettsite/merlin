@@ -638,7 +638,7 @@ new #[Layout('components.layout.app')] class extends Component
             <div class="mt-4 space-y-1">
                 @foreach($uploadResults as $result)
                     <div @class([
-                        'flex items-center gap-2 rounded px-3 py-2 text-sm',
+                        'flex items-center gap-2 rounded-sm px-3 py-2 text-sm',
                         'bg-success/10 text-success-700' => $result['status'] === 'queued',
                         'bg-warning/10 text-warning-700' => $result['status'] === 'duplicate',
                         'bg-danger/10 text-danger-700' => $result['status'] === 'error',

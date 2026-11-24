@@ -743,7 +743,7 @@ new #[Layout('components.layout.app')] class extends Component
 <div>
 {{-- Flash messages --}}
 @if(session('success'))
-    <div class="mx-6 mt-4 px-4 py-3 rounded bg-green-50 border border-green-200 text-sm text-success">
+    <div class="mx-6 mt-4 px-4 py-3 rounded-sm bg-green-50 border border-green-200 text-sm text-success">
         {{ session('success') }}
     </div>
 @endif
@@ -775,7 +775,7 @@ new #[Layout('components.layout.app')] class extends Component
                 wire:click="$set('statusFilter', '{{ $status }}')"
                 @class([
                     'px-3 py-1.5 text-sm rounded-md font-medium transition-colors whitespace-nowrap',
-                    'bg-white text-ink shadow-sm ring-1 ring-inset ring-line' => $statusFilter === $status,
+                    'bg-white text-ink shadow-xs ring-1 ring-inset ring-line' => $statusFilter === $status,
                     'text-ink-soft hover:text-ink' => $statusFilter !== $status,
                 ])
             >
@@ -823,7 +823,7 @@ new #[Layout('components.layout.app')] class extends Component
                         type="checkbox"
                         wire:click="toggleSelectPage({{ json_encode($pageIds) }})"
                         @checked($selectAllFiltered || $allPageSelected)
-                        class="rounded border-line"
+                        class="rounded-sm border-line"
                         @if($selectAllFiltered) disabled @endif
                     />
                 </th>
@@ -845,13 +845,13 @@ new #[Layout('components.layout.app')] class extends Component
                     {{-- The row opens the detail flyout; the checkbox must not. --}}
                     <td class="px-4 py-3" x-on:click.stop>
                         @if($selectAllFiltered)
-                            <input type="checkbox" checked disabled class="rounded border-line opacity-60" />
+                            <input type="checkbox" checked disabled class="rounded-sm border-line opacity-60" />
                         @else
                             <input
                                 type="checkbox"
                                 wire:model.live="selectedIds"
                                 value="{{ $invoice->id }}"
-                                class="rounded border-line"
+                                class="rounded-sm border-line"
                             />
                         @endif
                     </td>
@@ -898,7 +898,7 @@ new #[Layout('components.layout.app')] class extends Component
                                 default => 'bg-surface-alt text-ink-muted',
                             };
                         @endphp
-                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium {{ $badgeClass }}">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium {{ $badgeClass }}">
                             {{ $invoice->is_fully_credited ? 'Credited' : ucwords(str_replace('_', ' ', $invoice->status)) }}
                         </span>
                     </td>
@@ -1036,7 +1036,7 @@ new #[Layout('components.layout.app')] class extends Component
                                 default => 'bg-surface-alt text-ink-muted',
                             };
                         @endphp
-                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium {{ $badgeClass }}">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium {{ $badgeClass }}">
                             {{ $detail->is_fully_credited ? 'Credited' : ucfirst($detail->status) }}
                         </span>
                     </div>
@@ -1178,7 +1178,7 @@ new #[Layout('components.layout.app')] class extends Component
                         {{ $detail->due_date->format('d M Y') }}
                     </span>
                     @if($detail->due_date->isPast() && $detail->status === 'sent')
-                        <span class="px-1.5 py-0.5 rounded bg-red-100 text-danger font-medium">overdue</span>
+                        <span class="px-1.5 py-0.5 rounded-sm bg-red-100 text-danger font-medium">overdue</span>
                     @endif
                 </div>
             @endif
@@ -1213,10 +1213,10 @@ new #[Layout('components.layout.app')] class extends Component
                                 @if($editingLineId === $line->id)
                                     <tr class="border-t border-line">
                                         <td class="py-2 pr-2">
-                                            <input type="text" wire:model="editingLine.description" class="w-full border border-line rounded px-2 py-1 text-xs" />
+                                            <input type="text" wire:model="editingLine.description" class="w-full border border-line rounded-sm px-2 py-1 text-xs" />
                                         </td>
                                         <td class="py-2 px-2">
-                                            <select wire:model="editingLine.account_id" class="w-full border border-line rounded px-2 py-1 text-xs">
+                                            <select wire:model="editingLine.account_id" class="w-full border border-line rounded-sm px-2 py-1 text-xs">
                                                 <option value="">—</option>
                                                 @foreach($accounts as $account)
                                                     <option value="{{ $account->id }}">{{ $account->code }} {{ $account->name }}</option>
@@ -1224,13 +1224,13 @@ new #[Layout('components.layout.app')] class extends Component
                                             </select>
                                         </td>
                                         <td class="py-2 px-2">
-                                            <input type="number" wire:model="editingLine.quantity" step="0.0001" class="w-20 border border-line rounded px-2 py-1 text-xs text-right" />
+                                            <input type="number" wire:model="editingLine.quantity" step="0.0001" class="w-20 border border-line rounded-sm px-2 py-1 text-xs text-right" />
                                         </td>
                                         <td class="py-2 px-2">
-                                            <input type="number" wire:model="editingLine.unit_price" step="0.0001" class="w-24 border border-line rounded px-2 py-1 text-xs text-right" />
+                                            <input type="number" wire:model="editingLine.unit_price" step="0.0001" class="w-24 border border-line rounded-sm px-2 py-1 text-xs text-right" />
                                         </td>
                                         <td class="py-2 px-2">
-                                            <input type="number" wire:model="editingLine.tax_rate" step="0.01" min="0" max="100" class="w-16 border border-line rounded px-2 py-1 text-xs text-right" />
+                                            <input type="number" wire:model="editingLine.tax_rate" step="0.01" min="0" max="100" class="w-16 border border-line rounded-sm px-2 py-1 text-xs text-right" />
                                         </td>
                                         <td class="py-2 pl-2 text-right font-medium text-ink tabular-nums whitespace-nowrap">
                                             {{ number_format((float) $line->line_total + (float) $line->tax_amount, 2) }}
@@ -1284,10 +1284,10 @@ new #[Layout('components.layout.app')] class extends Component
                             @if($showAddLine)
                                 <tr class="border-t border-line bg-surface-alt">
                                     <td class="py-2 pr-2">
-                                        <input type="text" wire:model="newLine.description" placeholder="Description" class="w-full border border-line rounded px-2 py-1 text-xs" autofocus />
+                                        <input type="text" wire:model="newLine.description" placeholder="Description" class="w-full border border-line rounded-sm px-2 py-1 text-xs" autofocus />
                                     </td>
                                     <td class="py-2 px-2">
-                                        <select wire:model="newLine.account_id" class="w-full border border-line rounded px-2 py-1 text-xs">
+                                        <select wire:model="newLine.account_id" class="w-full border border-line rounded-sm px-2 py-1 text-xs">
                                             <option value="">—</option>
                                             @foreach($accounts as $account)
                                                 <option value="{{ $account->id }}">{{ $account->code }} {{ $account->name }}</option>
@@ -1295,13 +1295,13 @@ new #[Layout('components.layout.app')] class extends Component
                                         </select>
                                     </td>
                                     <td class="py-2 px-2">
-                                        <input type="number" wire:model="newLine.quantity" step="0.0001" class="w-20 border border-line rounded px-2 py-1 text-xs text-right" />
+                                        <input type="number" wire:model="newLine.quantity" step="0.0001" class="w-20 border border-line rounded-sm px-2 py-1 text-xs text-right" />
                                     </td>
                                     <td class="py-2 px-2">
-                                        <input type="number" wire:model="newLine.unit_price" step="0.0001" placeholder="0.00" class="w-24 border border-line rounded px-2 py-1 text-xs text-right" />
+                                        <input type="number" wire:model="newLine.unit_price" step="0.0001" placeholder="0.00" class="w-24 border border-line rounded-sm px-2 py-1 text-xs text-right" />
                                     </td>
                                     <td class="py-2 px-2">
-                                        <input type="number" wire:model="newLine.tax_rate" step="0.01" min="0" max="100" class="w-16 border border-line rounded px-2 py-1 text-xs text-right" />
+                                        <input type="number" wire:model="newLine.tax_rate" step="0.01" min="0" max="100" class="w-16 border border-line rounded-sm px-2 py-1 text-xs text-right" />
                                     </td>
                                     <td class="py-2 pl-2 text-right text-ink-muted text-xs whitespace-nowrap">—</td>
                                     <td class="py-2">
@@ -1388,7 +1388,7 @@ new #[Layout('components.layout.app')] class extends Component
         </p>
 
         @if($sendError)
-            <div class="mb-4 px-4 py-3 rounded bg-red-50 border border-red-200 text-sm text-danger">
+            <div class="mb-4 px-4 py-3 rounded-sm bg-red-50 border border-red-200 text-sm text-danger">
                 {{ $sendError }}
             </div>
         @endif
@@ -1402,7 +1402,7 @@ new #[Layout('components.layout.app')] class extends Component
                             <input
                                 type="checkbox"
                                 wire:model="sendRecipients.{{ $i }}.selected"
-                                class="rounded border-line text-primary focus:ring-primary"
+                                class="rounded-sm border-line text-primary focus:ring-primary"
                             />
                             <span class="text-sm">
                                 <span class="font-medium">{{ $recipient['name'] }}</span>
@@ -1413,7 +1413,7 @@ new #[Layout('components.layout.app')] class extends Component
                 </div>
             </div>
         @else
-            <div class="mb-5 px-4 py-3 rounded bg-surface-alt border border-line text-sm text-ink-muted">
+            <div class="mb-5 px-4 py-3 rounded-sm bg-surface-alt border border-line text-sm text-ink-muted">
                 No contacts with "receives invoices" enabled found. Add contacts to the client with that flag set.
             </div>
         @endif

@@ -393,7 +393,7 @@ new #[Layout('components.layout.app')] class extends Component
 
 <div>
 @if(session('success'))
-    <div class="mx-6 mt-4 px-4 py-3 rounded bg-green-50 border border-green-200 text-sm text-success">
+    <div class="mx-6 mt-4 px-4 py-3 rounded-sm bg-green-50 border border-green-200 text-sm text-success">
         {{ session('success') }}
     </div>
 @endif
@@ -469,7 +469,7 @@ new #[Layout('components.layout.app')] class extends Component
                                 default => 'bg-surface-alt text-ink-muted',
                             };
                         @endphp
-                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium {{ $badgeClass }}">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium {{ $badgeClass }}">
                             {{ ucfirst($journal->status) }}
                         </span>
                     </td>
@@ -542,7 +542,7 @@ new #[Layout('components.layout.app')] class extends Component
                                 default => 'bg-surface-alt text-ink-muted',
                             };
                         @endphp
-                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium {{ $badgeClass }}">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium {{ $badgeClass }}">
                             {{ ucfirst($detail->status) }}
                         </span>
                     </div>
@@ -647,7 +647,7 @@ new #[Layout('components.layout.app')] class extends Component
                     @endif
                 </div>
                 @if($errors->any())
-                    <div class="mb-3 px-3 py-2 rounded bg-red-50 border border-red-200 text-xs text-danger">
+                    <div class="mb-3 px-3 py-2 rounded-sm bg-red-50 border border-red-200 text-xs text-danger">
                         <ul class="list-disc pl-4 space-y-0.5">
                             @foreach($errors->all() as $message)
                                 <li>{{ $message }}</li>
@@ -672,17 +672,17 @@ new #[Layout('components.layout.app')] class extends Component
                             @foreach($lines as $line)
                                 @if($editingLineId === $line->id)
                                     <tr class="border-t border-line">
-                                        <td class="py-2 pr-2"><input type="text" wire:model="editingLine.description" class="w-full border border-line rounded px-2 py-1 text-xs" /></td>
+                                        <td class="py-2 pr-2"><input type="text" wire:model="editingLine.description" class="w-full border border-line rounded-sm px-2 py-1 text-xs" /></td>
                                         <td class="py-2 px-2">
-                                            <select wire:model="editingLine.account_id" class="w-full border border-line rounded px-2 py-1 text-xs">
+                                            <select wire:model="editingLine.account_id" class="w-full border border-line rounded-sm px-2 py-1 text-xs">
                                                 <option value="">—</option>
                                                 @foreach($accounts as $account)
                                                     <option value="{{ $account->id }}">{{ $account->code }} {{ $account->name }}</option>
                                                 @endforeach
                                             </select>
                                         </td>
-                                        <td class="py-2 px-2"><input type="number" wire:model="editingLine.debit" step="0.01" min="0" class="w-24 border border-line rounded px-2 py-1 text-xs text-right" /></td>
-                                        <td class="py-2 pl-2"><input type="number" wire:model="editingLine.credit" step="0.01" min="0" class="w-24 border border-line rounded px-2 py-1 text-xs text-right" /></td>
+                                        <td class="py-2 px-2"><input type="number" wire:model="editingLine.debit" step="0.01" min="0" class="w-24 border border-line rounded-sm px-2 py-1 text-xs text-right" /></td>
+                                        <td class="py-2 pl-2"><input type="number" wire:model="editingLine.credit" step="0.01" min="0" class="w-24 border border-line rounded-sm px-2 py-1 text-xs text-right" /></td>
                                         @if($detail->status === 'draft')
                                             <td class="py-2">
                                                 <div class="flex gap-1">
@@ -712,17 +712,17 @@ new #[Layout('components.layout.app')] class extends Component
 
                             @if($showAddLine)
                                 <tr class="border-t border-line bg-surface-alt">
-                                    <td class="py-2 pr-2"><input type="text" wire:model="newLine.description" placeholder="Description" class="w-full border border-line rounded px-2 py-1 text-xs" autofocus /></td>
+                                    <td class="py-2 pr-2"><input type="text" wire:model="newLine.description" placeholder="Description" class="w-full border border-line rounded-sm px-2 py-1 text-xs" autofocus /></td>
                                     <td class="py-2 px-2">
-                                        <select wire:model="newLine.account_id" class="w-full border border-line rounded px-2 py-1 text-xs">
+                                        <select wire:model="newLine.account_id" class="w-full border border-line rounded-sm px-2 py-1 text-xs">
                                             <option value="">—</option>
                                             @foreach($accounts as $account)
                                                 <option value="{{ $account->id }}">{{ $account->code }} {{ $account->name }}</option>
                                             @endforeach
                                         </select>
                                     </td>
-                                    <td class="py-2 px-2"><input type="number" wire:model="newLine.debit" step="0.01" min="0" placeholder="0.00" class="w-24 border border-line rounded px-2 py-1 text-xs text-right" /></td>
-                                    <td class="py-2 pl-2"><input type="number" wire:model="newLine.credit" step="0.01" min="0" placeholder="0.00" class="w-24 border border-line rounded px-2 py-1 text-xs text-right" /></td>
+                                    <td class="py-2 px-2"><input type="number" wire:model="newLine.debit" step="0.01" min="0" placeholder="0.00" class="w-24 border border-line rounded-sm px-2 py-1 text-xs text-right" /></td>
+                                    <td class="py-2 pl-2"><input type="number" wire:model="newLine.credit" step="0.01" min="0" placeholder="0.00" class="w-24 border border-line rounded-sm px-2 py-1 text-xs text-right" /></td>
                                     <td class="py-2">
                                         <div class="flex gap-1">
                                             <button wire:click="saveNewLine" class="text-success hover:text-green-700"><svg class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg></button>

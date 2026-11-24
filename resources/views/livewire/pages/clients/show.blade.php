@@ -198,7 +198,7 @@ new #[Layout('components.layout.app')] class extends Component
                     {{ $party->business?->display_name ?? '—' }}
                 </h1>
                 <span @class([
-                    'inline-flex items-center px-2 py-0.5 rounded text-xs font-medium',
+                    'inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium',
                     'bg-green-50 text-success' => $party->status === 'active',
                     'bg-yellow-50 text-warning' => $party->status === 'pending',
                     'bg-surface-alt text-ink-muted' => $party->status === 'inactive',
@@ -285,7 +285,7 @@ new #[Layout('components.layout.app')] class extends Component
         @if($supplierRel !== null)
             <div class="mt-3 flex items-center justify-between">
                 <div class="flex items-center gap-3">
-                    <span class="inline-flex items-center rounded px-2 py-0.5 text-xs font-medium bg-orange-50 text-orange-600">Supplier</span>
+                    <span class="inline-flex items-center rounded-sm px-2 py-0.5 text-xs font-medium bg-orange-50 text-orange-600">Supplier</span>
                     <a href="{{ route('suppliers.show', $party->id) }}" wire:navigate class="text-sm text-accent hover:underline">
                         View supplier page
                     </a>
@@ -398,7 +398,7 @@ new #[Layout('components.layout.app')] class extends Component
                             </td>
                             <td class="px-4 py-3">
                                 <span @class([
-                                    'inline-flex items-center px-2 py-0.5 rounded text-xs font-medium',
+                                    'inline-flex items-center px-2 py-0.5 rounded-sm text-xs font-medium',
                                     'bg-surface-alt text-ink-muted' => $invoice->status === 'draft',
                                     'bg-blue-50 text-blue-600' => $invoice->status === 'sent',
                                     'bg-green-50 text-success' => $invoice->status === 'paid',

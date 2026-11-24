@@ -195,13 +195,13 @@ new #[Layout('components.layout.app')] class extends Component
 
             <div>
                 <p class="text-sm font-medium text-ink mb-3">Permissions</p>
-                <div class="space-y-1 max-h-96 overflow-y-auto border border-line rounded p-3">
+                <div class="space-y-1 max-h-96 overflow-y-auto border border-line rounded-sm p-3">
                     @foreach($allPermissions as $permission)
-                        <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-surface-alt px-2 py-1 rounded">
+                        <label class="flex items-center gap-2 text-sm cursor-pointer hover:bg-surface-alt px-2 py-1 rounded-sm">
                             <input
                                 type="checkbox"
                                 wire:model="selectedPermissions.{{ $permission }}"
-                                class="rounded border-line text-primary"
+                                class="rounded-sm border-line text-primary"
                             />
                             <span class="font-mono text-xs text-ink-soft">{{ $permission }}</span>
                         </label>

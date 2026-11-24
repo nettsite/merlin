@@ -658,7 +658,7 @@ new #[Layout('components.layout.app')] class extends Component
                                         title="{{ $desc }}"
                                         x-on:mousedown="captureCursor()"
                                         x-on:click="insertTag('{{ $tag }}')"
-                                        class="font-mono text-xs bg-white border border-line rounded px-1.5 py-0.5 text-ink-soft hover:text-ink hover:border-ink-muted transition-colors cursor-pointer"
+                                        class="font-mono text-xs bg-white border border-line rounded-sm px-1.5 py-0.5 text-ink-soft hover:text-ink hover:border-ink-muted transition-colors cursor-pointer"
                                     >{{ $tag }}</button>
                                 @endforeach
                             </div>
@@ -833,13 +833,13 @@ new #[Layout('components.layout.app')] class extends Component
                     <div class="col-span-2 space-y-4">
                         @if($existingLogoUrl)
                             <div class="flex items-center gap-4">
-                                <img src="{{ $existingLogoUrl }}" alt="Company logo" class="h-16 max-w-[200px] object-contain border border-line rounded p-1 bg-white">
+                                <img src="{{ $existingLogoUrl }}" alt="Company logo" class="h-16 max-w-[200px] object-contain border border-line rounded-sm p-1 bg-white">
                                 <flux:button type="button" wire:click="removeLogo" variant="ghost" size="sm" class="text-danger">Remove</flux:button>
                             </div>
                         @endif
 
                         @if($logo)
-                            <img src="{{ $logo->temporaryUrl() }}" alt="Preview" class="h-16 max-w-[200px] object-contain border border-line rounded p-1 bg-white">
+                            <img src="{{ $logo->temporaryUrl() }}" alt="Preview" class="h-16 max-w-[200px] object-contain border border-line rounded-sm p-1 bg-white">
                         @endif
 
                         <flux:field>
@@ -848,7 +848,7 @@ new #[Layout('components.layout.app')] class extends Component
                                 type="file"
                                 wire:model="logo"
                                 accept="image/*"
-                                class="block text-sm text-ink-muted file:mr-3 file:py-1.5 file:px-3 file:rounded file:border file:border-line file:text-sm file:bg-surface-alt file:text-ink hover:file:bg-surface cursor-pointer"
+                                class="block text-sm text-ink-muted file:mr-3 file:py-1.5 file:px-3 file:rounded-sm file:border file:border-line file:text-sm file:bg-surface-alt file:text-ink hover:file:bg-surface cursor-pointer"
                             />
                             <flux:error name="logo" />
                         </flux:field>
@@ -1049,7 +1049,7 @@ new #[Layout('components.layout.app')] class extends Component
                                     <flux:select.option value="{{ $template->id }}">{{ $template->name }}</flux:select.option>
                                 @endforeach
                             </flux:select>
-                            <flux:description>The complete invoice email: subject and body, with merge tags such as <code class="text-xs bg-surface-alt px-1 rounded">@{{first_name}}</code>, <code class="text-xs bg-surface-alt px-1 rounded">@{{invoice_number}}</code> and <code class="text-xs bg-surface-alt px-1 rounded">@{{amount_due}}</code>.</flux:description>
+                            <flux:description>The complete invoice email: subject and body, with merge tags such as <code class="text-xs bg-surface-alt px-1 rounded-sm">@{{first_name}}</code>, <code class="text-xs bg-surface-alt px-1 rounded-sm">@{{invoice_number}}</code> and <code class="text-xs bg-surface-alt px-1 rounded-sm">@{{amount_due}}</code>.</flux:description>
                             <flux:error name="invoiceEmailTemplateId" />
                         </flux:field>
 
@@ -1061,7 +1061,7 @@ new #[Layout('components.layout.app')] class extends Component
                                     <flux:select.option value="{{ $template->id }}">{{ $template->name }}</flux:select.option>
                                 @endforeach
                             </flux:select>
-                            <flux:description>The complete payment receipt email: subject and body, with merge tags such as <code class="text-xs bg-surface-alt px-1 rounded">@{{first_name}}</code>, <code class="text-xs bg-surface-alt px-1 rounded">@{{amount}}</code> and <code class="text-xs bg-surface-alt px-1 rounded">@{{invoices}}</code>.</flux:description>
+                            <flux:description>The complete payment receipt email: subject and body, with merge tags such as <code class="text-xs bg-surface-alt px-1 rounded-sm">@{{first_name}}</code>, <code class="text-xs bg-surface-alt px-1 rounded-sm">@{{amount}}</code> and <code class="text-xs bg-surface-alt px-1 rounded-sm">@{{invoices}}</code>.</flux:description>
                             <flux:error name="paymentEmailTemplateId" />
                         </flux:field>
 
@@ -1073,7 +1073,7 @@ new #[Layout('components.layout.app')] class extends Component
                                     <flux:select.option value="{{ $template->id }}">{{ $template->name }}</flux:select.option>
                                 @endforeach
                             </flux:select>
-                            <flux:description>Branded wrapper for reminder emails. Must contain <code class="text-xs bg-surface-alt px-1 rounded">[email_body]</code> where the reminder text (Email Templates tab) goes.</flux:description>
+                            <flux:description>Branded wrapper for reminder emails. Must contain <code class="text-xs bg-surface-alt px-1 rounded-sm">[email_body]</code> where the reminder text (Email Templates tab) goes.</flux:description>
                             <flux:error name="baseEmailTemplateId" />
                         </flux:field>
                     </div>

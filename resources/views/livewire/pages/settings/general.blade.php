@@ -231,14 +231,14 @@ new #[Layout('components.layout.app')] class extends Component
 
             @if($existingLogoUrl)
                 <div class="flex items-center gap-4 mb-4">
-                    <img src="{{ $existingLogoUrl }}" alt="Company logo" class="h-16 max-w-[200px] object-contain border border-line rounded p-1 bg-white">
+                    <img src="{{ $existingLogoUrl }}" alt="Company logo" class="h-16 max-w-[200px] object-contain border border-line rounded-sm p-1 bg-white">
                     <flux:button type="button" wire:click="removeLogo" variant="ghost" size="sm" class="text-danger">Remove</flux:button>
                 </div>
             @endif
 
             @if($logo)
                 <div class="mb-3">
-                    <img src="{{ $logo->temporaryUrl() }}" alt="Preview" class="h-16 max-w-[200px] object-contain border border-line rounded p-1 bg-white">
+                    <img src="{{ $logo->temporaryUrl() }}" alt="Preview" class="h-16 max-w-[200px] object-contain border border-line rounded-sm p-1 bg-white">
                 </div>
             @endif
 
@@ -248,7 +248,7 @@ new #[Layout('components.layout.app')] class extends Component
                     type="file"
                     wire:model="logo"
                     accept="image/*"
-                    class="block text-sm text-ink-muted file:mr-3 file:py-1.5 file:px-3 file:rounded file:border file:border-line file:text-sm file:bg-surface-alt file:text-ink hover:file:bg-surface cursor-pointer"
+                    class="block text-sm text-ink-muted file:mr-3 file:py-1.5 file:px-3 file:rounded-sm file:border file:border-line file:text-sm file:bg-surface-alt file:text-ink hover:file:bg-surface cursor-pointer"
                 />
                 <flux:description>PNG, JPG or SVG. Max 2 MB.</flux:description>
                 <flux:error name="logo" />

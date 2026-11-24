@@ -34,7 +34,7 @@
     <button
         type="button"
         x-on:click="open = !open; if (open) $nextTick(() => $refs.search.focus())"
-        class="w-full flex items-center justify-between border border-zinc-200 border-b-zinc-300/80 dark:border-white/10 bg-white dark:bg-white/10 rounded-lg h-10 px-3 text-sm text-left shadow-xs"
+        class="w-full flex items-center justify-between border border-zinc-200 border-b-zinc-300/80 dark:border-white/10 bg-white dark:bg-white/10 rounded-lg h-10 px-3 text-sm text-left shadow-2xs"
     >
         <span x-text="selectedLabel || '{{ $placeholder }}'" :class="{ 'text-zinc-400': !selectedLabel }"></span>
         <svg class="w-4 h-4 text-zinc-400 shrink-0" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.29a.75.75 0 01.02-1.08z" clip-rule="evenodd"/></svg>
@@ -51,7 +51,7 @@
             x-ref="search"
             x-model="query"
             placeholder="{{ $searchPlaceholder }}"
-            class="m-2 px-2 py-1.5 text-sm border border-line rounded-md focus:outline-none"
+            class="m-2 px-2 py-1.5 text-sm border border-line rounded-md focus:outline-hidden"
         />
         <div class="overflow-y-auto">
             @if($nullable)
