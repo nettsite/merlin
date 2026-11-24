@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Payments — Merlin Docs</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/docs.css">
+</head>
+<body>
+    <div id="docs-shell">
+        <aside id="docs-sidebar"></aside>
+
+        <main id="docs-content">
+            <article>
+                <h1>Payments</h1>
+                <p>The <strong>Payments</strong> page (route <code>payments.index</code>, <code>resources/views/livewire/pages/payments/index.blade.php</code>) is a dedicated screen for recording a client payment, separate from the per-invoice <strong>Record Payment</strong> button on a single sales invoice (see <a href="sales-invoices.html#recording-payments">Sales Invoices</a>). It lists every existing payment <code>Document</code> (<code>document_type = 'payment'</code>, <code>direction = 'inbound'</code>) with its client, date, and amount, and lets a user generate or resend the PDF receipt for any of them.</p>
+
+                <h2 id="overview">Overview</h2>
+                <p>Unlike the invoice's own Record Payment action, this page is client-first rather than invoice-first: pick a client, see all of their open (sent or partially paid, balance &gt; 0) sales invoices, and allocate one payment across any subset of them. This is the UI for <code>BillingService::recordPaymentForInvoices()</code> — the same method backs both this page and the single-invoice Record Payment button, which simply calls it with one allocation.</p>
+
+                <h2 id="recording-a-payment-across-several-invoices">Recording a payment across several invoices</h2>
+                <p>Clicking <strong>New Payment</strong> opens a modal: select the client, then tick each open invoice to include and adjust its pre-filled allocation amount (defaults to that invoice's full balance due) if the payment doesn't cover it in full. Date and an optional reference are entered once for the whole payment, not per invoice.</p>
+                <p>On submit, <code>recordPaymentForInvoices()</code> requires at least one selected invoice, all invoices to belong to the same client, and every allocation amount to be greater than zero; it rejects the whole payment if the chosen contra account fails <code>DocumentService::assertValidContraAccount()</code>. It creates one <code>payment</code> <code>Document</code> for the full total (<code>contra_account_id</code> from <code>BillingSettings::default_contra_account_id</code>), linked to each invoice via <code>DocumentRelationship</code> (<code>relationship_type = 'payment_for'</code>), then calls <code>DocumentService::recordPayment()</code> per invoice to update its <code>amount_paid</code>/<code>balance_due</code> and flip its status to <code>paid</code> or <code>partially_paid</code> as appropriate. The whole operation is wrapped in a transaction so an overpayment or other rejection never leaves an orphaned payment document.</p>
+
+                <h2 id="receipts">Receipts</h2>
+                <p>Outside that transaction, <code>BillingService::sendReceipt()</code> fires automatically (see <a href="billing-settings.html">Billing Settings</a> for the <code>receipt</code>-type <code>BillingEmailTemplate</code>) — a receipt failure is logged but does not roll back the committed payment. From the Payments list, <strong>View</strong> regenerates and opens the PDF receipt inline for any row, and <strong>Send</strong>/<strong>Resend</strong> re-triggers <code>sendReceipt()</code> on demand.</p>
+
+                <h2 id="permissions">Permissions</h2>
+                <ul>
+                    <li><code>documents-view-any</code> — to view the Payments list (checked in <code>mount()</code> via <code>$this->authorize('viewAny', Document::class)</code>)</li>
+                    <li><code>can-record-payments</code> — to open the New Payment modal and submit it</li>
+                    <li><code>can-send-sales-invoices</code> — to send or resend a receipt email</li>
+                </ul>
+            </article>
+        </main>
+
+        <nav id="docs-toc"></nav>
+    </div>
+
+    <script src="assets/nav.js"></script>
+</body>
+</html>

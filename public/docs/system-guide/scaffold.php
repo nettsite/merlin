@@ -191,6 +191,12 @@ $pages = [
         [2, 'PDF generation'],
         [2, 'Permissions'],
     ]],
+    'payments.html' => ['Payments', [
+        [2, 'Overview'],
+        [2, 'Recording a payment across several invoices'],
+        [2, 'Receipts'],
+        [2, 'Permissions'],
+    ]],
     'recurring-invoices.html' => ['Recurring Invoices', [
         [2, 'Overview'],
         [2, 'Creating a recurring invoice'],

@@ -28,6 +28,7 @@ const NAV = [
             { file: 'contacts.html', title: 'Contacts' },
             { file: 'quotes.html', title: 'Quotes' },
             { file: 'sales-invoices.html', title: 'Sales Invoices' },
+            { file: 'payments.html', title: 'Payments' },
             { file: 'credit-notes.html', title: 'Credit Notes' },
             { file: 'recurring-invoices.html', title: 'Recurring Invoices' },
             { file: 'payment-terms.html', title: 'Payment Terms' },

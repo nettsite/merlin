@@ -420,6 +420,24 @@ Source: `resources/views/livewire/pages/sales-invoices/index.blade.php`,
 - **Permissions** — `documents-*` + `can-send-sales-invoices`,
   `can-record-payments`, `can-process-invoice-payments`.
 
+### payments.html — Payments
+Source: `resources/views/livewire/pages/payments/index.blade.php`,
+`app/Modules/Billing/Services/BillingService.php` (`recordPaymentForInvoices()`,
+`sendReceipt()`, `generateReceiptPdf()`).
+
+- **Overview** — Client-first payment screen (route `payments.index`),
+  separate from the per-invoice Record Payment button; lists every `payment`
+  Document and lets a user view/resend its receipt.
+- **Recording a payment across several invoices** — New Payment modal: pick a
+  client, tick any of their open invoices, adjust pre-filled amounts, one
+  date/reference for the whole payment. Backed by the same
+  `recordPaymentForInvoices()` the single-invoice Record Payment button calls
+  with one allocation.
+- **Receipts** — `sendReceipt()` fires automatically outside the recording
+  transaction; View/Send/Resend on the list call the same methods on demand.
+- **Permissions** — `documents-view-any` (list), `can-record-payments`
+  (record), `can-send-sales-invoices` (send/resend receipt).
+
 ### recurring-invoices.html — Recurring Invoices
 Source: `app/Modules/Billing/Models/RecurringInvoice.php`,
 `app/Modules/Billing/Services/RecurringInvoiceService.php`,

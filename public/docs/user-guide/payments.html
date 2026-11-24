@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Payments — Merlin User Guide</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="assets/docs.css">
+</head>
+<body>
+    <div id="docs-shell">
+        <aside id="docs-sidebar"></aside>
+
+        <main id="docs-content">
+            <article>
+                <h1>Payments</h1>
+                <p>The <strong>Payments</strong> page lists every payment that's been recorded against your clients' sales invoices. It's also where you can record a new payment without having to open an invoice first — handy when one payment from a client needs to be split across several of their invoices.</p>
+
+                <h2 id="recording-a-payment">Recording a payment</h2>
+                <ol>
+                    <li>Go to <strong>Billing &rsaquo; Payments</strong>.</li>
+                    <li>Click <strong>New Payment</strong>.</li>
+                    <li>Select the client. Their open invoices (anything sent or partially paid, with a balance still owing) appear below, each pre-filled with its full outstanding balance.</li>
+                    <li>Tick each invoice this payment should cover, and adjust the amount for any invoice it doesn't fully settle.</li>
+                    <li>Enter the date and, if you have one, a reference such as a bank transaction ID.</li>
+                    <li>Click <strong>Record Payment</strong>.</li>
+                </ol>
+                <p>This records the same kind of payment as clicking <strong>Record Payment</strong> on a single invoice (see <a href="sales-invoices.html#recording-a-payment">Sales Invoices</a>) — the only difference is that here you can cover several invoices with one payment in one step.</p>
+
+                <h2 id="receipts">Receipts</h2>
+                <p>A PDF receipt is generated and emailed to the client automatically as soon as the payment is recorded. From the Payments list you can also <strong>View</strong> a payment's receipt at any time, or <strong>Send</strong>/<strong>Resend</strong> it if the client needs another copy.</p>
+
+                <h2 id="permissions">Permissions</h2>
+                <p>You need the <code>can-record-payments</code> permission to record a payment, and <code>can-send-sales-invoices</code> to send or resend a receipt. Ask your administrator if either action isn't available to you.</p>
+            </article>
+        </main>
+
+        <nav id="docs-toc"></nav>
+    </div>
+
+    <script src="assets/nav.js"></script>
+</body>
+</html>

@@ -53,6 +53,7 @@ const NAV = [
         pages: [
             { file: 'clients.html', title: 'Clients' },
             { file: 'sales-invoices.html', title: 'Sales Invoices' },
+            { file: 'payments.html', title: 'Payments' },
             { file: 'quotes-credit-notes.html', title: 'Quotes & Credit Notes' },
             { file: 'recurring-invoices.html', title: 'Recurring Invoices' },
             { file: 'payment-terms.html', title: 'Payment Terms' },
