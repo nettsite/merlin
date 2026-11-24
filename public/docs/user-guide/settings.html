@@ -76,6 +76,7 @@
                 <ul>
                     <li><strong>New invoice</strong> (type: invoice) — sent when you click Send Invoice on a sales invoice. There should be exactly one invoice template.</li>
                     <li><strong>Reminders</strong> (type: reminder) — sent automatically by the scheduler. Each reminder has an <strong>Offset Days</strong> value: negative means that many business days <em>before</em> the due date; positive means that many business days <em>after</em> (overdue). Create as many reminders as you need.</li>
+                    <li><strong>Payment receipt</strong> (type: receipt) — sent automatically, with a PDF receipt attached, every time a payment is recorded against an invoice. There should be exactly one receipt template; it has no Offset Days setting, since it isn't tied to the due date.</li>
                 </ul>
                 <p>Templates are edited using a rich-text editor. Click any variable chip to insert it at the cursor. Available variables:</p>
                 <ul>

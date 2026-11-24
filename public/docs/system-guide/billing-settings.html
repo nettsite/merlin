@@ -42,11 +42,11 @@
                 <p>Create the wrapper template in <strong>Emails &rsaquo; Templates</strong>, then select it here. See <a href="email.html">Email (NettMail)</a>.</p>
 
                 <h2 id="billing-email-templates">BillingEmailTemplate model</h2>
-                <p>Invoice and reminder email content is stored as <code>BillingEmailTemplate</code> records, not as NettMail templates or as scalar settings values. The model lives at <code>App\Modules\Billing\Models\BillingEmailTemplate</code>.</p>
+                <p>Invoice, reminder, and receipt email content is stored as <code>BillingEmailTemplate</code> records, not as NettMail templates or as scalar settings values. The model lives at <code>App\Modules\Billing\Models\BillingEmailTemplate</code>.</p>
                 <table>
                     <thead><tr><th>Column</th><th>Type</th><th>Notes</th></tr></thead>
                     <tbody>
-                        <tr><td><code>type</code></td><td>string</td><td><code>invoice</code> or <code>reminder</code></td></tr>
+                        <tr><td><code>type</code></td><td>string</td><td><code>invoice</code>, <code>reminder</code>, or <code>receipt</code></td></tr>
                         <tr><td><code>name</code></td><td>string</td><td>Display name shown in the Email Templates sidebar</td></tr>
                         <tr><td><code>subject</code></td><td>string</td><td>Email subject line; supports <code>{{shortcodes}}</code></td></tr>
                         <tr><td><code>body</code></td><td>text</td><td>HTML body (authored in Quill); supports <code>{{shortcodes}}</code></td></tr>
@@ -54,7 +54,7 @@
                         <tr><td><code>enabled</code></td><td>boolean</td><td>Disabled templates are skipped by send and scheduler</td></tr>
                     </tbody>
                 </table>
-                <p><code>BillingEmailTemplate::forInvoice()</code> returns the first record with <code>type = 'invoice'</code>. There should be exactly one invoice template. Reminders are fetched via <code>scopeReminder()->scopeEnabled()</code> and matched by their <code>offset_days</code> to today's business-day distance from each invoice's due date.</p>
+                <p><code>BillingEmailTemplate::forInvoice()</code> returns the first record with <code>type = 'invoice'</code>, and <code>BillingEmailTemplate::forReceipt()</code> the first with <code>type = 'receipt'</code> — there should be exactly one of each. Reminders are fetched via <code>scopeReminder()->scopeEnabled()</code> and matched by their <code>offset_days</code> to today's business-day distance from each invoice's due date; <code>offset_days</code> has no meaning for the receipt template, since a receipt is sent at payment time, not on a due-date schedule.</p>
                 <p>Templates are seeded by <code>BillingEmailTemplateSeeder</code>. If no invoice template exists, <code>InvoiceEmailTemplateService::render()</code> throws a <code>RuntimeException</code>.</p>
 
                 <h2 id="email-template-shortcodes">Email shortcodes</h2>
