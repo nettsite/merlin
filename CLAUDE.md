@@ -51,7 +51,8 @@ Before saying a task is done, run these and report the actual result:
 2. `composer run test` — full suite must be green. Run `npm run build` first if view tests fail on missing assets.
 3. Touched documents, postings or journals? `php artisan documents:verify-audit-trail` must flag nothing.
 4. Never `migrate:fresh` or clear the dev database; it holds real data.
-5. After a push to main, run `/post-deploy-verify`.
+
+Never run `/post-deploy-verify` or otherwise check production after a push — the user works in production themselves.
 
 ## Architecture
 
