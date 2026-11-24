@@ -44,7 +44,7 @@
                         <tr><td>Auto-post confidence</td><td><code>0.90</code></td><td>The invoice is not eligible for automatic posting and remains in the review queue</td></tr>
                     </tbody>
                 </table>
-                <p>NEEDS CONFIRMATION: the README describes confidence bands of ≥ 85% (auto-posted), 60–84% (review queue), and &lt; 60% (flagged). These differ from the default setting values of 0.90 and 0.80. Confirm which values are canonical for your installation — the settings page values take precedence over any documentation example.</p>
+                <p>The live <code>PurchasingSettings</code> values above (editable on the Purchasing settings page) are canonical — they control the actual thresholds used by the pipeline. Any confidence percentages mentioned elsewhere, such as in the project README, are illustrative only and may not match your installation's configured values.</p>
 
                 <h2 id="matching-tolerances">Matching tolerances</h2>
                 <p>Pattern-based auto-posting compares a new invoice against the supplier's most recently posted invoice. Two tolerances control how close the match must be:</p>

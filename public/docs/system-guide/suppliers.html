@@ -53,7 +53,7 @@
                 <p>Pending suppliers appear in the suppliers list and must be reviewed by a staff member. To approve a pending supplier, open it from the list, verify the details are correct, change the status to <em>active</em>, and save. Until a supplier is approved, its invoices will remain in the review queue.</p>
 
                 <h2 id="the-supplier-detail-page">The supplier detail page</h2>
-                <p>Clicking on a supplier's name in the list opens the supplier detail page at <code>/suppliers/{id}</code>. This is a read-only view showing the supplier's details, contact assignments, addresses, and recent documents. NEEDS CONFIRMATION: exact panels shown on this page.</p>
+                <p>Clicking on a supplier's name in the list opens the supplier detail page at <code>/suppliers/{id}</code>. It shows: a header with the status badge and Activate/Deactivate/Edit actions; a key-value panel with legal name, trading name, email, phone, payment terms, default payable account, and notes; an "Also a Client" panel for adding or removing a client relationship on the same party (with its own payment term); and a tabbed, sortable table of the supplier's purchase invoices (filterable by status, with totals and balance due). Editing the supplier's contacts and addresses happens through the Edit form, not as separate panels on this page.</p>
 
                 <h2 id="permissions">Permissions</h2>
                 <p>Creating and editing a supplier touches several models, so multiple permissions are involved:</p>

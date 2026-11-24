@@ -60,10 +60,10 @@
                 <p>Calls <code>DocumentService::post()</code>. Allowed from: <code>received</code>, <code>reviewed</code>, <code>approved</code>, <code>disputed</code>. Posts the invoice to the general ledger — a balanced <a href="journal.html">journal entry</a> is written debiting each line's expense account and crediting accounts payable. This is a terminal action — the invoice status becomes <code>posted</code>, and its lines can no longer be saved or deleted at all, enforced at the model layer regardless of which UI action tries. Requires the <code>can-post-invoices</code> permission.</p>
 
                 <h3 id="dispute">Dispute</h3>
-                <p>Calls <code>DocumentService::dispute()</code>. Allowed from: <code>received</code>, <code>reviewed</code>, <code>approved</code>. Marks the invoice as disputed — for example, because the amounts are incorrect or the invoice is queried with the supplier. A disputed invoice returns to the active review queue. NEEDS CONFIRMATION: which permission governs the dispute action.</p>
+                <p>Calls <code>DocumentService::dispute()</code>. Allowed from: <code>received</code>, <code>reviewed</code>, <code>approved</code>. Marks the invoice as disputed — for example, because the amounts are incorrect or the invoice is queried with the supplier. A disputed invoice returns to the active review queue. Requires the <code>can-review-invoices</code> permission.</p>
 
                 <h3 id="reject">Reject</h3>
-                <p>Calls <code>DocumentService::reject()</code>. Allowed from: <code>received</code>, <code>disputed</code>. Permanently rejects the invoice. Use this for duplicate invoices, fraudulent invoices, or invoices that should never be posted. This is a terminal action. NEEDS CONFIRMATION: which permission governs the reject action.</p>
+                <p>Calls <code>DocumentService::reject()</code>. Allowed from: <code>received</code>, <code>disputed</code>. Permanently rejects the invoice. Use this for duplicate invoices, fraudulent invoices, or invoices that should never be posted. This is a terminal action. Requires the <code>can-review-invoices</code> permission.</p>
 
                 <h2 id="document-activity-log">Document activity log</h2>
                 <p>Every transition is recorded in the <code>document_activities</code> table using the <code>DocumentActivity</code> model and the Spatie activity log package. Each log entry records: the document, the user who performed the action (the causer), the event name, and the timestamp. This log is read-only and cannot be edited or deleted. To view the activity history for an invoice, open the invoice detail panel — the activity log is shown at the bottom of the panel.</p>
@@ -75,8 +75,8 @@
                         <tr><td>Mark as reviewed</td><td><code>can-review-invoices</code></td></tr>
                         <tr><td>Approve</td><td><code>can-authorise-invoices</code></td></tr>
                         <tr><td>Post</td><td><code>can-post-invoices</code></td></tr>
-                        <tr><td>Dispute</td><td>NEEDS CONFIRMATION</td></tr>
-                        <tr><td>Reject</td><td>NEEDS CONFIRMATION</td></tr>
+                        <tr><td>Dispute</td><td><code>can-review-invoices</code></td></tr>
+                        <tr><td>Reject</td><td><code>can-review-invoices</code></td></tr>
                         <tr><td>View activity log</td><td><code>document-activities-view-any</code></td></tr>
                     </tbody>
                 </table>

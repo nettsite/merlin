@@ -48,10 +48,10 @@
                 </table>
 
                 <h2 id="financial-year">Financial year</h2>
-                <p>The <code>AccountingSettings</code> group holds a single setting: <code>financial_year_start_month</code>. This is an integer from 1 (January) to 12 (December) representing the first month of your financial year. Merlin uses this to calculate the current financial year's start and end dates, which become the default date range in all reports. NEEDS CONFIRMATION: whether this setting has a default value or must be set explicitly on first installation.</p>
+                <p>The <code>AccountingSettings</code> group holds a single setting: <code>financial_year_start_month</code>. This is an integer from 1 (January) to 12 (December) representing the first month of your financial year. Merlin uses this to calculate the current financial year's start and end dates, which become the default date range in all reports. It defaults to <code>3</code> (March) when the settings migration runs — no manual setup is required on a fresh install.</p>
 
                 <h2 id="permissions">Permissions</h2>
-                <p>NEEDS CONFIRMATION: which permission gates access to the <code>/settings/general</code> page.</p>
+                <p>Every settings page, including General, requires the <code>access-panel</code> permission.</p>
             </article>
         </main>
 

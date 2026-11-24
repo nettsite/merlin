@@ -16,10 +16,10 @@
         <main id="docs-content">
             <article>
                 <h1>Recurring Invoices</h1>
-                <p>Recurring invoices are templates that automatically generate sales invoices on a regular schedule. You set up the client, line items, frequency, and billing day once, and Merlin creates the actual invoice at the right time — and optionally emails it to the client automatically. This is useful for subscriptions, retainers, and any service billed on a fixed periodic basis.</p>
+                <p>Recurring invoices are templates that generate sales invoices on a regular schedule when an administrator runs the generation command. You set up the client, line items, frequency, and billing day once, and Merlin creates the actual invoice when due — and optionally emails it to the client automatically. This is useful for subscriptions, retainers, and any service billed on a fixed periodic basis.</p>
 
                 <h2 id="overview">Overview</h2>
-                <p>Go to <strong>Billing &rsaquo; Recurring Invoices</strong> to see all recurring invoice schedules. Each schedule shows the client, frequency, next invoice date, and status. Statuses are <code>active</code> (will generate invoices on schedule), <code>paused</code> (temporarily stopped), and <code>completed</code> (the end date has passed or the schedule has been manually completed).</p>
+                <p>Go to <strong>Billing &rsaquo; Recurring Invoices</strong> to see all recurring invoice schedules. Each schedule shows the client, frequency, next invoice date, and status. Statuses are <code>active</code> (will generate an invoice next time the generation command runs, if due), <code>paused</code> (temporarily stopped), and <code>completed</code> (the end date has passed or the schedule has been manually completed).</p>
 
                 <h2 id="creating-a-recurring-invoice">Creating a recurring invoice</h2>
                 <ol>
@@ -61,7 +61,7 @@
                 <p>When <code>auto_send</code> is enabled on a recurring invoice, each generated sales invoice is automatically emailed to the selected contacts using the NettMail template configured in Settings &rsaquo; Billing. This happens in the same step as generation — no manual send action is required. If <code>auto_send</code> is off, the generated invoice appears in the Sales Invoices list in <code>draft</code> status, ready for you to review and send manually.</p>
 
                 <h2 id="how-invoices-are-generated">How invoices are generated</h2>
-                <p>The <code>GenerateRecurringInvoices</code> Artisan command runs automatically every day at 06:00, scheduled via Laravel's task scheduler. It checks all active recurring invoice schedules whose <code>next_invoice_date</code> is today or earlier, generates a <code>Document</code> record for each one, and advances the schedule's <code>next_invoice_date</code> to the next due date. If <code>auto_send</code> is enabled, the invoice email is dispatched immediately after generation.</p>
+                <p>Generation is manual: run <code>php artisan billing:generate-recurring</code> (add <code>--dry-run</code> to preview without generating). There is no scheduled task for this — nothing runs automatically. The command checks all active recurring invoice schedules whose <code>next_invoice_date</code> is today or earlier, generates a <code>Document</code> record for each one, and advances the schedule's <code>next_invoice_date</code> to the next due date. If <code>auto_send</code> is enabled, the invoice email is dispatched immediately after generation; otherwise the invoice is left in <code>draft</code> for review before sending.</p>
 
                 <h2 id="permissions">Permissions</h2>
                 <ul>

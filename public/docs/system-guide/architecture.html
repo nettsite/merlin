@@ -69,11 +69,11 @@
                 </table>
 
                 <h2 id="uuid-primary-keys">UUID primary keys</h2>
-                <p>All models use UUID primary keys via Laravel's <code>HasUuids</code> trait (or the project's <code>App\Traits\HasUuid</code> trait). This applies to every model in every module. UUIDs are generated automatically on creation; you do not pass an <code>id</code> when creating records.</p>
+                <p>All models use UUID primary keys via Laravel's native <code>HasUuids</code> trait. This applies to every model in every module. UUIDs are generated automatically on creation; you do not pass an <code>id</code> when creating records. There is no custom <code>HasUuid</code> trait in this codebase — do not add one.</p>
                 <p>Because Spatie packages default to integer primary keys in their published migrations, those migrations must be updated to use <code>uuidMorphs</code> instead of <code>morphs</code> when the project uses UUID keys. This has already been done for all Spatie packages in this project.</p>
 
                 <h2 id="the-morph-map">The morph map</h2>
-                <p>Merlin registers 22 short-string aliases for every model that participates in polymorphic relationships, via <code>Relation::enforceMorphMap()</code> in <code>AppServiceProvider::boot()</code>. This prevents stored morph strings (in audit logs, permissions, media, and activity records) from becoming invalid if a class is renamed or moved to a different namespace.</p>
+                <p>Merlin registers 21 short-string aliases for every model that participates in polymorphic relationships, via <code>Relation::enforceMorphMap()</code> in <code>AppServiceProvider::boot()</code>. This prevents stored morph strings (in audit logs, permissions, media, and activity records) from becoming invalid if a class is renamed or moved to a different namespace.</p>
                 <p>Examples: <code>'user'</code> → <code>User::class</code>, <code>'document'</code> → <code>Document::class</code>, <code>'party'</code> → <code>Party::class</code>. When adding a new model that will be used in a polymorphic relationship, register its alias in the morph map <em>before</em> writing any data.</p>
 
                 <h2 id="volt-pages-and-the-crud-framework">Livewire pages and the CRUD framework</h2>

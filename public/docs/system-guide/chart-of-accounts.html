@@ -58,7 +58,7 @@
                 <p>This creates a sub-account for every client relationship still missing one, and repoints any sales invoice whose <code>receivable_account_id</code> still targets the control account (or is null) to the client's own account. It's idempotent — safe to re-run — and fails fast with an error if no control account is configured yet in Settings &rsaquo; Billing.</p>
 
                 <h2 id="system-accounts">System accounts</h2>
-                <p>Accounts marked <code>is_system = true</code> are protected accounts created by the application for internal use (such as the accounts payable control account). NEEDS CONFIRMATION: exact UI restrictions on system accounts — whether they can be renamed or deactivated.</p>
+                <p>Accounts marked <code>is_system = true</code> are accounts created by the application for internal use (such as the accounts payable control account). The flag is informational only — nothing in the current codebase checks it to block renaming or deactivating these accounts in the UI, so treat it as a hint to be cautious rather than an enforced restriction. The only enforced restriction on an account is the parent/child posting guard: see <a href="#direct-posting">Direct posting</a> above.</p>
 
                 <h2 id="the-seeded-chart">The seeded chart</h2>
                 <p>The default chart seeded by <code>ChartOfAccountsSeeder</code> includes the following illustrative structure (your actual codes may vary):</p>

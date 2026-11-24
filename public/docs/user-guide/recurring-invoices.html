@@ -15,10 +15,10 @@
         <main id="docs-content">
             <article>
                 <h1>Recurring Invoices</h1>
-                <p>Recurring invoices are templates that generate a real invoice automatically on a schedule. Use them for monthly retainers, subscription fees, rent, or any invoice that repeats on the same pattern.</p>
+                <p>Recurring invoices are templates that generate a real invoice on a schedule. Use them for monthly retainers, subscription fees, rent, or any invoice that repeats on the same pattern.</p>
 
                 <h2 id="how-it-works">How it works</h2>
-                <p>You set up a recurring invoice template with the client, line items, and schedule. Every morning, Merlin checks whether any templates are due. When the next invoice date arrives, Merlin creates a full sales invoice from the template and advances the schedule to the next date. If auto-send is on, it emails the invoice to the client at the same time.</p>
+                <p>You set up a recurring invoice template with the client, line items, and schedule. Generation is not automatic — an administrator runs the recurring-invoice generation command when invoices are due. At that point, Merlin creates a full sales invoice from each template that's due and advances its schedule to the next date. If auto-send is on, it emails the invoice to the client at the same time; otherwise it's left as a draft for you to review and send.</p>
 
                 <h2 id="setting-up">Setting up a recurring invoice</h2>
                 <ol>

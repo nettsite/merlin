@@ -16,13 +16,13 @@
         <main id="docs-content">
             <article>
                 <h1>Seeding Reference Data</h1>
-                <p>After running migrations, Merlin's database is structurally correct but empty. Several pieces of reference data must exist before the application is usable: roles, a chart of accounts, payment terms, and an initial administrator account. Merlin ships with five seeders that create this data.</p>
+                <p>After running migrations, Merlin's database is structurally correct but empty. Several pieces of reference data must exist before the application is usable: roles, a chart of accounts, payment terms, an initial administrator account, and the billing defaults that invoicing depends on. Merlin ships with seven seeders that create this data.</p>
 
                 <h2 id="why-seed">Why seed</h2>
                 <p>Merlin's permission system, chart of accounts, and payment term calculations all depend on reference rows that cannot be inferred from the application code alone. Without these rows, users cannot log in, invoices have nowhere to post to, and due-date calculations have no terms to reference. Seeding is a required step after a fresh installation, not an optional one.</p>
 
                 <h2 id="available-seeders">Available seeders</h2>
-                <p>There are five seeders, each responsible for one area of reference data:</p>
+                <p>There are seven seeders, each responsible for one area of reference data:</p>
 
                 <h3 id="roles-and-permissions">Roles and permissions</h3>
                 <p><code>RolesAndPermissionsSeeder</code> creates the <strong>Administrator</strong> role. Permissions themselves are created by database migrations (not by seeders), so they already exist by the time this seeder runs. The seeder simply ensures the Administrator role exists in the <code>roles</code> table so it can be assigned to users.</p>
@@ -40,18 +40,27 @@
                 <h3 id="payment-terms">Payment terms</h3>
                 <p><code>PaymentTermSeeder</code> seeds a set of default payment terms (for example, Net 30, EOM) that can be attached to suppliers, clients, and invoices. You can add or edit terms through the UI at any time. See <a href="payment-terms.html">Payment Terms</a>.</p>
 
+                <h3 id="billing-email-templates">Billing email templates</h3>
+                <p><code>BillingEmailTemplateSeeder</code> creates the default <code>BillingEmailTemplate</code> rows used for payment reminders and receipts: an invoice template, an early reminder (3 days before due), first/second/final overdue reminders (1, 7, and 14 days after due), and a payment receipt. See <a href="billing-settings.html">Billing Settings</a>.</p>
+
+                <h3 id="default-billing-settings">Default billing settings</h3>
+                <p><code>DefaultBillingSettingsSeeder</code> wires up the <code>BillingSettings</code> values that sales invoicing silently depends on: the default receivable account (code 1100), the default contra/bank account (code 1000), the default payment term (<code>1st of Next Month</code>), the billing period day, and the NettMail templates used for the base and invoice emails. It must run after <code>ChartOfAccountsSeeder</code> and <code>PaymentTermSeeder</code> — it uses <code>firstOrFail()</code> on every lookup, so running it out of order fails loudly instead of leaving these settings null. Leaving them unset means invoices silently post to the flat control account instead of a per-client sub-account, with no error raised.</p>
+
                 <h2 id="running-all-seeders">Running all seeders</h2>
-                <p>Running <code>php artisan db:seed</code> without a class argument executes the <code>DatabaseSeeder</code>, which calls all five seeders in the correct order:</p>
+                <p>Running <code>php artisan db:seed</code> without a class argument executes the <code>DatabaseSeeder</code>, which calls all seven seeders in the correct order:</p>
                 <pre><code>php artisan db:seed</code></pre>
                 <p>To run a specific seeder individually:</p>
                 <pre><code>php artisan db:seed --class=RolesAndPermissionsSeeder
 php artisan db:seed --class=ChartOfAccountsSeeder
 php artisan db:seed --class=DefaultAdminUserSeeder
 php artisan db:seed --class=DebtorAccountGroupSeeder
-php artisan db:seed --class=PaymentTermSeeder</code></pre>
+php artisan db:seed --class=PaymentTermSeeder
+php artisan db:seed --class=BillingEmailTemplateSeeder
+php artisan db:seed --class=DefaultBillingSettingsSeeder</code></pre>
+                <p>Order matters for the last two: <code>BillingEmailTemplateSeeder</code> and <code>DefaultBillingSettingsSeeder</code> must run after <code>ChartOfAccountsSeeder</code> and <code>PaymentTermSeeder</code> have created the accounts and terms they look up.</p>
 
                 <h2 id="re-running-seeders-safely">Re-running seeders safely</h2>
-                <p>All five seeders use <code>firstOrCreate</code> or equivalent logic, so re-running them will not create duplicate records or overwrite existing data. You can safely re-run any seeder on a database that is already in use — for example, after pulling a new version of the application that adds reference data to a seeder.</p>
+                <p>All seeders use <code>firstOrCreate</code> or equivalent logic, so re-running them will not create duplicate records or overwrite existing data. You can safely re-run any seeder on a database that is already in use — for example, after pulling a new version of the application that adds reference data to a seeder.</p>
                 <p>Never run <code>php artisan migrate:fresh</code> or truncate tables on a production database. Migrations are forward-only (they have no rollback methods) and a fresh migration would destroy all existing data.</p>
             </article>
         </main>

@@ -27,7 +27,7 @@
                 <p>Yes. Merlin is free and open-source software (FOSS). You can self-host it at no cost. The only running cost is the Anthropic API usage for invoice extraction — you pay Anthropic directly for the Claude API calls Merlin makes on your behalf. The cost per invoice depends on how many tokens the invoice uses and which Claude model tier answers the extraction request.</p>
 
                 <h3>Do I need to host it myself?</h3>
-                <p>Merlin is designed for self-hosting on a server you control. You run it like any Laravel application: a web server, a database (MariaDB preferred), PHP 8.4, and optionally a queue worker for background processing. See <a href="installation.html">Installation</a> for the full setup steps. NEEDS CONFIRMATION: whether a hosted/SaaS version of Merlin is available or planned.</p>
+                <p>Merlin is self-hosted only — there is no hosted/SaaS offering. You run it like any Laravel application: a web server, a database (MariaDB preferred), PHP 8.4, and optionally a queue worker for background processing. See <a href="installation.html">Installation</a> for the full setup steps.</p>
 
                 <h3>What does an invoice extraction cost?</h3>
                 <p>Each invoice extraction makes one or two API calls to Claude. The fast model (Haiku) is tried first; the strong model (Sonnet) is only used when the fast result is uncertain or unreconciled. Token usage for each call is logged in <a href="llm-logs.html">LLM Logs</a> so you can monitor costs over time. Anthropic publishes current pricing at their website.</p>
@@ -69,7 +69,7 @@
                 <h2 id="billing">Billing</h2>
 
                 <h3>How do recurring invoices work?</h3>
-                <p>A recurring invoice is a template — it defines the client, line items, frequency, and billing day. Every day at 06:00, Merlin checks whether any active recurring invoices are due and generates a full sales invoice for each one. If the <code>auto_send</code> flag is set, the generated invoice is emailed to the client automatically. See <a href="recurring-invoices.html">Recurring Invoices</a>.</p>
+                <p>A recurring invoice is a template — it defines the client, line items, frequency, and billing day. Generation is not scheduled automatically; an administrator runs <code>php artisan billing:generate-recurring</code>, which checks whether any active recurring invoices are due and generates a full sales invoice for each one. If the <code>auto_send</code> flag is set, the generated invoice is emailed to the client automatically. See <a href="recurring-invoices.html">Recurring Invoices</a>.</p>
 
                 <h3>How are due dates calculated?</h3>
                 <p>Payment terms define the rule used to calculate a due date from an invoice date. Merlin supports six rules, including "N days after invoice date", "the Nth of the following month", and "first business day of the following month". See <a href="payment-terms.html">Payment Terms</a> for the full list.</p>

@@ -22,7 +22,7 @@
                 <ul>
                     <li><strong>PHP 8.4</strong> with the extensions Laravel requires (mbstring, pdo, openssl, tokenizer, xml, ctype, json, bcmath, fileinfo)</li>
                     <li><strong>Composer</strong> (PHP dependency manager)</li>
-                    <li><strong>Node.js and npm</strong> — NEEDS CONFIRMATION: minimum Node version</li>
+                    <li><strong>Node.js and npm</strong> — no minimum version is pinned in <code>package.json</code> (no <code>engines</code> field); use a current Node LTS release, since Vite (the build tool, currently v8) drops support for older Node versions over time</li>
                     <li><strong>MariaDB</strong> (preferred) or MySQL for the database</li>
                     <li><strong>Magika</strong> — a command-line binary used for file-type detection during invoice processing; must be installed and accessible on the system path, or its path set in <code>MAGIKA_BINARY</code></li>
                     <li><strong>Anthropic API key</strong> — required for AI invoice extraction; obtain one from the Anthropic console</li>
