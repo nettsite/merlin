@@ -29,10 +29,10 @@ beforeEach(function (): void {
 });
 
 it('shows month to date, year to date and twelve month labels from the income statement figures', function (): void {
-    codeToIncome(widgetInvoice('Alpha Ltd', 1000, '2026-12-01'));
-    codeToIncome(widgetInvoice('Beta Ltd', 250.50, '2026-12-01'));
+    codeToIncome(widgetInvoice('Alpha Ltd', 1000, '2026-11-05'));
+    codeToIncome(widgetInvoice('Beta Ltd', 250.50, '2026-11-20'));
 
-    // Both invoices are issued 2026-11-01: inside this month and this financial year (March start).
+    // Both invoices are due 2026-11-xx: inside this month and this financial year (March start).
     Livewire::test(RevenuePanel::class)
         ->assertSee('Month to date')
         ->assertSee('Year to date')

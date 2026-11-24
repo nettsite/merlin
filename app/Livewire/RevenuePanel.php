@@ -14,8 +14,9 @@ use Livewire\Component;
 class RevenuePanel extends Component
 {
     /**
-     * Net revenue between two dates, defined exactly as the Income Statement does:
-     * credits minus debits on income accounts, so credit notes net revenue back down.
+     * Net revenue between two dates, bucketed by invoice due date rather than
+     * posting date: credits minus debits on income accounts, so credit notes
+     * net revenue back down.
      */
     private function revenueBetween(CarbonInterface $from, CarbonInterface $to): float
     {
@@ -23,9 +24,10 @@ class RevenuePanel extends Component
             ->join('accounts', 'accounts.id', '=', 'postings.account_id')
             ->join('account_groups', 'account_groups.id', '=', 'accounts.account_group_id')
             ->join('account_types', 'account_types.id', '=', 'account_groups.account_type_id')
+            ->join('documents', 'documents.id', '=', 'postings.document_id')
             ->where('account_types.code', '4')
-            ->whereDate('postings.entry_date', '>=', $from)
-            ->whereDate('postings.entry_date', '<=', $to)
+            ->whereDate('documents.due_date', '>=', $from)
+            ->whereDate('documents.due_date', '<=', $to)
             ->selectRaw('COALESCE(SUM(postings.credit) - SUM(postings.debit), 0) as amount')
             ->value('amount');
     }
