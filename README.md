@@ -8,14 +8,14 @@
 
 <br>
 
-Merlin reads supplier invoices and posts them to your ledger — automatically. It uses an LLM pipeline to extract line items from PDFs, DOCX, XLSX, and CSV files, suggest GL account codes, and apply confidence-based auto-posting rules so that routine invoices never need human review.
+Merlin is a business management app for small businesses, built around a double-entry general ledger. It handles client billing (clients, sales invoices, quotes, credit notes, recurring invoices, payment terms, payment recording) and supplier expenses (suppliers, purchase invoices, posting rules) side by side on the same chart of accounts, with bank statement import/reconciliation and full financial reporting (income statement, trial balance, balance sheet) on top. On the expense side, an LLM pipeline reads supplier invoices — PDFs, DOCX, XLSX, CSV — extracts line items, suggests GL account codes, and applies confidence-based auto-posting rules so routine invoices never need human review. It also includes transactional and campaign email via NettMail.
 
 ## Stack
 
 | Layer | Package |
 |---|---|
 | Framework | Laravel 13, PHP 8.4 |
-| Frontend | Livewire 4 (single-file classes, no Volt), Flux UI, Alpine.js, Tailwind CSS 3 |
+| Frontend | Livewire 4 (single-file classes, no Volt), Flux UI, Alpine.js, Tailwind CSS 4 |
 | Auth | Laravel Breeze (Livewire stack) |
 | LLM | laravel/ai (`Laravel\Ai` Agent classes — Anthropic today, multi-vendor ready) |
 | Roles & permissions | spatie/laravel-permission |
@@ -112,7 +112,7 @@ Thresholds are configurable per business via `PurchasingSettings`.
 | Group | Pages |
 |---|---|
 | Expenses | Suppliers, Purchase Invoices, Payment Notifications, Posting Rules |
-| Billing | Clients, Sales Invoices, Quotes, Credit Notes, Recurring Invoices, Payment Terms |
+| Billing | Clients, Contacts, Sales Invoices, Payments, Quotes, Credit Notes, Recurring Invoices, Payment Terms |
 | Accounting | Journals, Bank Statements, Bank Templates, Accounts, Account Groups |
 | Reports | Income Statement, Trial Balance, Balance Sheet, Income by Client/Account, Expenses by Account, Expenses by Supplier, LLM Performance |
 | Settings | General, Purchasing, Billing, Roles, Users, LLM Logs |
