@@ -359,7 +359,7 @@ new #[Layout('components.layout.app')] class extends Component
 
 <div>
     {{-- Sticky header --}}
-    <div class="sticky top-0 z-10 bg-white border-b border-line">
+    <div class="sticky top-14 z-10 bg-white border-b border-line">
         <div class="flex items-center justify-between px-6 pt-5 pb-0">
             <h1 class="text-[17px] font-semibold tracking-tight text-ink">Settings</h1>
 
