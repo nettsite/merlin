@@ -789,7 +789,7 @@ new #[Layout('components.layout.app')] class extends Component
                         </flux:field>
 
                         @foreach ($reminders as $id => $reminder)
-                            <div class="flex items-center gap-4 py-5 last:pb-0">
+                            <div class="flex items-end gap-4 py-5 last:pb-0">
                                 <flux:field class="w-64 shrink-0">
                                     <flux:label>{{ $reminder['name'] }}</flux:label>
                                     <flux:select wire:model="reminders.{{ $id }}.nettmail_template_id">
