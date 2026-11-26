@@ -289,6 +289,7 @@ new #[Layout('components.layout.app')] class extends Component
             $this->sendSkipped = 0;
             $this->emailSubjectOverride = '';
             $this->emailBodyOverride = '';
+            $this->dispatch('email-body-loaded', body: $this->emailBodyOverride);
 
             return;
         }
@@ -301,6 +302,7 @@ new #[Layout('components.layout.app')] class extends Component
         if ($value === 'initial' || $value === 'custom') {
             $this->emailSubjectOverride = '';
             $this->emailBodyOverride = '';
+            $this->dispatch('email-body-loaded', body: $this->emailBodyOverride);
 
             return;
         }
@@ -314,6 +316,7 @@ new #[Layout('components.layout.app')] class extends Component
         $nettMailTemplate = $reminder->nettmail_template_id ? Template::find($reminder->nettmail_template_id) : null;
         $this->emailSubjectOverride = $nettMailTemplate?->subject ?? $reminder->subject;
         $this->emailBodyOverride = $nettMailTemplate?->html ?? $reminder->body;
+        $this->dispatch('email-body-loaded', body: $this->emailBodyOverride);
     }
 
     public function confirmSendEmail(): void
@@ -913,6 +916,12 @@ new #[Layout('components.layout.app')] class extends Component
     }
 }; ?>
 
+@assets
+{{-- Pinned with SRI; the CSP allows only this versioned folder (SecurityHeaders). Bump all three together. --}}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.snow.css" integrity="sha384-ecIckRi4QlKYya/FQUbBUjS4qp65jF/J87Guw5uzTbO1C1Jfa/6kYmd6dXUF6D7i" crossorigin="anonymous">
+<script src="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.js" integrity="sha384-utBUCeG4SYaCm4m7GQZYr8Hy8Fpy3V4KGjBZaf4WTKOcwhCYpt/0PfeEe3HNlwx8" crossorigin="anonymous"></script>
+@endassets
+
 <div>
 {{-- Flash messages --}}
 @if(session('success'))
@@ -1175,7 +1184,56 @@ new #[Layout('components.layout.app')] class extends Component
         @endif
 
         @if($selectedEmailType === 'custom' || ($selectedEmailType !== '' && $selectedEmailType !== 'initial'))
-            <div class="space-y-3">
+            <div class="space-y-3"
+                x-data="{
+                    init() {
+                        // Alpine can re-run init on the same element; a second Quill
+                        // on it would stack a second toolbar.
+                        if (this.$refs.editorEl.__quill) return;
+
+                        // Store raw Quill instance on the DOM element, not in Alpine's
+                        // reactive data — wrapping a Quill instance in Alpine's Proxy
+                        // corrupts Quill's internal this.selection / savedRange access.
+                        const quill = new Quill(this.$refs.editorEl, {
+                            theme: 'snow',
+                            modules: {
+                                toolbar: [
+                                    ['bold', 'italic', 'underline'],
+                                    ['link'],
+                                    [{ list: 'bullet' }, { list: 'ordered' }],
+                                    ['clean'],
+                                ],
+                            },
+                        });
+                        quill.root.style.fontFamily = 'Inter, ui-sans-serif, system-ui, sans-serif';
+                        quill.root.style.fontSize = '14px';
+                        // Use the clipboard API, not quill.root.innerHTML — assigning
+                        // innerHTML directly desyncs Quill's internal Delta model from
+                        // the DOM, breaking typing and index-based inserts.
+                        // Seeded from a data attribute inside wire:ignore, not interpolated
+                        // here: a changing x-data expression makes Livewire's morph re-init
+                        // this component after every save.
+                        quill.clipboard.dangerouslyPasteHTML(this.$refs.editorEl.dataset.initialBody ?? '');
+                        quill.on('text-change', () => {
+                            $wire.set('emailBodyOverride', quill.root.innerHTML, false);
+                        });
+
+                        // Stash on the editor element (stable via $refs) — not in
+                        // Alpine reactive data (Proxy corrupts Quill) and not on
+                        // $el (contextual: resolves to the clicked button in handlers).
+                        this.$refs.editorEl.__quill = quill;
+                    },
+                    loadBody(body) {
+                        // May fire before init() (server dispatches while the modal is
+                        // still being morphed in); init seeds the first body, so a
+                        // no-op here is safe.
+                        const quill = this.$refs.editorEl?.__quill;
+                        if (!quill) return;
+                        quill.clipboard.dangerouslyPasteHTML(body ?? '');
+                    },
+                }"
+                x-on:email-body-loaded.window="loadBody($event.detail.body)"
+            >
                 <p class="text-xs text-ink-muted">
                     Editing here only changes the email(s) sent now — it does not change the saved template. Merge tags like <code>@{{client_name}}</code> are still replaced per invoice.
                 </p>
@@ -1185,7 +1243,9 @@ new #[Layout('components.layout.app')] class extends Component
                 </flux:field>
                 <flux:field>
                     <flux:label>Body</flux:label>
-                    <flux:textarea wire:model="emailBodyOverride" rows="8" />
+                    <div wire:ignore class="border border-line rounded-md overflow-hidden [&_.ql-toolbar]:border-0 [&_.ql-toolbar]:border-b [&_.ql-toolbar]:border-line [&_.ql-container]:border-0">
+                        <div x-ref="editorEl" data-initial-body="{{ $emailBodyOverride }}" class="min-h-48 text-sm"></div>
+                    </div>
                 </flux:field>
             </div>
         @elseif($selectedEmailType === 'initial')
