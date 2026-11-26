@@ -2,6 +2,7 @@
 
 use App\Exceptions\InvalidDocumentStateException;
 use App\Modules\Accounting\Models\Account;
+use App\Modules\Billing\Models\BillingEmailTemplate;
 use App\Modules\Core\Models\PaymentTerm;
 use App\Modules\Billing\Services\BillingService;
 use App\Modules\Core\Models\Party;
@@ -12,7 +13,9 @@ use App\Modules\Core\Services\DocumentService;
 use App\Modules\Purchasing\Services\ExchangeRateService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use NettSite\NettMail\Models\Template;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Locked;
 use Livewire\Component;
@@ -42,6 +45,25 @@ new #[Layout('components.layout.app')] class extends Component
 
     #[Locked]
     public int $cancelSkipped = 0;
+
+    // Send Email modal
+    public bool $showSendEmailModal = false;
+
+    // '' (none chosen), 'initial', 'custom', or a BillingEmailTemplate id.
+    public string $selectedEmailType = '';
+
+    public string $emailSubjectOverride = '';
+
+    public string $emailBodyOverride = '';
+
+    public string $sendEmailError = '';
+
+    // Shown once a type is picked; eligibility is re-checked on confirm.
+    #[Locked]
+    public int $sendEligible = 0;
+
+    #[Locked]
+    public int $sendSkipped = 0;
 
     public string $sortBy = 'issue_date';
 
@@ -228,6 +250,154 @@ new #[Layout('components.layout.app')] class extends Component
 
         $this->showCancelModal = false;
         $this->clearSelection();
+    }
+
+    // -------------------------------------------------------------------------
+    // Bulk "Send Email"
+    // -------------------------------------------------------------------------
+
+    public function openSendEmailModal(): void
+    {
+        $this->authorize('can-send-sales-invoices');
+
+        $documents = $this->targetInvoices();
+
+        if ($documents->isEmpty()) {
+            return;
+        }
+
+        $this->selectedEmailType = '';
+        $this->emailSubjectOverride = '';
+        $this->emailBodyOverride = '';
+        $this->sendEmailError = '';
+        $this->sendEligible = 0;
+        $this->sendSkipped = 0;
+        $this->showSendEmailModal = true;
+    }
+
+    /**
+     * Livewire lifecycle hook: fires when $selectedEmailType changes (the type
+     * dropdown uses wire:model.live). Recomputes eligibility for the chosen type
+     * and pre-fills the editable subject/body with that type's current content.
+     */
+    public function updatedSelectedEmailType(string $value): void
+    {
+        $this->sendEmailError = '';
+
+        if ($value === '') {
+            $this->sendEligible = 0;
+            $this->sendSkipped = 0;
+            $this->emailSubjectOverride = '';
+            $this->emailBodyOverride = '';
+
+            return;
+        }
+
+        $documents = $this->targetInvoices();
+        $eligible = $this->eligibleForEmailType($documents, $value);
+        $this->sendEligible = $eligible->count();
+        $this->sendSkipped = $documents->count() - $eligible->count();
+
+        if ($value === 'initial' || $value === 'custom') {
+            $this->emailSubjectOverride = '';
+            $this->emailBodyOverride = '';
+
+            return;
+        }
+
+        $reminder = BillingEmailTemplate::find($value);
+
+        if ($reminder === null) {
+            return;
+        }
+
+        $nettMailTemplate = $reminder->nettmail_template_id ? Template::find($reminder->nettmail_template_id) : null;
+        $this->emailSubjectOverride = $nettMailTemplate?->subject ?? $reminder->subject;
+        $this->emailBodyOverride = $nettMailTemplate?->html ?? $reminder->body;
+    }
+
+    public function confirmSendEmail(): void
+    {
+        $this->authorize('can-send-sales-invoices');
+
+        if ($this->selectedEmailType === '') {
+            return;
+        }
+
+        $documents = $this->targetInvoices();
+        $eligible = $this->eligibleForEmailType($documents, $this->selectedEmailType);
+        $skipped = $documents->count() - $eligible->count();
+
+        $reminder = in_array($this->selectedEmailType, ['initial', 'custom'], true)
+            ? null
+            : BillingEmailTemplate::find($this->selectedEmailType);
+
+        $billingService = app(BillingService::class);
+        $sent = 0;
+        $errors = 0;
+
+        foreach ($eligible as $document) {
+            try {
+                match (true) {
+                    $this->selectedEmailType === 'initial' => $billingService->sendInvoice($document, Auth::user()),
+                    $this->selectedEmailType === 'custom' => $billingService->sendCustomEmail(
+                        $document, $this->emailSubjectOverride, $this->emailBodyOverride, Auth::user(),
+                    ),
+                    default => $billingService->sendReminder(
+                        $document, $reminder, Auth::user(), $this->emailSubjectOverride, $this->emailBodyOverride,
+                    ),
+                };
+                $sent++;
+            } catch (\Throwable $e) {
+                $errors++;
+                Log::error('Failed to send invoice email.', [
+                    'document_id' => $document->id,
+                    'email_type' => $this->selectedEmailType,
+                    'exception' => $e,
+                ]);
+            }
+        }
+
+        $label = match (true) {
+            $this->selectedEmailType === 'initial' => 'initial email',
+            $this->selectedEmailType === 'custom' => 'custom email',
+            default => $reminder?->name ?? 'email',
+        };
+
+        session()->flash('success', "Sent {$sent} ".Str::plural($label, $sent).'.'
+            .($skipped > 0 ? " Skipped {$skipped}." : '')
+            .($errors > 0 ? " {$errors} failed to send — check the log." : ''));
+
+        $this->showSendEmailModal = false;
+        $this->selectedEmailType = '';
+        $this->clearSelection();
+    }
+
+    /**
+     * Draft and cancelled invoices are never eligible for any email type. The 4
+     * reminder types additionally exclude fully paid invoices (balance_due <= 0),
+     * matching billing:send-reminders. Initial Email and Custom Email are not
+     * balance-gated. An invoice with no resolvable recipient is always excluded.
+     *
+     * @param  \Illuminate\Database\Eloquent\Collection<int, Document>  $documents
+     * @return \Illuminate\Database\Eloquent\Collection<int, Document>
+     */
+    private function eligibleForEmailType(\Illuminate\Database\Eloquent\Collection $documents, string $emailType): \Illuminate\Database\Eloquent\Collection
+    {
+        $isReminder = ! in_array($emailType, ['initial', 'custom'], true);
+        $billingService = app(BillingService::class);
+
+        return $documents->filter(function (Document $document) use ($isReminder, $billingService) {
+            if (in_array($document->status, ['draft', 'cancelled'], true)) {
+                return false;
+            }
+
+            if ($isReminder && (float) $document->balance_due <= 0) {
+                return false;
+            }
+
+            return $billingService->resolveRecipients($document) !== [];
+        });
     }
 
     /**
@@ -736,6 +906,9 @@ new #[Layout('components.layout.app')] class extends Component
             'accounts' => $accounts,
             'flyoutPaymentTerms' => $paymentTerms,
             'currencySymbol' => $currencySymbol,
+            'reminderTemplates' => $this->showSendEmailModal
+                ? BillingEmailTemplate::reminder()->orderBy('offset_days')->get()
+                : collect(),
         ];
     }
 }; ?>
@@ -804,6 +977,10 @@ new #[Layout('components.layout.app')] class extends Component
                 Select all {{ $totalFiltered }} matching
             </button>
         @endif
+
+        @can('can-send-sales-invoices')
+            <flux:button wire:click="openSendEmailModal" size="sm" variant="ghost" icon="envelope">Send email</flux:button>
+        @endcan
 
         @can('update', new \App\Modules\Core\Models\Document)
             <flux:button wire:click="openCancelModal" size="sm" variant="ghost" icon="x-circle">Cancel invoices</flux:button>
@@ -954,6 +1131,77 @@ new #[Layout('components.layout.app')] class extends Component
                 :disabled="$cancelEligible === 0"
             >
                 Cancel {{ $cancelEligible }} {{ \Illuminate\Support\Str::plural('invoice', $cancelEligible) }}
+            </flux:button>
+        </div>
+    </div>
+</flux:modal>
+
+{{-- ===== Send Email ===== --}}
+<flux:modal name="send-email" wire:model.self="showSendEmailModal" class="w-[560px]">
+    <div class="p-6 space-y-5">
+        <div>
+            <flux:heading size="lg" class="font-semibold">Send email</flux:heading>
+            <p class="mt-1 text-sm text-ink-muted">Send one of the billing emails to the selected invoices now, outside the normal reminder schedule.</p>
+        </div>
+
+        @if($sendEmailError)
+            <div class="px-3 py-2 rounded-sm bg-red-50 border border-red-200 text-sm text-danger">{{ $sendEmailError }}</div>
+        @endif
+
+        <flux:field>
+            <flux:label>Email</flux:label>
+            <flux:select wire:model.live="selectedEmailType">
+                <option value="">— Choose an email —</option>
+                <option value="initial">Initial Email (resend original invoice email)</option>
+                @foreach($reminderTemplates as $reminder)
+                    <option value="{{ $reminder->id }}">{{ $reminder->name }}{{ ! $reminder->enabled ? ' (not in automatic schedule)' : '' }}</option>
+                @endforeach
+                <option value="custom">Custom Email (write your own)</option>
+            </flux:select>
+        </flux:field>
+
+        @if($selectedEmailType !== '')
+            <div class="rounded-md border border-line bg-surface-alt px-4 py-3 text-sm">
+                <p>
+                    <span class="font-medium text-ink">{{ $sendEligible }}</span>
+                    {{ \Illuminate\Support\Str::plural('invoice', $sendEligible) }} will be emailed.
+                </p>
+                @if($sendSkipped > 0)
+                    <p class="mt-1 text-warning">
+                        {{ $sendSkipped }} selected {{ \Illuminate\Support\Str::plural('invoice', $sendSkipped) }} will be skipped — draft, cancelled, fully paid (reminders only), or with no recipient contact.
+                    </p>
+                @endif
+            </div>
+        @endif
+
+        @if($selectedEmailType === 'custom' || ($selectedEmailType !== '' && $selectedEmailType !== 'initial'))
+            <div class="space-y-3">
+                <p class="text-xs text-ink-muted">
+                    Editing here only changes the email(s) sent now — it does not change the saved template. Merge tags like <code>@{{client_name}}</code> are still replaced per invoice.
+                </p>
+                <flux:field>
+                    <flux:label>Subject</flux:label>
+                    <flux:input wire:model="emailSubjectOverride" />
+                </flux:field>
+                <flux:field>
+                    <flux:label>Body</flux:label>
+                    <flux:textarea wire:model="emailBodyOverride" rows="8" />
+                </flux:field>
+            </div>
+        @elseif($selectedEmailType === 'initial')
+            <p class="text-xs text-ink-muted">Initial Email resends the original invoice email as configured in Settings — wording can't be edited for this type yet.</p>
+        @endif
+
+        <div class="flex justify-end gap-3 pt-2">
+            <flux:button variant="ghost" wire:click="$set('showSendEmailModal', false)">Back</flux:button>
+            <flux:button
+                variant="primary"
+                wire:click="confirmSendEmail"
+                wire:loading.attr="disabled"
+                wire:target="confirmSendEmail"
+                :disabled="$selectedEmailType === '' || $sendEligible === 0"
+            >
+                Send {{ $sendEligible }} {{ \Illuminate\Support\Str::plural('email', $sendEligible) }}
             </flux:button>
         </div>
     </div>

@@ -6,6 +6,8 @@ use App\Modules\Core\Models\User;
 use App\Modules\Core\Settings\CompanySettings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
+use Nettsite\NettMail\Core\Domain\Templates\TemplateType;
+use NettSite\NettMail\Models\Template;
 
 uses(RefreshDatabase::class);
 
@@ -83,9 +85,21 @@ it('saves the banking details printed on invoices', function (): void {
         ->and($company->bank_branch_code)->toBe('250655');
 });
 
+function billingEmailTemplate(string $name): Template
+{
+    return Template::create([
+        'name' => $name,
+        'type' => TemplateType::Transactional,
+        'subject' => 'Subject',
+        'html' => '<p>Body</p>',
+    ]);
+}
+
 it('saves default invoice terms and footer on the Billing tab', function (): void {
     Livewire::test('pages.settings.index', ['tab' => 'billing'])
         ->set('tab', 'billing')
+        ->set('invoiceEmailTemplateId', billingEmailTemplate('Invoice Email')->id)
+        ->set('paymentEmailTemplateId', billingEmailTemplate('Payment Receipt Email')->id)
         ->set('defaultInvoiceTerms', 'All invoices are payable by due date.')
         ->set('defaultInvoiceFooter', 'Our Bank Details: FNB')
         ->call('save')
@@ -105,37 +119,55 @@ it('shows the Outgoing Email section on the General settings URL', function (): 
         ->assertSee('Reply-To Address');
 });
 
-it('loads the email text editor from the CDN version the CSP allows, with integrity hashes', function (): void {
-    $html = $this->get('/settings?tab=templates')->assertOk()->getContent();
-
-    expect($html)
-        ->toContain('https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.js" integrity="sha384-')
-        ->toContain('https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.snow.css" integrity="sha384-')
-        ->not->toContain('quill@2/');
+it('has no separate Email Templates tab', function (): void {
+    Livewire::test('pages.settings.index')
+        ->assertDontSee('Email Templates');
 });
 
-it('keeps the email body editor setup unchanged across a save so Quill is not started twice', function (): void {
-    BillingEmailTemplate::create([
-        'type' => 'invoice',
-        'name' => 'Invoice',
-        'subject' => 'Invoice {{invoice_number}}',
-        'body' => '<p>Original body</p>',
+it('saves a reminder row\'s NettMail template, offset and enabled flag on the Billing tab', function (): void {
+    $reminder = BillingEmailTemplate::create([
+        'type' => 'reminder',
+        'name' => 'Early Reminder',
+        'subject' => 'unused',
+        'body' => 'unused',
+        'offset_days' => -3,
+        'enabled' => true,
+    ]);
+    $nettMailTemplate = billingEmailTemplate('Early Reminder Email');
+
+    Livewire::test('pages.settings.index', ['tab' => 'billing'])
+        ->set('tab', 'billing')
+        ->set('invoiceEmailTemplateId', billingEmailTemplate('Invoice Email')->id)
+        ->set('paymentEmailTemplateId', billingEmailTemplate('Payment Receipt Email')->id)
+        ->set("reminders.{$reminder->id}.nettmail_template_id", $nettMailTemplate->id)
+        ->set("reminders.{$reminder->id}.offset_days", -5)
+        ->set("reminders.{$reminder->id}.enabled", false)
+        ->call('save')
+        ->assertHasNoErrors();
+
+    $reminder->refresh();
+
+    expect($reminder->name)->toBe('Early Reminder')
+        ->and($reminder->nettmail_template_id)->toBe($nettMailTemplate->id)
+        ->and($reminder->offset_days)->toBe(-5)
+        ->and($reminder->enabled)->toBeFalse();
+});
+
+it('requires a NettMail template to be chosen for each reminder', function (): void {
+    $reminder = BillingEmailTemplate::create([
+        'type' => 'reminder',
+        'name' => 'Early Reminder',
+        'subject' => 'unused',
+        'body' => 'unused',
+        'offset_days' => -3,
         'enabled' => true,
     ]);
 
-    $component = Livewire::withQueryParams(['tab' => 'templates'])->test('pages.settings.index');
-
-    $editorSetup = fn (): string => preg_match('/x-data="(\{\s*cursorIndex.*?)"\s+x-on:sync-and-save-template/s', $component->html(), $m) === 1 ? $m[1] : '';
-
-    $before = $editorSetup();
-
-    expect($before)->not->toBe('')
-        ->not->toContain('Original body')
-        ->and($component->html())->toContain('data-initial-body="&lt;p&gt;Original body&lt;/p&gt;"');
-
-    $component->set('tplBody', '<p>Edited body</p>')->call('save')->assertHasNoErrors();
-
-    expect($editorSetup())->toBe($before);
+    Livewire::test('pages.settings.index', ['tab' => 'billing'])
+        ->set('tab', 'billing')
+        ->set("reminders.{$reminder->id}.nettmail_template_id", '')
+        ->call('save')
+        ->assertHasErrors(["reminders.{$reminder->id}.nettmail_template_id"]);
 });
 
 it('requires permission to open the settings page', function (): void {

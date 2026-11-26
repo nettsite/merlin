@@ -11,9 +11,8 @@ use NettSite\NettMail\Models\Template;
 
 /**
  * Wires up the settings that Billing silently no-ops without (see
- * ClientReceivableAccountService::getOrCreateForClient() and
- * InvoiceEmailTemplateService::wrapInBaseTemplate()) — a fresh install with
- * these left unset means every sales invoice posts straight to the flat
+ * ClientReceivableAccountService::getOrCreateForClient()) — a fresh install
+ * with these left unset means every sales invoice posts straight to the flat
  * control account instead of a per-client sub-account, with no error raised.
  *
  * Must run after ChartOfAccountsSeeder and PaymentTermSeeder — uses
@@ -39,20 +38,26 @@ class DefaultBillingSettingsSeeder extends Seeder
         </div>
         HTML;
 
+    /** Starting point for the complete payment receipt email; restyled in NettMail's editor. */
+    private const RECEIPT_EMAIL_HTML = <<<'HTML'
+        <div style="font-family:Arial,Helvetica,sans-serif;font-size:15px;line-height:1.6;color:#1f2937;max-width:600px;">
+        <p>{{company_logo}}</p>
+        <p>Dear {{first_name}},</p>
+        <p>Thank you — we've received your payment of <strong>{{amount}}</strong> on {{date}}.</p>
+        <table style="border-collapse:collapse;margin:16px 0;">
+        <tr><td style="padding:4px 16px 4px 0;color:#6b7280;">Reference</td><td style="padding:4px 0;">{{reference}}</td></tr>
+        <tr><td style="padding:4px 16px 4px 0;color:#6b7280;">For invoice(s)</td><td style="padding:4px 0;">{{invoices}}</td></tr>
+        </table>
+        <p>Your receipt is attached to this email.</p>
+        <p>Thank you for your business,<br>{{company_name}}</p>
+        </div>
+        HTML;
+
     public function run(): void
     {
         $receivableAccount = Account::where('code', '1100')->firstOrFail();
         $bankAccount = Account::where('code', '1000')->firstOrFail();
         $defaultTerm = PaymentTerm::where('name', '1st of Next Month')->firstOrFail();
-
-        $template = Template::firstOrCreate(
-            ['name' => 'Sales Invoice'],
-            [
-                'type' => TemplateType::Transactional,
-                'subject' => 'Invoice from {{company_name}}',
-                'html' => '[email_body]',
-            ],
-        );
 
         $invoiceEmail = Template::firstOrCreate(
             ['name' => 'Invoice Email'],
@@ -63,13 +68,22 @@ class DefaultBillingSettingsSeeder extends Seeder
             ],
         );
 
+        $receiptEmail = Template::firstOrCreate(
+            ['name' => 'Payment Receipt Email'],
+            [
+                'type' => TemplateType::Transactional,
+                'subject' => 'Payment received — {{invoices}}',
+                'html' => self::RECEIPT_EMAIL_HTML,
+            ],
+        );
+
         $settings = app(BillingSettings::class);
         $settings->default_receivable_account_id = $receivableAccount->id;
         $settings->default_contra_account_id = $bankAccount->id;
         $settings->default_payment_term_id = $defaultTerm->id;
         $settings->billing_period_day = 25;
-        $settings->base_email_template_id = $template->id;
         $settings->invoice_email_template_id = $invoiceEmail->id;
+        $settings->payment_email_template_id = $receiptEmail->id;
         $settings->save();
     }
 }

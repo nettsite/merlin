@@ -21,13 +21,10 @@ class BillingSettings extends Settings
     /** Tax liability account ID used on sales invoices. */
     public ?string $tax_liability_account_id = null;
 
-    /** NettMail/Unlayer template used as the branded wrapper for all billing emails. Must contain {{email_body}}. */
-    public ?string $base_email_template_id = null;
-
-    /** NettMail template used as the complete invoice email (subject + body). Null = Settings text in the base layout. */
+    /** NettMail template used as the complete invoice email (subject + body). Null = built-in fallback text. */
     public ?string $invoice_email_template_id = null;
 
-    /** NettMail template used as the complete payment receipt email (subject + body). Null = Email Templates tab text. */
+    /** NettMail template used as the complete payment receipt email (subject + body). Null = built-in fallback text. */
     public ?string $payment_email_template_id = null;
 
     /** Floor for the next payment/receipt number. Null = continue counting from the highest existing number. Auto-advances after each payment. */

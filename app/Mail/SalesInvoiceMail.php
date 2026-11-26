@@ -38,7 +38,10 @@ class SalesInvoiceMail extends NettMailMailable
     {
         $media = $this->invoice->getFirstMedia('invoice_pdf');
 
-        if ($media === null) {
+        // The media row can outlive the file (storage cleared/moved outside the app);
+        // Symfony's mailer fatals opaquely trying to read a path that doesn't exist, so
+        // send without the attachment rather than fail the whole email.
+        if ($media === null || ! is_file($media->getPath())) {
             return [];
         }
 

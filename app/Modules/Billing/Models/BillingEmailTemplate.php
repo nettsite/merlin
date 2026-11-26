@@ -14,6 +14,7 @@ class BillingEmailTemplate extends Model
 
     protected $fillable = [
         'type',
+        'nettmail_template_id',
         'name',
         'subject',
         'body',

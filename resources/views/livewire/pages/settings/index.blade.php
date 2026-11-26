@@ -4,7 +4,6 @@ use App\Modules\Accounting\Models\Account;
 use App\Modules\Accounting\Settings\AccountingSettings;
 use App\Modules\Billing\Models\BillingEmailTemplate;
 use App\Modules\Core\Models\PaymentTerm;
-use App\Modules\Billing\Services\InvoiceEmailTemplateService;
 use App\Modules\Billing\Settings\BillingSettings;
 use App\Modules\Core\Settings\CompanySettings;
 use App\Modules\Core\Settings\CurrencySettings;
@@ -89,8 +88,6 @@ new #[Layout('components.layout.app')] class extends Component
 
     public int $billingPeriodDay = 1;
 
-    public ?string $baseEmailTemplateId = null;
-
     public ?string $invoiceEmailTemplateId = null;
 
     public ?string $paymentEmailTemplateId = null;
@@ -103,20 +100,11 @@ new #[Layout('components.layout.app')] class extends Component
 
     public string $defaultInvoiceFooter = '';
 
-    // ── Email Templates ────────────────────────────────────────────────────
-    public ?string $editingTemplateId = null;
-
-    public string $tplType = 'invoice';
-
-    public string $tplName = '';
-
-    public string $tplSubject = '';
-
-    public string $tplBody = '';
-
-    public ?int $tplOffsetDays = null;
-
-    public bool $tplEnabled = true;
+    // ── Reminder emails (Billing tab) ────────────────────────────────────────
+    // Keyed by BillingEmailTemplate id. Each reminder now always points at a
+    // NettMail template for its content — no legacy subject/body fallback.
+    /** @var array<string, array{name: string, nettmail_template_id: ?string, offset_days: int, enabled: bool}> */
+    public array $reminders = [];
 
     public function mount(): void
     {
@@ -160,7 +148,6 @@ new #[Layout('components.layout.app')] class extends Component
         $this->defaultPaymentTermId = $billing->default_payment_term_id;
         $this->taxLiabilityAccountId = $billing->tax_liability_account_id;
         $this->billingPeriodDay = $billing->billing_period_day;
-        $this->baseEmailTemplateId = $billing->base_email_template_id;
         $this->invoiceEmailTemplateId = $billing->invoice_email_template_id;
         $this->paymentEmailTemplateId = $billing->payment_email_template_id;
         $this->nextReceiptNumber = $billing->next_receipt_number;
@@ -168,59 +155,19 @@ new #[Layout('components.layout.app')] class extends Component
         $this->defaultInvoiceTerms = $billing->default_invoice_terms;
         $this->defaultInvoiceFooter = $billing->default_invoice_footer;
 
-        if ($this->tab === 'templates') {
-            $this->autoSelectFirstTemplate();
-        }
+        $this->reminders = BillingEmailTemplate::reminder()->orderBy('offset_days')->get()
+            ->mapWithKeys(fn (BillingEmailTemplate $r) => [$r->id => [
+                'name' => $r->name,
+                'nettmail_template_id' => $r->nettmail_template_id,
+                'offset_days' => $r->offset_days,
+                'enabled' => $r->enabled,
+            ]])
+            ->all();
     }
 
-    public function updatedTab(string $value): void
+    public function updatedTab(): void
     {
-        if ($value === 'templates' && $this->editingTemplateId === null) {
-            $this->autoSelectFirstTemplate();
-        }
-
         $this->saved = false;
-    }
-
-    /**
-     * With a NettMail invoice email chosen, the invoice text here is unused, so only
-     * reminders are listed: one place to edit each email.
-     *
-     * @return \Illuminate\Database\Eloquent\Builder<BillingEmailTemplate>
-     */
-    private function editableEmailTemplates(): \Illuminate\Database\Eloquent\Builder
-    {
-        return BillingEmailTemplate::query()
-            ->when($this->invoiceEmailTemplateId, fn ($query) => $query->where('type', '!=', 'invoice'))
-            ->when($this->paymentEmailTemplateId, fn ($query) => $query->where('type', '!=', 'receipt'))
-            ->orderByRaw("type = 'invoice' DESC")
-            ->orderBy('offset_days');
-    }
-
-    private function autoSelectFirstTemplate(): void
-    {
-        $first = $this->editableEmailTemplates()->first();
-
-        if ($first) {
-            $this->loadTemplate($first->id);
-        }
-    }
-
-    public function loadTemplate(string $id): void
-    {
-        $template = BillingEmailTemplate::findOrFail($id);
-        $this->editingTemplateId = $template->id;
-        $this->tplType = $template->type;
-        $this->tplName = $template->name;
-        $this->tplSubject = $template->subject;
-        $this->tplBody = $template->body;
-        $this->tplOffsetDays = $template->offset_days;
-        $this->tplEnabled = $template->enabled;
-        $this->saved = false;
-
-        // Push the new body into the wire:ignore'd Quill editor, which Livewire
-        // can no longer update via DOM morphing.
-        $this->dispatch('template-loaded', body: $template->body);
     }
 
     public function save(): void
@@ -233,7 +180,6 @@ new #[Layout('components.layout.app')] class extends Component
             'general' => $this->saveGeneral(),
             'accounting' => $this->saveAccounting(),
             'billing' => $this->saveBilling(),
-            'templates' => $this->saveTemplate(),
             default => null,
         };
     }
@@ -346,13 +292,15 @@ new #[Layout('components.layout.app')] class extends Component
             'defaultPaymentTermId' => 'nullable|uuid|exists:payment_terms,id',
             'taxLiabilityAccountId' => 'nullable|uuid|exists:accounts,id',
             'billingPeriodDay' => 'required|integer|min:1|max:28',
-            'baseEmailTemplateId' => 'nullable|uuid|exists:nettmail_templates,id',
-            'invoiceEmailTemplateId' => 'nullable|uuid|exists:nettmail_templates,id',
-            'paymentEmailTemplateId' => 'nullable|uuid|exists:nettmail_templates,id',
+            'invoiceEmailTemplateId' => 'required|uuid|exists:nettmail_templates,id',
+            'paymentEmailTemplateId' => 'required|uuid|exists:nettmail_templates,id',
             'nextReceiptNumber' => 'nullable|integer|min:1',
             'nextInvoiceNumber' => 'nullable|integer|min:1',
             'defaultInvoiceTerms' => 'nullable|string|max:2000',
             'defaultInvoiceFooter' => 'nullable|string|max:2000',
+            'reminders.*.nettmail_template_id' => 'required|uuid|exists:nettmail_templates,id',
+            'reminders.*.offset_days' => 'required|integer',
+            'reminders.*.enabled' => 'boolean',
         ]);
 
         $settings = app(BillingSettings::class);
@@ -361,7 +309,6 @@ new #[Layout('components.layout.app')] class extends Component
         $settings->default_payment_term_id = $this->defaultPaymentTermId ?: null;
         $settings->tax_liability_account_id = $this->taxLiabilityAccountId ?: null;
         $settings->billing_period_day = $this->billingPeriodDay;
-        $settings->base_email_template_id = $this->baseEmailTemplateId ?: null;
         $settings->invoice_email_template_id = $this->invoiceEmailTemplateId ?: null;
         $settings->payment_email_template_id = $this->paymentEmailTemplateId ?: null;
         $settings->next_receipt_number = $this->nextReceiptNumber ?: null;
@@ -370,33 +317,18 @@ new #[Layout('components.layout.app')] class extends Component
         $settings->default_invoice_footer = $this->defaultInvoiceFooter;
         $settings->save();
 
-        $this->saved = true;
-    }
+        foreach ($this->reminders as $id => $reminder) {
+            $template = BillingEmailTemplate::find($id);
 
-    private function saveTemplate(): void
-    {
-        if ($this->editingTemplateId === null) {
-            return;
+            if ($template === null) {
+                continue;
+            }
+
+            $template->nettmail_template_id = $reminder['nettmail_template_id'];
+            $template->offset_days = $reminder['offset_days'];
+            $template->enabled = $reminder['enabled'];
+            $template->save();
         }
-
-        $this->validate([
-            'tplName' => 'required|string|max:255',
-            'tplSubject' => 'required|string|max:500',
-            'tplBody' => 'required|string',
-            'tplOffsetDays' => 'nullable|integer',
-        ]);
-
-        $template = BillingEmailTemplate::findOrFail($this->editingTemplateId);
-        $template->name = $this->tplName;
-        $template->subject = $this->tplSubject;
-        $template->body = $this->tplBody;
-        $template->enabled = $this->tplEnabled;
-
-        if ($template->type === 'reminder') {
-            $template->offset_days = (int) $this->tplOffsetDays;
-        }
-
-        $template->save();
 
         $this->saved = true;
     }
@@ -421,19 +353,9 @@ new #[Layout('components.layout.app')] class extends Component
                 ->get(['id', 'name']);
         }
 
-        if ($this->tab === 'templates') {
-            $data['allTemplates'] = $this->editableEmailTemplates()->get();
-        }
-
         return $data;
     }
 }; ?>
-
-@assets
-{{-- Pinned with SRI; the CSP allows only this versioned folder (SecurityHeaders). Bump all three together. --}}
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.snow.css" integrity="sha384-ecIckRi4QlKYya/FQUbBUjS4qp65jF/J87Guw5uzTbO1C1Jfa/6kYmd6dXUF6D7i" crossorigin="anonymous">
-<script src="https://cdn.jsdelivr.net/npm/quill@2.0.3/dist/quill.js" integrity="sha384-utBUCeG4SYaCm4m7GQZYr8Hy8Fpy3V4KGjBZaf4WTKOcwhCYpt/0PfeEe3HNlwx8" crossorigin="anonymous"></script>
-@endassets
 
 <div>
     {{-- Sticky header --}}
@@ -441,17 +363,7 @@ new #[Layout('components.layout.app')] class extends Component
         <div class="flex items-center justify-between px-6 pt-5 pb-0">
             <h1 class="text-[17px] font-semibold tracking-tight text-ink">Settings</h1>
 
-            @if($tab === 'templates' && $editingTemplateId)
-                <div class="flex items-center gap-3 pb-4">
-                    @if($saved)
-                        <span class="text-sm text-success">Saved.</span>
-                    @endif
-                    {{-- Dispatch event so Alpine syncs Quill content before Livewire saves --}}
-                    <flux:button x-on:click="$dispatch('sync-and-save-template')" variant="primary" size="sm">
-                        Save Changes
-                    </flux:button>
-                </div>
-            @elseif(!in_array($tab, ['roles', 'templates']))
+            @if($tab !== 'roles')
                 <div class="flex items-center gap-3 pb-4">
                     @if($saved)
                         <span wire:loading.remove wire:target="save" class="text-sm text-success">Saved.</span>
@@ -465,7 +377,7 @@ new #[Layout('components.layout.app')] class extends Component
 
         {{-- Tab bar --}}
         <div class="flex gap-0 px-6">
-            @foreach(['general' => 'General', 'accounting' => 'Accounting', 'billing' => 'Billing', 'roles' => 'Roles', 'templates' => 'Email Templates'] as $key => $label)
+            @foreach(['general' => 'General', 'accounting' => 'Accounting', 'billing' => 'Billing', 'roles' => 'Roles'] as $key => $label)
                 <button
                     type="button"
                     wire:click="$set('tab', '{{ $key }}')"
@@ -481,193 +393,6 @@ new #[Layout('components.layout.app')] class extends Component
     {{-- Tab content --}}
     @if($tab === 'roles')
         <livewire:pages.roles.index />
-
-    @elseif($tab === 'templates')
-        {{-- Template list sidebar + editor --}}
-        <div class="flex min-h-[600px] divide-x divide-line">
-
-            {{-- Sidebar: template list --}}
-            <div class="w-52 shrink-0 py-3">
-                @foreach ($allTemplates as $tmpl)
-                    <button
-                        type="button"
-                        wire:click="loadTemplate('{{ $tmpl->id }}')"
-                        class="w-full text-left px-4 py-3 border-l-2 transition-colors
-                            {{ $editingTemplateId === $tmpl->id
-                                ? 'border-accent bg-surface-alt text-ink'
-                                : 'border-transparent hover:bg-surface-alt text-ink-muted hover:text-ink' }}"
-                    >
-                        <p class="text-sm font-medium leading-tight">{{ $tmpl->name }}</p>
-                        <p class="text-xs text-ink-soft mt-0.5">
-                            @if($tmpl->type === 'invoice')
-                                New invoice
-                            @elseif($tmpl->type === 'receipt')
-                                Payment receipt
-                            @elseif($tmpl->offset_days < 0)
-                                {{ abs($tmpl->offset_days) }}d before due
-                            @else
-                                {{ $tmpl->offset_days }}d overdue
-                            @endif
-                            @if(!$tmpl->enabled)
-                                · <span class="text-danger">off</span>
-                            @endif
-                        </p>
-                    </button>
-                @endforeach
-            </div>
-
-            {{-- Editor --}}
-            @if($editingTemplateId)
-                <div class="flex-1 px-8 py-6 max-w-4xl"
-                    wire:key="template-editor"
-                    x-data="{
-                        cursorIndex: 0,
-                        init() {
-                            // Alpine can re-run init on the same element; a second Quill
-                            // on it would stack a second toolbar.
-                            if (this.$refs.editorEl.__quill) return;
-
-                            // Use style-based size so output has inline font-size (email-safe).
-                            const SizeStyle = Quill.import('attributors/style/size');
-                            SizeStyle.whitelist = ['12px', '13px', '14px', '15px', '16px', '18px', '20px'];
-                            Quill.register(SizeStyle, true);
-
-                            // Store raw Quill instance on the DOM element, not in Alpine's
-                            // reactive data — wrapping a Quill instance in Alpine's Proxy
-                            // corrupts Quill's internal this.selection / savedRange access.
-                            const quill = new Quill(this.$refs.editorEl, {
-                                theme: 'snow',
-                                modules: {
-                                    toolbar: [
-                                        [{ size: ['12px', '13px', '14px', '15px', false, '16px', '18px', '20px'] }],
-                                        ['bold', 'italic', 'underline'],
-                                        ['link'],
-                                        [{ list: 'bullet' }, { list: 'ordered' }],
-                                        ['clean']
-                                    ]
-                                }
-                            });
-                            quill.root.style.fontFamily = 'Inter, ui-sans-serif, system-ui, sans-serif';
-                            quill.root.style.fontSize = '16px';
-                            // Use the clipboard API, not quill.root.innerHTML — assigning
-                            // innerHTML directly desyncs Quill's internal Delta model from
-                            // the DOM, breaking typing and index-based inserts.
-                            // Seeded from a data attribute inside wire:ignore, not interpolated
-                            // here: a changing x-data expression makes Livewire's morph re-init
-                            // this component after every save.
-                            quill.clipboard.dangerouslyPasteHTML(this.$refs.editorEl.dataset.initialBody ?? '');
-                            quill.on('text-change', () => {
-                                $wire.set('tplBody', quill.root.innerHTML, false);
-                                // selection-change does NOT fire while typing, so the
-                                // cursor index goes stale; refresh it on every keystroke.
-                                const range = quill.getSelection();
-                                if (range) this.cursorIndex = range.index;
-                            });
-                            quill.on('selection-change', (range) => {
-                                if (range) this.cursorIndex = range.index;
-                            });
-
-                            // Stash on the editor element (stable via $refs) — not in
-                            // Alpine reactive data (Proxy corrupts Quill) and not on
-                            // $el (contextual: resolves to the clicked button in handlers).
-                            this.$refs.editorEl.__quill = quill;
-                        },
-                        syncContent() {
-                            const quill = this.$refs.editorEl.__quill;
-                            if (quill) {
-                                $wire.set('tplBody', quill.root.innerHTML, false);
-                            }
-                        },
-                        captureCursor() {
-                            // Runs on button mousedown — the editor still has focus here,
-                            // so getSelection() returns the true live caret (event-based
-                            // tracking lags behind typing).
-                            const quill = this.$refs.editorEl?.__quill;
-                            const range = quill?.getSelection();
-                            if (range) this.cursorIndex = range.index;
-                        },
-                        insertTag(tag) {
-                            const quill = this.$refs.editorEl.__quill;
-                            if (!quill) return;
-                            const idx = this.cursorIndex;
-                            quill.insertText(idx, tag);
-                            quill.setSelection(idx + tag.length, 0);
-                            this.cursorIndex = idx + tag.length;
-                        },
-                        loadBody(body) {
-                            // May fire before init() (server dispatches template-loaded
-                            // while the panel is morphed in); init seeds the first body,
-                            // so a no-op here is safe.
-                            const quill = this.$refs.editorEl?.__quill;
-                            if (!quill) return;
-                            quill.clipboard.dangerouslyPasteHTML(body);
-                            this.cursorIndex = 0;
-                        }
-                    }"
-                    x-on:sync-and-save-template.window="syncContent(); $nextTick(() => $wire.save())"
-                    x-on:template-loaded.window="loadBody($event.detail.body)"
-                >
-                    <div class="space-y-5">
-                        {{-- Name / offset / enabled --}}
-                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
-                            <flux:field>
-                                <flux:label>Name</flux:label>
-                                <flux:input wire:model="tplName" />
-                                <flux:error name="tplName" />
-                            </flux:field>
-
-                            @if($tplType === 'reminder')
-                                <flux:field>
-                                    <flux:label>Offset Days</flux:label>
-                                    <flux:input wire:model="tplOffsetDays" type="number" />
-                                    <flux:description>Negative = before due, positive = after</flux:description>
-                                    <flux:error name="tplOffsetDays" />
-                                </flux:field>
-                            @endif
-
-                            <div class="pb-1">
-                                <flux:field>
-                                    <flux:checkbox wire:model="tplEnabled" label="Enabled" />
-                                </flux:field>
-                            </div>
-                        </div>
-
-                        {{-- Subject --}}
-                        <flux:field>
-                            <flux:label>Subject</flux:label>
-                            <flux:input wire:model="tplSubject" />
-                            <flux:error name="tplSubject" />
-                        </flux:field>
-
-                        {{-- Body (Quill) --}}
-                        <flux:field>
-                            <flux:label>Body</flux:label>
-                            <div wire:ignore class="border border-line rounded-md overflow-hidden [&_.ql-toolbar]:border-0 [&_.ql-toolbar]:border-b [&_.ql-toolbar]:border-line [&_.ql-container]:border-0">
-                                <div x-ref="editorEl" data-initial-body="{{ $tplBody }}" class="min-h-64 text-sm"></div>
-                            </div>
-                            <flux:error name="tplBody" />
-                        </flux:field>
-
-                        {{-- Variables reference --}}
-                        <div class="rounded-md border border-line bg-surface-alt p-4 text-sm">
-                            <p class="text-xs font-semibold text-ink-muted uppercase tracking-wide mb-2">Available variables</p>
-                            <div class="flex flex-wrap gap-2">
-                                @foreach (($tplType === 'receipt' ? InvoiceEmailTemplateService::availableReceiptShortcodes() : InvoiceEmailTemplateService::availableShortcodes()) as $tag => $desc)
-                                    <button
-                                        type="button"
-                                        title="{{ $desc }}"
-                                        x-on:mousedown="captureCursor()"
-                                        x-on:click="insertTag('{{ $tag }}')"
-                                        class="font-mono text-xs bg-white border border-line rounded-sm px-1.5 py-0.5 text-ink-soft hover:text-ink hover:border-ink-muted transition-colors cursor-pointer"
-                                    >{{ $tag }}</button>
-                                @endforeach
-                            </div>
-                            <p class="text-xs text-ink-muted mt-2">Click a variable to insert it at the cursor.</p>
-                        </div>
-                    </div>
-                </div>
-            @endif
-        </div>
 
     @else
         <div class="max-w-5xl mx-auto px-6 py-2 divide-y divide-line">
@@ -1038,13 +763,12 @@ new #[Layout('components.layout.app')] class extends Component
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-8 py-8">
                     <div>
                         <h3 class="text-sm font-semibold text-ink">Email</h3>
-                        <p class="mt-1 text-sm text-ink-muted">NettMail templates used for billing emails. Edit them under Emails → Templates.</p>
+                        <p class="mt-1 text-sm text-ink-muted">NettMail templates used for billing emails.</p>
                     </div>
-                    <div class="col-span-2 space-y-5">
-                        <flux:field>
+                    <div class="col-span-2 divide-y divide-line">
+                        <flux:field class="pb-5">
                             <flux:label>Invoice Email</flux:label>
                             <flux:select wire:model="invoiceEmailTemplateId" class="max-w-sm">
-                                <flux:select.option value="">— Use the Email Templates tab text —</flux:select.option>
                                 @foreach ($emailTemplates as $template)
                                     <flux:select.option value="{{ $template->id }}">{{ $template->name }}</flux:select.option>
                                 @endforeach
@@ -1053,10 +777,9 @@ new #[Layout('components.layout.app')] class extends Component
                             <flux:error name="invoiceEmailTemplateId" />
                         </flux:field>
 
-                        <flux:field>
+                        <flux:field class="py-5">
                             <flux:label>Payment Email</flux:label>
                             <flux:select wire:model="paymentEmailTemplateId" class="max-w-sm">
-                                <flux:select.option value="">— Use the Email Templates tab text —</flux:select.option>
                                 @foreach ($emailTemplates as $template)
                                     <flux:select.option value="{{ $template->id }}">{{ $template->name }}</flux:select.option>
                                 @endforeach
@@ -1065,17 +788,32 @@ new #[Layout('components.layout.app')] class extends Component
                             <flux:error name="paymentEmailTemplateId" />
                         </flux:field>
 
-                        <flux:field>
-                            <flux:label>Reminder Email Layout</flux:label>
-                            <flux:select wire:model="baseEmailTemplateId" class="max-w-sm">
-                                <flux:select.option value="">— None —</flux:select.option>
-                                @foreach ($emailTemplates as $template)
-                                    <flux:select.option value="{{ $template->id }}">{{ $template->name }}</flux:select.option>
-                                @endforeach
-                            </flux:select>
-                            <flux:description>Branded wrapper for reminder emails. Must contain <code class="text-xs bg-surface-alt px-1 rounded-sm">[email_body]</code> where the reminder text (Email Templates tab) goes.</flux:description>
-                            <flux:error name="baseEmailTemplateId" />
-                        </flux:field>
+                        @foreach ($reminders as $id => $reminder)
+                            <div class="flex items-center gap-4 py-5 last:pb-0">
+                                <flux:field class="w-64 shrink-0">
+                                    <flux:label>{{ $reminder['name'] }}</flux:label>
+                                    <flux:select wire:model="reminders.{{ $id }}.nettmail_template_id">
+                                        @foreach ($emailTemplates as $template)
+                                            <flux:select.option value="{{ $template->id }}">{{ $template->name }}</flux:select.option>
+                                        @endforeach
+                                    </flux:select>
+                                    <flux:error name="reminders.{{ $id }}.nettmail_template_id" />
+                                </flux:field>
+
+                                <div class="flex items-center gap-2 shrink-0">
+                                    <label class="inline-flex items-center gap-1 text-sm text-ink-muted">
+                                        Offset
+                                        <flux:tooltip content="Negative sends before the due date, positive sends after. For example -3 sends 3 days before due; 7 sends 7 days after due.">
+                                            <flux:icon.information-circle class="size-3.5" />
+                                        </flux:tooltip>
+                                    </label>
+                                    <flux:input wire:model="reminders.{{ $id }}.offset_days" type="number" class="w-20" />
+                                    <flux:error name="reminders.{{ $id }}.offset_days" />
+                                </div>
+
+                                <flux:checkbox wire:model="reminders.{{ $id }}.enabled" label="Enabled" class="shrink-0" />
+                            </div>
+                        @endforeach
                     </div>
                 </div>
 

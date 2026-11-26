@@ -2,16 +2,13 @@
 
 namespace App\Modules\Billing\Console;
 
-use App\Mail\SalesInvoiceMail;
 use App\Modules\Billing\Models\BillingEmailTemplate;
 use App\Modules\Billing\Services\BillingService;
-use App\Modules\Billing\Services\InvoiceEmailTemplateService;
 use App\Modules\Billing\Services\WorkingDayCalculator;
 use App\Modules\Core\Models\Document;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Mail;
 use RuntimeException;
 use Throwable;
 
@@ -23,7 +20,6 @@ class SendReminders extends Command
 
     public function handle(
         WorkingDayCalculator $workingDays,
-        InvoiceEmailTemplateService $templateService,
         BillingService $billingService,
     ): int {
         $isDryRun = (bool) $this->option('dry-run');
@@ -78,7 +74,6 @@ class SendReminders extends Command
                 }
 
                 try {
-                    $rendered = $templateService->render($invoice, $reminder);
                     $emails = array_column($billingService->resolveRecipients($invoice), 'email');
 
                     if (empty($emails)) {
@@ -89,11 +84,7 @@ class SendReminders extends Command
                         continue;
                     }
 
-                    foreach ($emails as $email) {
-                        Mail::mailer('nettmail')->to($email)->send(
-                            new SalesInvoiceMail($invoice, $rendered['subject'], $rendered['html']),
-                        );
-                    }
+                    $billingService->sendReminder($invoice, $reminder, null);
 
                     $this->info('    Sent to: '.implode(', ', $emails));
                     Log::info("billing:send-reminders — sent {$invoice->document_number} ({$reminder->name}) to ".implode(', ', $emails));

@@ -24,8 +24,9 @@ class InvoiceEmailTemplateService
 
     /**
      * Render a billing email. Invoices use the NettMail template chosen as the invoice
-     * email (the whole email, edited in NettMail) when one is set; reminders, and
-     * invoices without one, use a BillingEmailTemplate wrapped in the base layout.
+     * email (the whole email, edited in NettMail) when one is set; a reminder row uses
+     * its own NettMail template when it has one set; otherwise falls back to the
+     * BillingEmailTemplate's subject/body as-is.
      *
      * @return array{subject: string, html: string}
      */
@@ -33,12 +34,16 @@ class InvoiceEmailTemplateService
     {
         $values = $this->mergeTagValues($invoice, $recipientFirstName);
 
-        if ($emailTemplate === null && ($invoiceEmail = $this->invoiceEmailTemplate()) !== null) {
+        $nettMailTemplate = $emailTemplate === null
+            ? $this->invoiceEmailTemplate()
+            : $this->nettMailTemplateFor($emailTemplate);
+
+        if ($nettMailTemplate !== null) {
             $renderer = new MergeTagRenderer;
 
             return [
-                'subject' => $renderer->render($invoiceEmail->subject ?: self::DEFAULT_INVOICE_SUBJECT, $values),
-                'html' => $renderer->render($invoiceEmail->html ?? '', $this->htmlValues($values)),
+                'subject' => $renderer->render($nettMailTemplate->subject ?: self::DEFAULT_INVOICE_SUBJECT, $values),
+                'html' => $renderer->render($nettMailTemplate->html ?? '', $this->htmlValues($values)),
             ];
         }
 
@@ -49,18 +54,68 @@ class InvoiceEmailTemplateService
         }
 
         $subject = $this->substitute($emailTemplate->subject, $values);
-        $body = $this->substitute($emailTemplate->body, $this->htmlValues($values));
-
-        $html = $this->wrapInBaseTemplate($body, $this->htmlValues($values));
+        $html = $this->substitute($emailTemplate->body, $this->htmlValues($values));
 
         return ['subject' => $subject, 'html' => $html];
+    }
+
+    /**
+     * Render a billing email for a specific {@see BillingEmailTemplate} row, with the
+     * subject and/or body text replaced for this send only (the override is never
+     * written back to the template). Falls back to the row's own content — its NettMail
+     * template if it has one, otherwise its subject/body — for whichever of the two
+     * overrides was not supplied.
+     *
+     * @return array{subject: string, html: string}
+     */
+    public function renderWithOverride(
+        Document $invoice,
+        BillingEmailTemplate $emailTemplate,
+        ?string $subjectOverride,
+        ?string $bodyOverride,
+        string $recipientFirstName = '',
+    ): array {
+        $values = $this->mergeTagValues($invoice, $recipientFirstName);
+        $nettMailTemplate = $this->nettMailTemplateFor($emailTemplate);
+
+        $subjectTemplate = $subjectOverride ?? ($nettMailTemplate?->subject ?? $emailTemplate->subject);
+        $bodyTemplate = $bodyOverride ?? ($nettMailTemplate?->html ?? $emailTemplate->body);
+
+        if ($nettMailTemplate !== null) {
+            $renderer = new MergeTagRenderer;
+
+            return [
+                'subject' => $renderer->render($subjectTemplate ?: self::DEFAULT_INVOICE_SUBJECT, $values),
+                'html' => $renderer->render($bodyTemplate ?? '', $this->htmlValues($values)),
+            ];
+        }
+
+        $subject = $this->substitute($subjectTemplate, $values);
+        $html = $this->substitute($bodyTemplate, $this->htmlValues($values));
+
+        return ['subject' => $subject, 'html' => $html];
+    }
+
+    /**
+     * Render a fully ad hoc email — no underlying {@see BillingEmailTemplate} at all.
+     *
+     * @return array{subject: string, html: string}
+     */
+    public function renderCustom(Document $invoice, string $subject, string $body, string $recipientFirstName = ''): array
+    {
+        $values = $this->mergeTagValues($invoice, $recipientFirstName);
+
+        $renderedSubject = $this->substitute($subject, $values);
+        $renderedBody = $this->substitute($body, $this->htmlValues($values));
+
+        return ['subject' => $renderedSubject, 'html' => $renderedBody];
     }
 
     /**
      * Render the payment receipt email for a payment Document. Uses the NettMail
      * template chosen as the payment email (the whole email, edited in NettMail)
      * when one is set, the same way invoices do; otherwise falls back to the
-     * "Payment Receipt" BillingEmailTemplate wrapped in the base layout.
+     * "Payment Receipt" BillingEmailTemplate as-is.
      *
      * @return array{subject: string, html: string}
      */
@@ -84,9 +139,9 @@ class InvoiceEmailTemplateService
         }
 
         $subject = $this->substitute($emailTemplate->subject, $values);
-        $body = $this->substitute($emailTemplate->body, $this->htmlValues($values));
+        $html = $this->substitute($emailTemplate->body, $this->htmlValues($values));
 
-        return ['subject' => $subject, 'html' => $this->wrapInBaseTemplate($body, $this->htmlValues($values))];
+        return ['subject' => $subject, 'html' => $html];
     }
 
     /**
@@ -170,31 +225,9 @@ class InvoiceEmailTemplateService
         return $templateId === null ? null : Template::find($templateId);
     }
 
-    /**
-     * @param  array<string, string>  $values
-     */
-    private function wrapInBaseTemplate(string $body, array $values): string
+    private function nettMailTemplateFor(BillingEmailTemplate $emailTemplate): ?Template
     {
-        $baseTemplateId = $this->billingSettings->base_email_template_id;
-
-        if ($baseTemplateId === null) {
-            return $body;
-        }
-
-        $baseTemplate = Template::find($baseTemplateId);
-
-        if ($baseTemplate === null) {
-            return $body;
-        }
-
-        $style = config('nettmail.email_body_style', 'font-family:Inter,ui-sans-serif,system-ui,sans-serif;font-size:16px;line-height:1.6;color:#1f2937;');
-        $styledBody = '<div style="'.$style.'">'.$body.'</div>';
-
-        // [email_body] uses square brackets so GrapesJS/Unlayer does not wrap it
-        // in a <code> element the way it does with double-brace expressions.
-        $html = str_replace('[email_body]', $styledBody, $baseTemplate->html ?? '');
-
-        return (new MergeTagRenderer)->render($html, $values);
+        return $emailTemplate->nettmail_template_id === null ? null : Template::find($emailTemplate->nettmail_template_id);
     }
 
     /**

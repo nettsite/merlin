@@ -788,7 +788,7 @@ class DocumentService
         });
     }
 
-    protected function recordActivity(
+    public function recordActivity(
         Document $doc,
         ?User $by,
         string $type,

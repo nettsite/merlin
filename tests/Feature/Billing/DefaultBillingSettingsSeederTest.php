@@ -21,13 +21,11 @@ it('wires up all default billing settings after chart of accounts and payment te
     $receivable = Account::where('code', '1100')->first();
     $bank = Account::where('code', '1000')->first();
     $firstOfNextMonth = PaymentTerm::where('name', '1st of Next Month')->first();
-    $template = Template::where('name', 'Sales Invoice')->first();
 
     expect($settings->default_receivable_account_id)->toBe($receivable->id)
         ->and($settings->default_contra_account_id)->toBe($bank->id)
         ->and($settings->default_payment_term_id)->toBe($firstOfNextMonth->id)
-        ->and($settings->billing_period_day)->toBe(25)
-        ->and($settings->base_email_template_id)->toBe($template->id);
+        ->and($settings->billing_period_day)->toBe(25);
 });
 
 it('makes recurring invoices fall due on the 1st of the next month by default', function (): void {
@@ -57,6 +55,19 @@ it('seeds a complete invoice email in NettMail and selects it', function (): voi
         ->not->toContain('[email_body]');
 });
 
+it('seeds a complete payment receipt email in NettMail and selects it', function (): void {
+    (new ChartOfAccountsSeeder)->run();
+    (new PaymentTermSeeder)->run();
+    (new DefaultBillingSettingsSeeder)->run();
+
+    $receiptEmail = Template::find(app(BillingSettings::class)->payment_email_template_id);
+
+    expect($receiptEmail?->name)->toBe('Payment Receipt Email')
+        ->and($receiptEmail->html)->toContain('{{amount}}')
+        ->toContain('{{invoices}}')
+        ->not->toContain('[email_body]');
+});
+
 it('fails loudly instead of leaving settings null when run before its dependencies', function (): void {
     expect(fn () => (new DefaultBillingSettingsSeeder)->run())
         ->toThrow(ModelNotFoundException::class);
@@ -70,5 +81,6 @@ it('is idempotent — a second run does not create a duplicate template', functi
     (new DefaultBillingSettingsSeeder)->run();
     (new DefaultBillingSettingsSeeder)->run();
 
-    expect(Template::where('name', 'Sales Invoice')->count())->toBe(1);
+    expect(Template::where('name', 'Invoice Email')->count())->toBe(1)
+        ->and(Template::where('name', 'Payment Receipt Email')->count())->toBe(1);
 });

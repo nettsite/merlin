@@ -204,18 +204,8 @@ it('falls back to a default subject when the NettMail template has none', functi
         ->toBe("Invoice {$doc->document_number} from ".config('app.name'));
 });
 
-it('keeps reminders on the Settings text inside the base layout', function (): void {
+it('renders a reminder on its own legacy content, unaffected by the invoice NettMail template', function (): void {
     nettMailInvoiceEmail('<p>Whole invoice email</p>');
-
-    $layout = Template::create([
-        'name' => 'Layout',
-        'type' => TemplateType::Transactional,
-        'subject' => 'x',
-        'html' => '<div class="brand">[email_body]</div>',
-    ]);
-    $settings = app(BillingSettings::class);
-    $settings->base_email_template_id = $layout->id;
-    $settings->save();
 
     $reminder = BillingEmailTemplate::create([
         'type' => 'reminder',
@@ -228,8 +218,7 @@ it('keeps reminders on the Settings text inside the base layout', function (): v
 
     $rendered = app(InvoiceEmailTemplateService::class)->render(templateDraft(), $reminder);
 
-    expect($rendered['html'])->toContain('<div class="brand">')
-        ->toContain('Please pay')
+    expect($rendered['html'])->toBe('<p>Please pay ZAR 0.00</p>')
         ->not->toContain('Whole invoice email');
 });
 

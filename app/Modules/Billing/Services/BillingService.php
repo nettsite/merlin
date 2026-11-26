@@ -4,6 +4,7 @@ namespace App\Modules\Billing\Services;
 
 use App\Mail\PaymentReceiptMail;
 use App\Mail\SalesInvoiceMail;
+use App\Modules\Billing\Models\BillingEmailTemplate;
 use App\Modules\Billing\Settings\BillingSettings;
 use App\Modules\Core\Models\Document;
 use App\Modules\Core\Models\DocumentRelationship;
@@ -84,6 +85,24 @@ class BillingService
             ->usingFileName('invoice-'.($invoice->document_number ?? $invoice->id).'.pdf')
             ->usingName('Invoice '.($invoice->document_number ?? $invoice->id))
             ->toMediaCollection('invoice_pdf');
+    }
+
+    /**
+     * Reminder and custom emails attach whatever PDF is already on the invoice rather
+     * than regenerating one on every send; this regenerates it if the media row has
+     * outlived its file (storage cleared/moved outside the app) so the attachment
+     * never silently fails to build.
+     */
+    private function ensureInvoicePdf(Document $invoice): void
+    {
+        $media = $invoice->getFirstMedia('invoice_pdf');
+
+        if ($media !== null && is_file($media->getPath())) {
+            return;
+        }
+
+        $this->generatePdf($invoice);
+        $invoice->refresh();
     }
 
     /**
@@ -275,6 +294,85 @@ class BillingService
         } catch (Throwable $e) {
             Log::error('Failed to send payment receipt.', ['payment_id' => $payment->id, 'exception' => $e]);
         }
+    }
+
+    /**
+     * Send a reminder email for one invoice, using the given reminder template.
+     * Called both by the billing:send-reminders schedule and by the manual
+     * "Send Email" action on the sales invoices list.
+     *
+     * @throws RuntimeException if the invoice has no resolvable recipients.
+     */
+    public function sendReminder(
+        Document $invoice,
+        BillingEmailTemplate $reminder,
+        ?User $by,
+        ?string $subjectOverride = null,
+        ?string $bodyOverride = null,
+    ): void {
+        $recipients = $this->resolveRecipients($invoice);
+
+        if ($recipients === []) {
+            throw new RuntimeException('No recipients found for '.($invoice->party?->displayName ?? 'this client').'.');
+        }
+
+        $this->ensureInvoicePdf($invoice);
+
+        $templates = app(InvoiceEmailTemplateService::class);
+
+        foreach ($recipients as $recipient) {
+            $firstName = $recipient['name'] !== '' ? explode(' ', $recipient['name'])[0] : '';
+
+            $rendered = $subjectOverride !== null || $bodyOverride !== null
+                ? $templates->renderWithOverride($invoice, $reminder, $subjectOverride, $bodyOverride, $firstName)
+                : $templates->render($invoice, $reminder, $firstName);
+
+            Mail::mailer('nettmail')->to($recipient['email'])->send(
+                new SalesInvoiceMail($invoice, $rendered['subject'], $rendered['html']),
+            );
+        }
+
+        app(DocumentService::class)->recordActivity(
+            $invoice,
+            $by,
+            'reminder_sent',
+            "Reminder email ({$reminder->name}) sent to ".implode(', ', array_column($recipients, 'email')).'.',
+        );
+    }
+
+    /**
+     * Send a fully ad hoc email for one invoice — no underlying BillingEmailTemplate,
+     * subject/body authored directly in the "Send Email" modal for this send only.
+     *
+     * @throws RuntimeException if the invoice has no resolvable recipients.
+     */
+    public function sendCustomEmail(Document $invoice, string $subject, string $body, ?User $by): void
+    {
+        $recipients = $this->resolveRecipients($invoice);
+
+        if ($recipients === []) {
+            throw new RuntimeException('No recipients found for '.($invoice->party?->displayName ?? 'this client').'.');
+        }
+
+        $this->ensureInvoicePdf($invoice);
+
+        $templates = app(InvoiceEmailTemplateService::class);
+
+        foreach ($recipients as $recipient) {
+            $firstName = $recipient['name'] !== '' ? explode(' ', $recipient['name'])[0] : '';
+            $rendered = $templates->renderCustom($invoice, $subject, $body, $firstName);
+
+            Mail::mailer('nettmail')->to($recipient['email'])->send(
+                new SalesInvoiceMail($invoice, $rendered['subject'], $rendered['html']),
+            );
+        }
+
+        app(DocumentService::class)->recordActivity(
+            $invoice,
+            $by,
+            'custom_email_sent',
+            'Custom email sent to '.implode(', ', array_column($recipients, 'email')).'.',
+        );
     }
 
     /**
